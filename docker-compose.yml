@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  joodpakpaw-postgres:
+    image: postgres:16-alpine
+    container_name: joodpakpaw-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: joodpakpaw
+      POSTGRES_PASSWORD: joodpakpaw_password
+      POSTGRES_DB: joodpakpaw_db
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U joodpakpaw -d joodpakpaw_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - joodpakpaw-network
+
+  joodpakpaw-redis:
+    image: redis:7-alpine
+    container_name: joodpakpaw-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - joodpakpaw-network
+
+  joodpakpaw-minio:
+    image: minio/minio:latest
+    container_name: joodpakpaw-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadminpassword
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - joodpakpaw-network
+
+  joodpakpaw-minio-createbuckets:
+    image: minio/mc:latest
+    container_name: joodpakpaw-minio-createbuckets
+    depends_on:
+      joodpakpaw-minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set local http://joodpakpaw-minio:9000 minioadmin minioadminpassword;
+      /usr/bin/mc mb --ignore-existing local/joodpakpaw-media;
+      /usr/bin/mc anonymous set download local/joodpakpaw-media;
+      exit 0;
+      "
+    networks:
+      - joodpakpaw-network
+
+  joodpakpaw-api:
+    build:
+      context: ./joodpakpaw-api
+      dockerfile: Dockerfile
+    container_name: joodpakpaw-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      NODE_ENV: development
+      PORT: 8000
+      DATABASE_URL: postgresql://joodpakpaw:joodpakpaw_password@joodpakpaw-postgres:5432/joodpakpaw_db?schema=public
+      REDIS_URL: redis://joodpakpaw-redis:6379
+      S3_ENDPOINT: http://joodpakpaw-minio:9000
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadminpassword
+      S3_BUCKET: joodpakpaw-media
+      S3_PUBLIC_URL: http://localhost:9000/joodpakpaw-media
+      JWT_SECRET: joodpakpaw_super_secret_jwt_key_2026_dev
+      JWT_REFRESH_SECRET: joodpakpaw_super_secret_refresh_jwt_key_2026_dev
+      FRONTEND_URL: http://localhost:3000
+    depends_on:
+      joodpakpaw-postgres:
+        condition: service_healthy
+      joodpakpaw-redis:
+        condition: service_healthy
+      joodpakpaw-minio:
+        condition: service_healthy
+    networks:
+      - joodpakpaw-network
+
+networks:
+  joodpakpaw-network:
+    name: joodpakpaw-network
+    driver: bridge
+
+volumes:
+  postgres-data:
+    name: postgres-data
+  redis-data:
+    name: redis-data
+  minio-data:
+    name: minio-data
