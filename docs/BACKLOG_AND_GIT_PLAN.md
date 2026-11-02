@@ -15,7 +15,7 @@
 | :---: | :--- | :--- | :--- | :--- |
 | `[x]` | **`PBI-01`** | **Docker Compose & `joodpakpaw-api` Skeleton:** ตั้งค่า `docker-compose.yml` (`joodpakpaw-postgres`, `joodpakpaw-redis`, `joodpakpaw-minio`, `joodpakpaw-network`) และโครงสร้างโปรเจกต์ `joodpakpaw-api` พร้อม `/health` และ `.env.example` | `db-infra-architect` | `feat(infra): [PBI-01] setup joodpakpaw docker-compose and api project skeleton` |
 | `[x]` | **`PBI-02`** | **Complete 41-Table PostgreSQL Schema & Migrations:** สร้าง Schema & Migration ครบทั้ง 41 ตาราง (8 โดเมน) พร้อม Indexes และ Constraints กันห้องติดลบ รองรับทั้ง Local Docker และ Supabase/Neon | `db-infra-architect` | `feat(db): [PBI-02] implement complete postgresql schema, constraints, and indexes` |
-| `[ ]` | **`PBI-03`** | **Master Lookup & Demo Seed Data:** สร้างสคริปต์ Seed ข้อมูลตั้งต้น (Roles, Permissions, ประเภทสัตว์, สายพันธุ์, ขนาดน้ำหนัก, ระดับพลังงาน 1–5, สิ่งอำนวยความสะดวก, หมวดรายงาน) และบัญชี/ที่พักตัวอย่าง | `db-infra-architect` | `feat(seed): [PBI-03] add master lookup seed data and demo accounts/properties` |
+| `[x]` | **`PBI-03`** | **Master Lookup & Demo Seed Data:** สร้างสคริปต์ Seed ข้อมูลตั้งต้น (Roles, Permissions, ประเภทสัตว์, สายพันธุ์, ขนาดน้ำหนัก, ระดับพลังงาน 1–5, สิ่งอำนวยความสะดวก, หมวดรายงาน) และบัญชี/ที่พักตัวอย่าง | `db-infra-architect` | `feat(seed): [PBI-03] add master lookup seed data and demo accounts/properties` |
 
 ---
 
