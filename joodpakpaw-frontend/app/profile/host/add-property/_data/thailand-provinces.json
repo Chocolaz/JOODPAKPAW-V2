@@ -1,0 +1,4176 @@
+[
+  {
+    "code": 10,
+    "name_en": "Bangkok",
+    "districts": [
+      {
+        "code": 1001,
+        "name_en": "Phra Nakhon"
+      },
+      {
+        "code": 1002,
+        "name_en": "Dusit"
+      },
+      {
+        "code": 1003,
+        "name_en": "Nong Chok"
+      },
+      {
+        "code": 1004,
+        "name_en": "Bang Rak"
+      },
+      {
+        "code": 1005,
+        "name_en": "Bang Khen"
+      },
+      {
+        "code": 1006,
+        "name_en": "Bang Kapi"
+      },
+      {
+        "code": 1007,
+        "name_en": "Pathum Wan"
+      },
+      {
+        "code": 1008,
+        "name_en": "Pom Prap Sattruphai"
+      },
+      {
+        "code": 1009,
+        "name_en": "Phra Khanong"
+      },
+      {
+        "code": 1010,
+        "name_en": "Min Buri"
+      },
+      {
+        "code": 1011,
+        "name_en": "Lat Krabang"
+      },
+      {
+        "code": 1012,
+        "name_en": "Yannawa"
+      },
+      {
+        "code": 1013,
+        "name_en": "Samphanthawong"
+      },
+      {
+        "code": 1014,
+        "name_en": "Phaya Thai"
+      },
+      {
+        "code": 1015,
+        "name_en": "Thon Buri"
+      },
+      {
+        "code": 1016,
+        "name_en": "Bangkok Yai"
+      },
+      {
+        "code": 1017,
+        "name_en": "Huai Khwang"
+      },
+      {
+        "code": 1018,
+        "name_en": "Khlong San"
+      },
+      {
+        "code": 1019,
+        "name_en": "Taling Chan"
+      },
+      {
+        "code": 1020,
+        "name_en": "Bangkok Noi"
+      },
+      {
+        "code": 1021,
+        "name_en": "Bang Khun Thian"
+      },
+      {
+        "code": 1022,
+        "name_en": "Phasi Charoen"
+      },
+      {
+        "code": 1023,
+        "name_en": "Nong Khaem"
+      },
+      {
+        "code": 1024,
+        "name_en": "Rat Burana"
+      },
+      {
+        "code": 1025,
+        "name_en": "Bang Phlat"
+      },
+      {
+        "code": 1026,
+        "name_en": "Din Daeng"
+      },
+      {
+        "code": 1027,
+        "name_en": "Bung Kum"
+      },
+      {
+        "code": 1028,
+        "name_en": "Sathon"
+      },
+      {
+        "code": 1029,
+        "name_en": "Bang Su"
+      },
+      {
+        "code": 1030,
+        "name_en": "Chatuchak"
+      },
+      {
+        "code": 1031,
+        "name_en": "Bang Kho Laem"
+      },
+      {
+        "code": 1032,
+        "name_en": "Prawet"
+      },
+      {
+        "code": 1033,
+        "name_en": "Khlong Toei"
+      },
+      {
+        "code": 1034,
+        "name_en": "Suan Luang"
+      },
+      {
+        "code": 1035,
+        "name_en": "Chom Thong"
+      },
+      {
+        "code": 1036,
+        "name_en": "Don Mueang"
+      },
+      {
+        "code": 1037,
+        "name_en": "Rat Thewi"
+      },
+      {
+        "code": 1038,
+        "name_en": "Lat Phrao"
+      },
+      {
+        "code": 1039,
+        "name_en": "Watthana"
+      },
+      {
+        "code": 1040,
+        "name_en": "Bang Khae"
+      },
+      {
+        "code": 1041,
+        "name_en": "Lak Si"
+      },
+      {
+        "code": 1042,
+        "name_en": "Sai Mai"
+      },
+      {
+        "code": 1043,
+        "name_en": "Khanna Yao"
+      },
+      {
+        "code": 1044,
+        "name_en": "Saphan Sung"
+      },
+      {
+        "code": 1045,
+        "name_en": "Wang Thong Lang"
+      },
+      {
+        "code": 1046,
+        "name_en": "Khlong Sam Wa"
+      },
+      {
+        "code": 1047,
+        "name_en": "Bang Na"
+      },
+      {
+        "code": 1048,
+        "name_en": "Thawi Watthana"
+      },
+      {
+        "code": 1049,
+        "name_en": "Thung Khu"
+      },
+      {
+        "code": 1050,
+        "name_en": "Bang Bon"
+      }
+    ]
+  },
+  {
+    "code": 11,
+    "name_en": "Samut Prakan",
+    "districts": [
+      {
+        "code": 1101,
+        "name_en": "Mueang Samut Prakan"
+      },
+      {
+        "code": 1102,
+        "name_en": "Bang Bo"
+      },
+      {
+        "code": 1103,
+        "name_en": "Bang Phli"
+      },
+      {
+        "code": 1104,
+        "name_en": "Phra Pradaeng"
+      },
+      {
+        "code": 1105,
+        "name_en": "Phra Samut Chedi"
+      },
+      {
+        "code": 1106,
+        "name_en": "Bang Sao Thong"
+      }
+    ]
+  },
+  {
+    "code": 12,
+    "name_en": "Nonthaburi",
+    "districts": [
+      {
+        "code": 1201,
+        "name_en": "Mueang Nonthaburi"
+      },
+      {
+        "code": 1202,
+        "name_en": "Bang Kruai"
+      },
+      {
+        "code": 1203,
+        "name_en": "Bang Yai"
+      },
+      {
+        "code": 1204,
+        "name_en": "Bang Bua Thong"
+      },
+      {
+        "code": 1205,
+        "name_en": "Sai Noi"
+      },
+      {
+        "code": 1206,
+        "name_en": "Pak Kret"
+      }
+    ]
+  },
+  {
+    "code": 13,
+    "name_en": "Pathum Thani",
+    "districts": [
+      {
+        "code": 1301,
+        "name_en": "Mueang Pathum Thani"
+      },
+      {
+        "code": 1302,
+        "name_en": "Khlong Luang"
+      },
+      {
+        "code": 1303,
+        "name_en": "Thanyaburi"
+      },
+      {
+        "code": 1304,
+        "name_en": "Nong Suea"
+      },
+      {
+        "code": 1305,
+        "name_en": "Lat Lum Kaeo"
+      },
+      {
+        "code": 1306,
+        "name_en": "Lam Luk Ka"
+      },
+      {
+        "code": 1307,
+        "name_en": "Sam Khok"
+      }
+    ]
+  },
+  {
+    "code": 14,
+    "name_en": "Phra Nakhon Si Ayutthaya",
+    "districts": [
+      {
+        "code": 1401,
+        "name_en": "Phra Nakhon Si Ayutthaya"
+      },
+      {
+        "code": 1402,
+        "name_en": "Tha Ruea"
+      },
+      {
+        "code": 1403,
+        "name_en": "Nakhon Luang"
+      },
+      {
+        "code": 1404,
+        "name_en": "Bang Sai"
+      },
+      {
+        "code": 1405,
+        "name_en": "Bang Ban"
+      },
+      {
+        "code": 1406,
+        "name_en": "Bang Pa-In"
+      },
+      {
+        "code": 1407,
+        "name_en": "Bang Pahan"
+      },
+      {
+        "code": 1408,
+        "name_en": "Phak Hai"
+      },
+      {
+        "code": 1409,
+        "name_en": "Phachi"
+      },
+      {
+        "code": 1410,
+        "name_en": "Lat Bua Luang"
+      },
+      {
+        "code": 1411,
+        "name_en": "Wang Noi"
+      },
+      {
+        "code": 1412,
+        "name_en": "Sena"
+      },
+      {
+        "code": 1413,
+        "name_en": "Bang Sai"
+      },
+      {
+        "code": 1414,
+        "name_en": "Uthai"
+      },
+      {
+        "code": 1415,
+        "name_en": "Maha Rat"
+      },
+      {
+        "code": 1416,
+        "name_en": "Ban Phraek"
+      }
+    ]
+  },
+  {
+    "code": 15,
+    "name_en": "Ang Thong",
+    "districts": [
+      {
+        "code": 1501,
+        "name_en": "Mueang Ang Thong"
+      },
+      {
+        "code": 1502,
+        "name_en": "Chaiyo"
+      },
+      {
+        "code": 1503,
+        "name_en": "Pa Mok"
+      },
+      {
+        "code": 1504,
+        "name_en": "Pho Thong"
+      },
+      {
+        "code": 1505,
+        "name_en": "Sawaeng Ha"
+      },
+      {
+        "code": 1506,
+        "name_en": "Wiset Chai Chan"
+      },
+      {
+        "code": 1507,
+        "name_en": "Samko"
+      }
+    ]
+  },
+  {
+    "code": 16,
+    "name_en": "Loburi",
+    "districts": [
+      {
+        "code": 1601,
+        "name_en": "Mueang Lop Buri"
+      },
+      {
+        "code": 1602,
+        "name_en": "Phatthana Nikhom"
+      },
+      {
+        "code": 1603,
+        "name_en": "Khok Samrong"
+      },
+      {
+        "code": 1604,
+        "name_en": "Chai Badan"
+      },
+      {
+        "code": 1605,
+        "name_en": "Tha Wung"
+      },
+      {
+        "code": 1606,
+        "name_en": "Ban Mi"
+      },
+      {
+        "code": 1607,
+        "name_en": "Tha Luang"
+      },
+      {
+        "code": 1608,
+        "name_en": "Sa Bot"
+      },
+      {
+        "code": 1609,
+        "name_en": "Khok Charoen"
+      },
+      {
+        "code": 1610,
+        "name_en": "Lam Sonthi"
+      },
+      {
+        "code": 1611,
+        "name_en": "Nong Muang"
+      }
+    ]
+  },
+  {
+    "code": 17,
+    "name_en": "Sing Buri",
+    "districts": [
+      {
+        "code": 1701,
+        "name_en": "Mueang Sing Buri"
+      },
+      {
+        "code": 1702,
+        "name_en": "Bang Rachan"
+      },
+      {
+        "code": 1703,
+        "name_en": "Khai Bang Rachan"
+      },
+      {
+        "code": 1704,
+        "name_en": "Phrom Buri"
+      },
+      {
+        "code": 1705,
+        "name_en": "Tha Chang"
+      },
+      {
+        "code": 1706,
+        "name_en": "In Buri"
+      }
+    ]
+  },
+  {
+    "code": 18,
+    "name_en": "Chai Nat",
+    "districts": [
+      {
+        "code": 1801,
+        "name_en": "Mueang Chai Nat"
+      },
+      {
+        "code": 1802,
+        "name_en": "Manorom"
+      },
+      {
+        "code": 1803,
+        "name_en": "Wat Sing"
+      },
+      {
+        "code": 1804,
+        "name_en": "Sapphaya"
+      },
+      {
+        "code": 1805,
+        "name_en": "Sankhaburi"
+      },
+      {
+        "code": 1806,
+        "name_en": "Hankha"
+      },
+      {
+        "code": 1807,
+        "name_en": "Nong Mamong"
+      },
+      {
+        "code": 1808,
+        "name_en": "Noen Kham"
+      }
+    ]
+  },
+  {
+    "code": 19,
+    "name_en": "Saraburi",
+    "districts": [
+      {
+        "code": 1901,
+        "name_en": "Mueang Saraburi"
+      },
+      {
+        "code": 1902,
+        "name_en": "Kaeng Khoi"
+      },
+      {
+        "code": 1903,
+        "name_en": "Nong Khae"
+      },
+      {
+        "code": 1904,
+        "name_en": "Wihan Daeng"
+      },
+      {
+        "code": 1905,
+        "name_en": "Nong Saeng"
+      },
+      {
+        "code": 1906,
+        "name_en": "Ban Mo"
+      },
+      {
+        "code": 1907,
+        "name_en": "Don Phut"
+      },
+      {
+        "code": 1908,
+        "name_en": "Nong Don"
+      },
+      {
+        "code": 1909,
+        "name_en": "Phra Phutthabat"
+      },
+      {
+        "code": 1910,
+        "name_en": "Sao Hai"
+      },
+      {
+        "code": 1911,
+        "name_en": "Muak Lek"
+      },
+      {
+        "code": 1912,
+        "name_en": "Wang Muang"
+      },
+      {
+        "code": 1913,
+        "name_en": "Chaloem Phra Kiet"
+      }
+    ]
+  },
+  {
+    "code": 20,
+    "name_en": "Chon Buri",
+    "districts": [
+      {
+        "code": 2001,
+        "name_en": "Mueang Chon Buri"
+      },
+      {
+        "code": 2002,
+        "name_en": "Ban Bueng"
+      },
+      {
+        "code": 2003,
+        "name_en": "Nong Yai"
+      },
+      {
+        "code": 2004,
+        "name_en": "Bang Lamung"
+      },
+      {
+        "code": 2005,
+        "name_en": "Phan Thong"
+      },
+      {
+        "code": 2006,
+        "name_en": "Phanat Nikhom"
+      },
+      {
+        "code": 2007,
+        "name_en": "Si Racha"
+      },
+      {
+        "code": 2008,
+        "name_en": "Ko Sichang"
+      },
+      {
+        "code": 2009,
+        "name_en": "Sattahip"
+      },
+      {
+        "code": 2010,
+        "name_en": "Bo Thong"
+      },
+      {
+        "code": 2011,
+        "name_en": "Ko Chan"
+      }
+    ]
+  },
+  {
+    "code": 21,
+    "name_en": "Rayong",
+    "districts": [
+      {
+        "code": 2101,
+        "name_en": "Mueang Rayong"
+      },
+      {
+        "code": 2102,
+        "name_en": "Ban Chang"
+      },
+      {
+        "code": 2103,
+        "name_en": "Klaeng"
+      },
+      {
+        "code": 2104,
+        "name_en": "Wang Chan"
+      },
+      {
+        "code": 2105,
+        "name_en": "Ban Khai"
+      },
+      {
+        "code": 2106,
+        "name_en": "Pluak Daeng"
+      },
+      {
+        "code": 2107,
+        "name_en": "Khao Chamao"
+      },
+      {
+        "code": 2108,
+        "name_en": "Nikhom Phatthana"
+      }
+    ]
+  },
+  {
+    "code": 22,
+    "name_en": "Chanthaburi",
+    "districts": [
+      {
+        "code": 2201,
+        "name_en": "Mueang Chanthaburi"
+      },
+      {
+        "code": 2202,
+        "name_en": "Khlung"
+      },
+      {
+        "code": 2203,
+        "name_en": "Tha Mai"
+      },
+      {
+        "code": 2204,
+        "name_en": "Pong Nam Ron"
+      },
+      {
+        "code": 2205,
+        "name_en": "Makham"
+      },
+      {
+        "code": 2206,
+        "name_en": "Laem Sing"
+      },
+      {
+        "code": 2207,
+        "name_en": "Soi Dao"
+      },
+      {
+        "code": 2208,
+        "name_en": "Kaeng Hang Maeo"
+      },
+      {
+        "code": 2209,
+        "name_en": "Na Yai Am"
+      },
+      {
+        "code": 2210,
+        "name_en": "Khao Khitchakut"
+      }
+    ]
+  },
+  {
+    "code": 23,
+    "name_en": "Trat",
+    "districts": [
+      {
+        "code": 2301,
+        "name_en": "Mueang Trat"
+      },
+      {
+        "code": 2302,
+        "name_en": "Khlong Yai"
+      },
+      {
+        "code": 2303,
+        "name_en": "Khao Saming"
+      },
+      {
+        "code": 2304,
+        "name_en": "Bo Rai"
+      },
+      {
+        "code": 2305,
+        "name_en": "Laem Ngop"
+      },
+      {
+        "code": 2306,
+        "name_en": "Ko Kut"
+      },
+      {
+        "code": 2307,
+        "name_en": "Ko Chang"
+      }
+    ]
+  },
+  {
+    "code": 24,
+    "name_en": "Chachoengsao",
+    "districts": [
+      {
+        "code": 2401,
+        "name_en": "Mueang Chachoengsao"
+      },
+      {
+        "code": 2402,
+        "name_en": "Bang Khla"
+      },
+      {
+        "code": 2403,
+        "name_en": "Bang Nam Priao"
+      },
+      {
+        "code": 2404,
+        "name_en": "Bang Pakong"
+      },
+      {
+        "code": 2405,
+        "name_en": "Ban Pho"
+      },
+      {
+        "code": 2406,
+        "name_en": "Phanom Sarakham"
+      },
+      {
+        "code": 2407,
+        "name_en": "Ratchasan"
+      },
+      {
+        "code": 2408,
+        "name_en": "Sanam Chai Khet"
+      },
+      {
+        "code": 2409,
+        "name_en": "Pleang Yao"
+      },
+      {
+        "code": 2410,
+        "name_en": "Tha Takiap"
+      },
+      {
+        "code": 2411,
+        "name_en": "Khlong Khuean"
+      }
+    ]
+  },
+  {
+    "code": 25,
+    "name_en": "Prachin Buri",
+    "districts": [
+      {
+        "code": 2501,
+        "name_en": "Mueang Prachin Buri"
+      },
+      {
+        "code": 2502,
+        "name_en": "Kabin Buri"
+      },
+      {
+        "code": 2503,
+        "name_en": "Na Di"
+      },
+      {
+        "code": 2506,
+        "name_en": "Ban Sang"
+      },
+      {
+        "code": 2507,
+        "name_en": "Prachantakham"
+      },
+      {
+        "code": 2508,
+        "name_en": "Si Maha Phot"
+      },
+      {
+        "code": 2509,
+        "name_en": "Si Mahosot"
+      }
+    ]
+  },
+  {
+    "code": 26,
+    "name_en": "Nakhon Nayok",
+    "districts": [
+      {
+        "code": 2601,
+        "name_en": "Mueang Nakhon Nayok"
+      },
+      {
+        "code": 2602,
+        "name_en": "Pak Phli"
+      },
+      {
+        "code": 2603,
+        "name_en": "Ban Na"
+      },
+      {
+        "code": 2604,
+        "name_en": "Ongkharak"
+      }
+    ]
+  },
+  {
+    "code": 27,
+    "name_en": "Sa Kaeo",
+    "districts": [
+      {
+        "code": 2701,
+        "name_en": "Mueang Sa Kaeo"
+      },
+      {
+        "code": 2702,
+        "name_en": "Khlong Hat"
+      },
+      {
+        "code": 2703,
+        "name_en": "Ta Phraya"
+      },
+      {
+        "code": 2704,
+        "name_en": "Wang Nam Yen"
+      },
+      {
+        "code": 2705,
+        "name_en": "Watthana Nakhon"
+      },
+      {
+        "code": 2706,
+        "name_en": "Aranyaprathet"
+      },
+      {
+        "code": 2707,
+        "name_en": "Khao Chakan"
+      },
+      {
+        "code": 2708,
+        "name_en": "Khok Sung"
+      },
+      {
+        "code": 2709,
+        "name_en": "Wang Sombun"
+      }
+    ]
+  },
+  {
+    "code": 30,
+    "name_en": "Nakhon Ratchasima",
+    "districts": [
+      {
+        "code": 3001,
+        "name_en": "Mueang Nakhon Ratchasima"
+      },
+      {
+        "code": 3002,
+        "name_en": "Khon Buri"
+      },
+      {
+        "code": 3003,
+        "name_en": "Soeng Sang"
+      },
+      {
+        "code": 3004,
+        "name_en": "Khong"
+      },
+      {
+        "code": 3005,
+        "name_en": "Ban Lueam"
+      },
+      {
+        "code": 3006,
+        "name_en": "Chakkarat"
+      },
+      {
+        "code": 3007,
+        "name_en": "Chok Chai"
+      },
+      {
+        "code": 3008,
+        "name_en": "Dan Khun Thot"
+      },
+      {
+        "code": 3009,
+        "name_en": "Non Thai"
+      },
+      {
+        "code": 3010,
+        "name_en": "Non Sung"
+      },
+      {
+        "code": 3011,
+        "name_en": "Kham Sakaesaeng"
+      },
+      {
+        "code": 3012,
+        "name_en": "Bua Yai"
+      },
+      {
+        "code": 3013,
+        "name_en": "Prathai"
+      },
+      {
+        "code": 3014,
+        "name_en": "Pak Thong Chai"
+      },
+      {
+        "code": 3015,
+        "name_en": "Phimai"
+      },
+      {
+        "code": 3016,
+        "name_en": "Huai Thalaeng"
+      },
+      {
+        "code": 3017,
+        "name_en": "Chum Phuang"
+      },
+      {
+        "code": 3018,
+        "name_en": "Sung Noen"
+      },
+      {
+        "code": 3019,
+        "name_en": "Kham Thale So"
+      },
+      {
+        "code": 3020,
+        "name_en": "Si Khio"
+      },
+      {
+        "code": 3021,
+        "name_en": "Pak Chong"
+      },
+      {
+        "code": 3022,
+        "name_en": "Nong Bunmak"
+      },
+      {
+        "code": 3023,
+        "name_en": "Kaeng Sanam Nang"
+      },
+      {
+        "code": 3024,
+        "name_en": "Non Daeng"
+      },
+      {
+        "code": 3025,
+        "name_en": "Wang Nam Khiao"
+      },
+      {
+        "code": 3026,
+        "name_en": "Thepharak"
+      },
+      {
+        "code": 3027,
+        "name_en": "Mueang Yang"
+      },
+      {
+        "code": 3028,
+        "name_en": "Phra Thong Kham"
+      },
+      {
+        "code": 3029,
+        "name_en": "Lamtaman Chai"
+      },
+      {
+        "code": 3030,
+        "name_en": "Bua Lai"
+      },
+      {
+        "code": 3031,
+        "name_en": "Sida"
+      },
+      {
+        "code": 3032,
+        "name_en": "Chaloem Phra Kiet"
+      }
+    ]
+  },
+  {
+    "code": 31,
+    "name_en": "Buri Ram",
+    "districts": [
+      {
+        "code": 3101,
+        "name_en": "Mueang Buri Ram"
+      },
+      {
+        "code": 3102,
+        "name_en": "Khu Mueang"
+      },
+      {
+        "code": 3103,
+        "name_en": "Krasang"
+      },
+      {
+        "code": 3104,
+        "name_en": "Nang Rong"
+      },
+      {
+        "code": 3105,
+        "name_en": "Nong Ki"
+      },
+      {
+        "code": 3106,
+        "name_en": "Lahan Sai"
+      },
+      {
+        "code": 3107,
+        "name_en": "Prakhon Chai"
+      },
+      {
+        "code": 3108,
+        "name_en": "Ban Kruat"
+      },
+      {
+        "code": 3109,
+        "name_en": "Phutthaisong"
+      },
+      {
+        "code": 3110,
+        "name_en": "Lam Plai Mat"
+      },
+      {
+        "code": 3111,
+        "name_en": "Satuek"
+      },
+      {
+        "code": 3112,
+        "name_en": "Pakham"
+      },
+      {
+        "code": 3113,
+        "name_en": "Na Pho"
+      },
+      {
+        "code": 3114,
+        "name_en": "Nong Hong"
+      },
+      {
+        "code": 3115,
+        "name_en": "Phlapphla Chai"
+      },
+      {
+        "code": 3116,
+        "name_en": "Huai Rat"
+      },
+      {
+        "code": 3117,
+        "name_en": "Non Din Daeng"
+      },
+      {
+        "code": 3118,
+        "name_en": "Chamni"
+      },
+      {
+        "code": 3119,
+        "name_en": "Ban Mai Chaiyaphot"
+      },
+      {
+        "code": 3120,
+        "name_en": "Non Din Daeng"
+      },
+      {
+        "code": 3121,
+        "name_en": "Ban Dan"
+      },
+      {
+        "code": 3122,
+        "name_en": "Khaen Dong"
+      },
+      {
+        "code": 3123,
+        "name_en": "Chaloem Phra Kiet"
+      }
+    ]
+  },
+  {
+    "code": 32,
+    "name_en": "Surin",
+    "districts": [
+      {
+        "code": 3201,
+        "name_en": "Mueang Surin"
+      },
+      {
+        "code": 3202,
+        "name_en": "Chumphon Buri"
+      },
+      {
+        "code": 3203,
+        "name_en": "Tha Tum"
+      },
+      {
+        "code": 3204,
+        "name_en": "Chom Phra"
+      },
+      {
+        "code": 3205,
+        "name_en": "Prasat"
+      },
+      {
+        "code": 3206,
+        "name_en": "Kap Choeng"
+      },
+      {
+        "code": 3207,
+        "name_en": "Rattanaburi"
+      },
+      {
+        "code": 3208,
+        "name_en": "Sanom"
+      },
+      {
+        "code": 3209,
+        "name_en": "Sikhoraphum"
+      },
+      {
+        "code": 3210,
+        "name_en": "Sangkha"
+      },
+      {
+        "code": 3211,
+        "name_en": "Lamduan"
+      },
+      {
+        "code": 3212,
+        "name_en": "Samrong Thap"
+      },
+      {
+        "code": 3213,
+        "name_en": "Buachet"
+      },
+      {
+        "code": 3214,
+        "name_en": "Phanom Dong Rak"
+      },
+      {
+        "code": 3215,
+        "name_en": "Si Narong"
+      },
+      {
+        "code": 3216,
+        "name_en": "Khwao Sinarin"
+      },
+      {
+        "code": 3217,
+        "name_en": "Non Narai"
+      }
+    ]
+  },
+  {
+    "code": 33,
+    "name_en": "Si Sa Ket",
+    "districts": [
+      {
+        "code": 3301,
+        "name_en": "Mueang Si Sa Ket"
+      },
+      {
+        "code": 3302,
+        "name_en": "Yang Chum Noi"
+      },
+      {
+        "code": 3303,
+        "name_en": "Kanthararom"
+      },
+      {
+        "code": 3304,
+        "name_en": "Kantharalak"
+      },
+      {
+        "code": 3305,
+        "name_en": "Khukhan"
+      },
+      {
+        "code": 3306,
+        "name_en": "Phrai Bueng"
+      },
+      {
+        "code": 3307,
+        "name_en": "Prang Ku"
+      },
+      {
+        "code": 3308,
+        "name_en": "Khun Han"
+      },
+      {
+        "code": 3309,
+        "name_en": "Rasi Salai"
+      },
+      {
+        "code": 3310,
+        "name_en": "Uthumphon Phisai"
+      },
+      {
+        "code": 3311,
+        "name_en": "Bueng Bun"
+      },
+      {
+        "code": 3312,
+        "name_en": "Huai Thap Than"
+      },
+      {
+        "code": 3313,
+        "name_en": "Non Khun"
+      },
+      {
+        "code": 3314,
+        "name_en": "Si Rattana"
+      },
+      {
+        "code": 3315,
+        "name_en": "Nam Kliang"
+      },
+      {
+        "code": 3316,
+        "name_en": "Wang Hin"
+      },
+      {
+        "code": 3317,
+        "name_en": "Phu Sing"
+      },
+      {
+        "code": 3318,
+        "name_en": "Mueang Chan"
+      },
+      {
+        "code": 3319,
+        "name_en": "Benchalak"
+      },
+      {
+        "code": 3320,
+        "name_en": "Phayu"
+      },
+      {
+        "code": 3321,
+        "name_en": "Pho Si Suwan"
+      },
+      {
+        "code": 3322,
+        "name_en": "Sila Lat"
+      }
+    ]
+  },
+  {
+    "code": 34,
+    "name_en": "Ubon Ratchathani",
+    "districts": [
+      {
+        "code": 3401,
+        "name_en": "Mueang Ubon Ratchathani"
+      },
+      {
+        "code": 3402,
+        "name_en": "Si Mueang Mai"
+      },
+      {
+        "code": 3403,
+        "name_en": "Khong Chiam"
+      },
+      {
+        "code": 3404,
+        "name_en": "Khueang Nai"
+      },
+      {
+        "code": 3405,
+        "name_en": "Khemarat"
+      },
+      {
+        "code": 3407,
+        "name_en": "Det Udom"
+      },
+      {
+        "code": 3408,
+        "name_en": "Na Chaluai"
+      },
+      {
+        "code": 3409,
+        "name_en": "Nam Yuen"
+      },
+      {
+        "code": 3410,
+        "name_en": "Boontharik"
+      },
+      {
+        "code": 3411,
+        "name_en": "Trakan Phuet Phon"
+      },
+      {
+        "code": 3412,
+        "name_en": "Kut Khaopun"
+      },
+      {
+        "code": 3414,
+        "name_en": "Muang Sam Sip"
+      },
+      {
+        "code": 3415,
+        "name_en": "Warin Chamrap"
+      },
+      {
+        "code": 3419,
+        "name_en": "Phibun Mangsahan"
+      },
+      {
+        "code": 3420,
+        "name_en": "Tan Sum"
+      },
+      {
+        "code": 3421,
+        "name_en": "Pho Sai"
+      },
+      {
+        "code": 3422,
+        "name_en": "Samrong"
+      },
+      {
+        "code": 3424,
+        "name_en": "Don Mot Daeng"
+      },
+      {
+        "code": 3425,
+        "name_en": "Sirindhorn"
+      },
+      {
+        "code": 3426,
+        "name_en": "Thung Si Udom"
+      },
+      {
+        "code": 3429,
+        "name_en": "Na Yia"
+      },
+      {
+        "code": 3430,
+        "name_en": "Na Tan"
+      },
+      {
+        "code": 3431,
+        "name_en": "Lao Suea Kok"
+      },
+      {
+        "code": 3432,
+        "name_en": "Sawang Wirawong"
+      },
+      {
+        "code": 3433,
+        "name_en": "Nam Khun"
+      }
+    ]
+  },
+  {
+    "code": 35,
+    "name_en": "Yasothon",
+    "districts": [
+      {
+        "code": 3501,
+        "name_en": "Mueang Yasothon"
+      },
+      {
+        "code": 3502,
+        "name_en": "Sai Mun"
+      },
+      {
+        "code": 3503,
+        "name_en": "Kut Chum"
+      },
+      {
+        "code": 3504,
+        "name_en": "Kham Khuean Kaeo"
+      },
+      {
+        "code": 3505,
+        "name_en": "Pa Tio"
+      },
+      {
+        "code": 3506,
+        "name_en": "Maha Chana Chai"
+      },
+      {
+        "code": 3507,
+        "name_en": "Kho Wang"
+      },
+      {
+        "code": 3508,
+        "name_en": "Loeng Nok Tha"
+      },
+      {
+        "code": 3509,
+        "name_en": "Thai Charoen"
+      }
+    ]
+  },
+  {
+    "code": 36,
+    "name_en": "Chaiyaphum",
+    "districts": [
+      {
+        "code": 3601,
+        "name_en": "Mueang Chaiyaphum"
+      },
+      {
+        "code": 3602,
+        "name_en": "Ban Khwao"
+      },
+      {
+        "code": 3603,
+        "name_en": "Khon Sawan"
+      },
+      {
+        "code": 3604,
+        "name_en": "Kaset Sombun"
+      },
+      {
+        "code": 3605,
+        "name_en": "Nong Bua Daeng"
+      },
+      {
+        "code": 3606,
+        "name_en": "Chatturat"
+      },
+      {
+        "code": 3607,
+        "name_en": "Bamnet Narong"
+      },
+      {
+        "code": 3608,
+        "name_en": "Nong Bua Rawe"
+      },
+      {
+        "code": 3609,
+        "name_en": "Thep Sathit"
+      },
+      {
+        "code": 3610,
+        "name_en": "Phu Khiao"
+      },
+      {
+        "code": 3611,
+        "name_en": "Ban Thaen"
+      },
+      {
+        "code": 3612,
+        "name_en": "Kaeng Khro"
+      },
+      {
+        "code": 3613,
+        "name_en": "Khon San"
+      },
+      {
+        "code": 3614,
+        "name_en": "Phakdi Chumphon"
+      },
+      {
+        "code": 3615,
+        "name_en": "Noen Sa-Nga"
+      },
+      {
+        "code": 3616,
+        "name_en": "Sap Yai"
+      }
+    ]
+  },
+  {
+    "code": 37,
+    "name_en": "Amnat Charoen",
+    "districts": [
+      {
+        "code": 3701,
+        "name_en": "Mueang Amnat Charoen"
+      },
+      {
+        "code": 3702,
+        "name_en": "Chanuman"
+      },
+      {
+        "code": 3703,
+        "name_en": "Pathum Ratchawongsa"
+      },
+      {
+        "code": 3704,
+        "name_en": "Phana"
+      },
+      {
+        "code": 3705,
+        "name_en": "Senangkhanikhom"
+      },
+      {
+        "code": 3706,
+        "name_en": "Hua Taphan"
+      },
+      {
+        "code": 3707,
+        "name_en": "Lue Amnat"
+      }
+    ]
+  },
+  {
+    "code": 38,
+    "name_en": "Bueng Kan",
+    "districts": [
+      {
+        "code": 3801,
+        "name_en": "Bueng Kan"
+      },
+      {
+        "code": 3802,
+        "name_en": "Phon Charoen"
+      },
+      {
+        "code": 3803,
+        "name_en": "So Phisai"
+      },
+      {
+        "code": 3804,
+        "name_en": "Seka"
+      },
+      {
+        "code": 3805,
+        "name_en": "Pak Khat"
+      },
+      {
+        "code": 3806,
+        "name_en": "Bueng Khong Long"
+      },
+      {
+        "code": 3807,
+        "name_en": "Si Wilai"
+      },
+      {
+        "code": 3808,
+        "name_en": "Bung Khla"
+      }
+    ]
+  },
+  {
+    "code": 39,
+    "name_en": "Nong Bua Lam Phu",
+    "districts": [
+      {
+        "code": 3901,
+        "name_en": "Mueang Nong Bua Lam Phu"
+      },
+      {
+        "code": 3902,
+        "name_en": "Na Klang"
+      },
+      {
+        "code": 3903,
+        "name_en": "Non Sang"
+      },
+      {
+        "code": 3904,
+        "name_en": "Si Bun Rueang"
+      },
+      {
+        "code": 3905,
+        "name_en": "Suwannakhuha"
+      },
+      {
+        "code": 3906,
+        "name_en": "Na Wang"
+      }
+    ]
+  },
+  {
+    "code": 40,
+    "name_en": "Khon Kaen",
+    "districts": [
+      {
+        "code": 4001,
+        "name_en": "Mueang Khon Kaen"
+      },
+      {
+        "code": 4002,
+        "name_en": "Ban Fang"
+      },
+      {
+        "code": 4003,
+        "name_en": "Phra Yuen"
+      },
+      {
+        "code": 4004,
+        "name_en": "Nong Ruea"
+      },
+      {
+        "code": 4005,
+        "name_en": "Chum Phae"
+      },
+      {
+        "code": 4006,
+        "name_en": "Si Chomphu"
+      },
+      {
+        "code": 4007,
+        "name_en": "Nam Phong"
+      },
+      {
+        "code": 4008,
+        "name_en": "Ubolratana"
+      },
+      {
+        "code": 4009,
+        "name_en": "Kranuan"
+      },
+      {
+        "code": 4010,
+        "name_en": "Ban Phai"
+      },
+      {
+        "code": 4011,
+        "name_en": "Pueai Noi"
+      },
+      {
+        "code": 4012,
+        "name_en": "Phon"
+      },
+      {
+        "code": 4013,
+        "name_en": "Waeng Yai"
+      },
+      {
+        "code": 4014,
+        "name_en": "Waeng Noi"
+      },
+      {
+        "code": 4015,
+        "name_en": "Nong Song Hong"
+      },
+      {
+        "code": 4016,
+        "name_en": "Phu Wiang"
+      },
+      {
+        "code": 4017,
+        "name_en": "Mancha Khiri"
+      },
+      {
+        "code": 4018,
+        "name_en": "Chonnabot"
+      },
+      {
+        "code": 4019,
+        "name_en": "Khao Suan Kwang"
+      },
+      {
+        "code": 4020,
+        "name_en": "Phu Phaman"
+      },
+      {
+        "code": 4021,
+        "name_en": "Sam Sung"
+      },
+      {
+        "code": 4022,
+        "name_en": "Khok Pho Chai"
+      },
+      {
+        "code": 4023,
+        "name_en": "Nong Na Kham"
+      },
+      {
+        "code": 4024,
+        "name_en": "Ban Haet"
+      },
+      {
+        "code": 4025,
+        "name_en": "Non Sila"
+      },
+      {
+        "code": 4029,
+        "name_en": "Wiang Kao"
+      }
+    ]
+  },
+  {
+    "code": 41,
+    "name_en": "Udon Thani",
+    "districts": [
+      {
+        "code": 4101,
+        "name_en": "Mueang Udon Thani"
+      },
+      {
+        "code": 4102,
+        "name_en": "Kut Chap"
+      },
+      {
+        "code": 4103,
+        "name_en": "Nong Wua So"
+      },
+      {
+        "code": 4104,
+        "name_en": "Kumphawapi"
+      },
+      {
+        "code": 4105,
+        "name_en": "Non Sa-At"
+      },
+      {
+        "code": 4106,
+        "name_en": "Nong Saeng"
+      },
+      {
+        "code": 4107,
+        "name_en": "Thung Fon"
+      },
+      {
+        "code": 4108,
+        "name_en": "Chai Wan"
+      },
+      {
+        "code": 4109,
+        "name_en": "Si That"
+      },
+      {
+        "code": 4110,
+        "name_en": "Wang Sam Mo"
+      },
+      {
+        "code": 4111,
+        "name_en": "Ban Dung"
+      },
+      {
+        "code": 4117,
+        "name_en": "Ban Phue"
+      },
+      {
+        "code": 4118,
+        "name_en": "Nam Som"
+      },
+      {
+        "code": 4119,
+        "name_en": "Phen"
+      },
+      {
+        "code": 4120,
+        "name_en": "Sang Khom"
+      },
+      {
+        "code": 4121,
+        "name_en": "Nong Saeng"
+      },
+      {
+        "code": 4122,
+        "name_en": "Na Yung"
+      },
+      {
+        "code": 4123,
+        "name_en": "Phibun Rak"
+      },
+      {
+        "code": 4124,
+        "name_en": "Ku Kaeo"
+      },
+      {
+        "code": 4125,
+        "name_en": "Prachaksinlapakhom"
+      }
+    ]
+  },
+  {
+    "code": 42,
+    "name_en": "Loei",
+    "districts": [
+      {
+        "code": 4201,
+        "name_en": "Mueang Loei"
+      },
+      {
+        "code": 4202,
+        "name_en": "Na Duang"
+      },
+      {
+        "code": 4203,
+        "name_en": "Chiang Khan"
+      },
+      {
+        "code": 4204,
+        "name_en": "Pak Chom"
+      },
+      {
+        "code": 4205,
+        "name_en": "Dan Sai"
+      },
+      {
+        "code": 4206,
+        "name_en": "Na Haeo"
+      },
+      {
+        "code": 4207,
+        "name_en": "Phu Ruea"
+      },
+      {
+        "code": 4208,
+        "name_en": "Tha Li"
+      },
+      {
+        "code": 4209,
+        "name_en": "Wang Saphung"
+      },
+      {
+        "code": 4210,
+        "name_en": "Phu Kradueng"
+      },
+      {
+        "code": 4211,
+        "name_en": "Phu Luang"
+      },
+      {
+        "code": 4212,
+        "name_en": "Pha Khao"
+      },
+      {
+        "code": 4213,
+        "name_en": "Erawan"
+      },
+      {
+        "code": 4214,
+        "name_en": "Nong Hin"
+      }
+    ]
+  },
+  {
+    "code": 43,
+    "name_en": "Nong Khai",
+    "districts": [
+      {
+        "code": 4301,
+        "name_en": "Mueang Nong Khai"
+      },
+      {
+        "code": 4302,
+        "name_en": "Tha Bo"
+      },
+      {
+        "code": 4305,
+        "name_en": "Phon Phisai"
+      },
+      {
+        "code": 4307,
+        "name_en": "Si Chiang Mai"
+      },
+      {
+        "code": 4308,
+        "name_en": "Sangkhom"
+      },
+      {
+        "code": 4314,
+        "name_en": "Sakhrai"
+      },
+      {
+        "code": 4315,
+        "name_en": "Fao Rai"
+      },
+      {
+        "code": 4316,
+        "name_en": "Rattanawapi"
+      },
+      {
+        "code": 4317,
+        "name_en": "Pho Tak"
+      }
+    ]
+  },
+  {
+    "code": 44,
+    "name_en": "Maha Sarakham",
+    "districts": [
+      {
+        "code": 4401,
+        "name_en": "Mueang Maha Sarakham"
+      },
+      {
+        "code": 4402,
+        "name_en": "Kae Dam"
+      },
+      {
+        "code": 4403,
+        "name_en": "Kosum Phisai"
+      },
+      {
+        "code": 4404,
+        "name_en": "Kantharawichai"
+      },
+      {
+        "code": 4405,
+        "name_en": "Chiang Yuen"
+      },
+      {
+        "code": 4406,
+        "name_en": "Borabue"
+      },
+      {
+        "code": 4407,
+        "name_en": "Na Chueak"
+      },
+      {
+        "code": 4408,
+        "name_en": "Phayakkhaphum Phisai"
+      },
+      {
+        "code": 4409,
+        "name_en": "Wapi Pathum"
+      },
+      {
+        "code": 4410,
+        "name_en": "Na Dun"
+      },
+      {
+        "code": 4411,
+        "name_en": "Yang Sisurat"
+      },
+      {
+        "code": 4412,
+        "name_en": "Kut Rang"
+      },
+      {
+        "code": 4413,
+        "name_en": "Chuen Chom"
+      }
+    ]
+  },
+  {
+    "code": 45,
+    "name_en": "Roi Et",
+    "districts": [
+      {
+        "code": 4501,
+        "name_en": "Mueang Roi Et"
+      },
+      {
+        "code": 4502,
+        "name_en": "Kaset Wisai"
+      },
+      {
+        "code": 4503,
+        "name_en": "Pathum Rat"
+      },
+      {
+        "code": 4504,
+        "name_en": "Chaturaphak Phiman"
+      },
+      {
+        "code": 4505,
+        "name_en": "Thawat Buri"
+      },
+      {
+        "code": 4506,
+        "name_en": "Phanom Phrai"
+      },
+      {
+        "code": 4507,
+        "name_en": "Phon Thong"
+      },
+      {
+        "code": 4508,
+        "name_en": "Pho Chai"
+      },
+      {
+        "code": 4509,
+        "name_en": "Nong Phok"
+      },
+      {
+        "code": 4510,
+        "name_en": "Selaphum"
+      },
+      {
+        "code": 4511,
+        "name_en": "Suwannaphum"
+      },
+      {
+        "code": 4512,
+        "name_en": "Mueang Suang"
+      },
+      {
+        "code": 4513,
+        "name_en": "Phon Sai"
+      },
+      {
+        "code": 4514,
+        "name_en": "At Samat"
+      },
+      {
+        "code": 4515,
+        "name_en": "Moei Wadi"
+      },
+      {
+        "code": 4516,
+        "name_en": "Si Somdet"
+      },
+      {
+        "code": 4517,
+        "name_en": "Changhan"
+      },
+      {
+        "code": 4518,
+        "name_en": "Chiang Khwan"
+      },
+      {
+        "code": 4519,
+        "name_en": "Nong Hi"
+      },
+      {
+        "code": 4520,
+        "name_en": "Thung Khao Luang"
+      }
+    ]
+  },
+  {
+    "code": 46,
+    "name_en": "Kalasin",
+    "districts": [
+      {
+        "code": 4601,
+        "name_en": "Mueang Kalasin"
+      },
+      {
+        "code": 4602,
+        "name_en": "Na Mon"
+      },
+      {
+        "code": 4603,
+        "name_en": "Kamalasai"
+      },
+      {
+        "code": 4604,
+        "name_en": "Rong Kham"
+      },
+      {
+        "code": 4605,
+        "name_en": "Kuchinarai"
+      },
+      {
+        "code": 4606,
+        "name_en": "Khao Wong"
+      },
+      {
+        "code": 4607,
+        "name_en": "Yang Talat"
+      },
+      {
+        "code": 4608,
+        "name_en": "Huai Mek"
+      },
+      {
+        "code": 4609,
+        "name_en": "Sahatsakhan"
+      },
+      {
+        "code": 4610,
+        "name_en": "Kham Muang"
+      },
+      {
+        "code": 4611,
+        "name_en": "Tha Khantho"
+      },
+      {
+        "code": 4612,
+        "name_en": "Nong Kung Si"
+      },
+      {
+        "code": 4613,
+        "name_en": "Somdet"
+      },
+      {
+        "code": 4614,
+        "name_en": "Huai Phueng"
+      },
+      {
+        "code": 4615,
+        "name_en": "Sam Chai"
+      },
+      {
+        "code": 4616,
+        "name_en": "Na Khu"
+      },
+      {
+        "code": 4617,
+        "name_en": "Don Chan"
+      },
+      {
+        "code": 4618,
+        "name_en": "Khong Chai"
+      }
+    ]
+  },
+  {
+    "code": 47,
+    "name_en": "Sakon Nakhon",
+    "districts": [
+      {
+        "code": 4701,
+        "name_en": "Mueang Sakon Nakhon"
+      },
+      {
+        "code": 4702,
+        "name_en": "Kusuman"
+      },
+      {
+        "code": 4703,
+        "name_en": "Kut Bak"
+      },
+      {
+        "code": 4704,
+        "name_en": "Phanna Nikhom"
+      },
+      {
+        "code": 4705,
+        "name_en": "Phanh Khon"
+      },
+      {
+        "code": 4706,
+        "name_en": "Waritchaphum"
+      },
+      {
+        "code": 4707,
+        "name_en": "Nikhom Nam Un"
+      },
+      {
+        "code": 4708,
+        "name_en": "Wanon Niwat"
+      },
+      {
+        "code": 4709,
+        "name_en": "Kham Ta Kla"
+      },
+      {
+        "code": 4710,
+        "name_en": "Ban Muang"
+      },
+      {
+        "code": 4711,
+        "name_en": "Akat Amnuai"
+      },
+      {
+        "code": 4712,
+        "name_en": "Sawang Daen Din"
+      },
+      {
+        "code": 4713,
+        "name_en": "Song Dao"
+      },
+      {
+        "code": 4714,
+        "name_en": "Tao Ngoi"
+      },
+      {
+        "code": 4715,
+        "name_en": "Khok Si Suphan"
+      },
+      {
+        "code": 4716,
+        "name_en": "Charoen Sin"
+      },
+      {
+        "code": 4717,
+        "name_en": "Phon Na Kaeo"
+      },
+      {
+        "code": 4718,
+        "name_en": "Phu Phan"
+      }
+    ]
+  },
+  {
+    "code": 48,
+    "name_en": "Nakhon Phanom",
+    "districts": [
+      {
+        "code": 4801,
+        "name_en": "Mueang Nakhon Phanom"
+      },
+      {
+        "code": 4802,
+        "name_en": "Pla Pak"
+      },
+      {
+        "code": 4803,
+        "name_en": "Tha Uthen"
+      },
+      {
+        "code": 4804,
+        "name_en": "Ban Phaeng"
+      },
+      {
+        "code": 4805,
+        "name_en": "That Phanom"
+      },
+      {
+        "code": 4806,
+        "name_en": "Renu Nakhon"
+      },
+      {
+        "code": 4807,
+        "name_en": "Na Kae"
+      },
+      {
+        "code": 4808,
+        "name_en": "Si Songkhram"
+      },
+      {
+        "code": 4809,
+        "name_en": "Na Wa"
+      },
+      {
+        "code": 4810,
+        "name_en": "Phon Sawan"
+      },
+      {
+        "code": 4811,
+        "name_en": "Na Thom"
+      },
+      {
+        "code": 4812,
+        "name_en": "Wang Yang"
+      }
+    ]
+  },
+  {
+    "code": 49,
+    "name_en": "Mukdahan",
+    "districts": [
+      {
+        "code": 4901,
+        "name_en": "Mueang Mukdahan"
+      },
+      {
+        "code": 4902,
+        "name_en": "Nikhom Kham Soi"
+      },
+      {
+        "code": 4903,
+        "name_en": "Don Tan"
+      },
+      {
+        "code": 4904,
+        "name_en": "Don Tan"
+      },
+      {
+        "code": 4905,
+        "name_en": "Khamcha-I"
+      },
+      {
+        "code": 4906,
+        "name_en": "Wan Yai"
+      },
+      {
+        "code": 4907,
+        "name_en": "Nong Sung"
+      }
+    ]
+  },
+  {
+    "code": 50,
+    "name_en": "Chiang Mai",
+    "districts": [
+      {
+        "code": 5001,
+        "name_en": "Mueang Chiang Mai"
+      },
+      {
+        "code": 5002,
+        "name_en": "Chom Thong"
+      },
+      {
+        "code": 5003,
+        "name_en": "Mae Chaem"
+      },
+      {
+        "code": 5004,
+        "name_en": "Chiang Dao"
+      },
+      {
+        "code": 5005,
+        "name_en": "Doi Saket"
+      },
+      {
+        "code": 5006,
+        "name_en": "Mae Taeng"
+      },
+      {
+        "code": 5007,
+        "name_en": "Mae Rim"
+      },
+      {
+        "code": 5008,
+        "name_en": "Samoeng"
+      },
+      {
+        "code": 5009,
+        "name_en": "Fang"
+      },
+      {
+        "code": 5010,
+        "name_en": "Mae Ai"
+      },
+      {
+        "code": 5011,
+        "name_en": "Phrao"
+      },
+      {
+        "code": 5012,
+        "name_en": "San Pa Tong"
+      },
+      {
+        "code": 5013,
+        "name_en": "San Kamphaeng"
+      },
+      {
+        "code": 5014,
+        "name_en": "San Sai"
+      },
+      {
+        "code": 5015,
+        "name_en": "Hang Dong"
+      },
+      {
+        "code": 5016,
+        "name_en": "Hot"
+      },
+      {
+        "code": 5017,
+        "name_en": "Doi Tao"
+      },
+      {
+        "code": 5018,
+        "name_en": "Omkoi"
+      },
+      {
+        "code": 5019,
+        "name_en": "Saraphi"
+      },
+      {
+        "code": 5020,
+        "name_en": "Wiang Haeng"
+      },
+      {
+        "code": 5021,
+        "name_en": "Chai Prakan"
+      },
+      {
+        "code": 5022,
+        "name_en": "Mae Wang"
+      },
+      {
+        "code": 5023,
+        "name_en": "Mae On"
+      },
+      {
+        "code": 5024,
+        "name_en": "Doi Lo"
+      },
+      {
+        "code": 5025,
+        "name_en": "Kanlayaniwatthana"
+      }
+    ]
+  },
+  {
+    "code": 51,
+    "name_en": "Lamphun",
+    "districts": [
+      {
+        "code": 5101,
+        "name_en": "Mueang Lamphun"
+      },
+      {
+        "code": 5102,
+        "name_en": "Mae Tha"
+      },
+      {
+        "code": 5103,
+        "name_en": "Ban Hong"
+      },
+      {
+        "code": 5104,
+        "name_en": "Li"
+      },
+      {
+        "code": 5105,
+        "name_en": "Thung Hua Chang"
+      },
+      {
+        "code": 5106,
+        "name_en": "Pa Sang"
+      },
+      {
+        "code": 5107,
+        "name_en": "Ban Thi"
+      },
+      {
+        "code": 5108,
+        "name_en": "Wiang Nong Long"
+      }
+    ]
+  },
+  {
+    "code": 52,
+    "name_en": "Lampang",
+    "districts": [
+      {
+        "code": 5201,
+        "name_en": "Mueang Lampang"
+      },
+      {
+        "code": 5202,
+        "name_en": "Mae Mo"
+      },
+      {
+        "code": 5203,
+        "name_en": "Ko Kha"
+      },
+      {
+        "code": 5204,
+        "name_en": "Soem Ngam"
+      },
+      {
+        "code": 5205,
+        "name_en": "Ngao"
+      },
+      {
+        "code": 5206,
+        "name_en": "Chae Hom"
+      },
+      {
+        "code": 5207,
+        "name_en": "Wang Nuea"
+      },
+      {
+        "code": 5208,
+        "name_en": "Thoen"
+      },
+      {
+        "code": 5209,
+        "name_en": "Mae Phrik"
+      },
+      {
+        "code": 5210,
+        "name_en": "Mae Tha"
+      },
+      {
+        "code": 5211,
+        "name_en": "Sop Prap"
+      },
+      {
+        "code": 5212,
+        "name_en": "Hang Chat"
+      },
+      {
+        "code": 5213,
+        "name_en": "Mueang Pan"
+      }
+    ]
+  },
+  {
+    "code": 53,
+    "name_en": "Uttaradit",
+    "districts": [
+      {
+        "code": 5301,
+        "name_en": "Mueang Uttaradit"
+      },
+      {
+        "code": 5302,
+        "name_en": "Tron"
+      },
+      {
+        "code": 5303,
+        "name_en": "Tha Pla"
+      },
+      {
+        "code": 5304,
+        "name_en": "Nam Pat"
+      },
+      {
+        "code": 5305,
+        "name_en": "Fak Tha"
+      },
+      {
+        "code": 5306,
+        "name_en": "Ban Khok"
+      },
+      {
+        "code": 5307,
+        "name_en": "Phichai"
+      },
+      {
+        "code": 5308,
+        "name_en": "Laplae"
+      },
+      {
+        "code": 5309,
+        "name_en": "Thong Saen Khan"
+      }
+    ]
+  },
+  {
+    "code": 54,
+    "name_en": "Phrae",
+    "districts": [
+      {
+        "code": 5401,
+        "name_en": "Mueang Phrae"
+      },
+      {
+        "code": 5402,
+        "name_en": "Mueang Phrae"
+      },
+      {
+        "code": 5403,
+        "name_en": "Long"
+      },
+      {
+        "code": 5404,
+        "name_en": "Sung Men"
+      },
+      {
+        "code": 5405,
+        "name_en": "Den Chai"
+      },
+      {
+        "code": 5406,
+        "name_en": "Song"
+      },
+      {
+        "code": 5407,
+        "name_en": "Wang Chin"
+      },
+      {
+        "code": 5408,
+        "name_en": "Nong Muang Khai"
+      }
+    ]
+  },
+  {
+    "code": 55,
+    "name_en": "Nan",
+    "districts": [
+      {
+        "code": 5501,
+        "name_en": "Mueang Nan"
+      },
+      {
+        "code": 5502,
+        "name_en": "Mae Charim"
+      },
+      {
+        "code": 5503,
+        "name_en": "Ban Luang"
+      },
+      {
+        "code": 5504,
+        "name_en": "Na Noi"
+      },
+      {
+        "code": 5505,
+        "name_en": "Pua"
+      },
+      {
+        "code": 5506,
+        "name_en": "Tha Wang Pha"
+      },
+      {
+        "code": 5507,
+        "name_en": "Wiang Sa"
+      },
+      {
+        "code": 5508,
+        "name_en": "Thung Chang"
+      },
+      {
+        "code": 5509,
+        "name_en": "Chiang Klang"
+      },
+      {
+        "code": 5510,
+        "name_en": "Na Muen"
+      },
+      {
+        "code": 5511,
+        "name_en": "Santi Suk"
+      },
+      {
+        "code": 5512,
+        "name_en": "Bo Kluea"
+      },
+      {
+        "code": 5513,
+        "name_en": "Song Khwae"
+      },
+      {
+        "code": 5514,
+        "name_en": "Phu Phiang"
+      },
+      {
+        "code": 5515,
+        "name_en": "Chaloem Phra Kiet"
+      }
+    ]
+  },
+  {
+    "code": 56,
+    "name_en": "Phayao",
+    "districts": [
+      {
+        "code": 5601,
+        "name_en": "Mueang Phayao"
+      },
+      {
+        "code": 5602,
+        "name_en": "Chun"
+      },
+      {
+        "code": 5603,
+        "name_en": "Chiang Kham"
+      },
+      {
+        "code": 5604,
+        "name_en": "Chiang Muan"
+      },
+      {
+        "code": 5605,
+        "name_en": "Dok Khamtai"
+      },
+      {
+        "code": 5606,
+        "name_en": "Pong"
+      },
+      {
+        "code": 5607,
+        "name_en": "Mae Chai"
+      },
+      {
+        "code": 5608,
+        "name_en": "Phu Sang"
+      },
+      {
+        "code": 5609,
+        "name_en": "Phu Kamyao"
+      }
+    ]
+  },
+  {
+    "code": 57,
+    "name_en": "Chiang Rai",
+    "districts": [
+      {
+        "code": 5701,
+        "name_en": "Mueang Chiang Rai"
+      },
+      {
+        "code": 5702,
+        "name_en": "Wiang Chai"
+      },
+      {
+        "code": 5703,
+        "name_en": "Chiang Khong"
+      },
+      {
+        "code": 5704,
+        "name_en": "Thoeng"
+      },
+      {
+        "code": 5705,
+        "name_en": "Phan"
+      },
+      {
+        "code": 5706,
+        "name_en": "Pa Daet"
+      },
+      {
+        "code": 5707,
+        "name_en": "Mae Chan"
+      },
+      {
+        "code": 5708,
+        "name_en": "Chiang Saen"
+      },
+      {
+        "code": 5709,
+        "name_en": "Mae Sai"
+      },
+      {
+        "code": 5710,
+        "name_en": "Mae Suai"
+      },
+      {
+        "code": 5711,
+        "name_en": "Wiang Pa Pao"
+      },
+      {
+        "code": 5712,
+        "name_en": "Phaya Mengrai"
+      },
+      {
+        "code": 5713,
+        "name_en": "Wiang Kaen"
+      },
+      {
+        "code": 5714,
+        "name_en": "Khun Tan"
+      },
+      {
+        "code": 5715,
+        "name_en": "Mae Fa Luang"
+      },
+      {
+        "code": 5716,
+        "name_en": "Mae Lao"
+      },
+      {
+        "code": 5717,
+        "name_en": "Wiang Chiang Rung"
+      },
+      {
+        "code": 5718,
+        "name_en": "Doi Luang"
+      }
+    ]
+  },
+  {
+    "code": 58,
+    "name_en": "Mae Hong Son",
+    "districts": [
+      {
+        "code": 5801,
+        "name_en": "Mueang Mae Hong Son"
+      },
+      {
+        "code": 5802,
+        "name_en": "Khun Yuam"
+      },
+      {
+        "code": 5803,
+        "name_en": "Pai"
+      },
+      {
+        "code": 5804,
+        "name_en": "Mae Sariang"
+      },
+      {
+        "code": 5805,
+        "name_en": "Mae La Noi"
+      },
+      {
+        "code": 5806,
+        "name_en": "Sop Moei"
+      },
+      {
+        "code": 5807,
+        "name_en": "Pang Mapha"
+      }
+    ]
+  },
+  {
+    "code": 60,
+    "name_en": "Nakhon Sawan",
+    "districts": [
+      {
+        "code": 6001,
+        "name_en": "Mueang Nakhon Sawan"
+      },
+      {
+        "code": 6002,
+        "name_en": "Krok Phra"
+      },
+      {
+        "code": 6003,
+        "name_en": "Chum Saeng"
+      },
+      {
+        "code": 6004,
+        "name_en": "Nong Bua"
+      },
+      {
+        "code": 6005,
+        "name_en": "Banphot Phisai"
+      },
+      {
+        "code": 6006,
+        "name_en": "Kao Liao"
+      },
+      {
+        "code": 6007,
+        "name_en": "Takhli"
+      },
+      {
+        "code": 6008,
+        "name_en": "Tha Tako"
+      },
+      {
+        "code": 6009,
+        "name_en": "Phaisali"
+      },
+      {
+        "code": 6010,
+        "name_en": "Phayuha Hkiri"
+      },
+      {
+        "code": 6011,
+        "name_en": "Lat Yao"
+      },
+      {
+        "code": 6012,
+        "name_en": "Tak Fa"
+      },
+      {
+        "code": 6013,
+        "name_en": "Mae Wong"
+      },
+      {
+        "code": 6014,
+        "name_en": "Mae Pern"
+      },
+      {
+        "code": 6015,
+        "name_en": "Chum Ta Bong"
+      }
+    ]
+  },
+  {
+    "code": 61,
+    "name_en": "Uthai Thani",
+    "districts": [
+      {
+        "code": 6101,
+        "name_en": "Mueang Uthai Thani"
+      },
+      {
+        "code": 6102,
+        "name_en": "Thap Than"
+      },
+      {
+        "code": 6103,
+        "name_en": "Sawang Arom"
+      },
+      {
+        "code": 6104,
+        "name_en": "Nong Chang"
+      },
+      {
+        "code": 6105,
+        "name_en": "Nong Khayang"
+      },
+      {
+        "code": 6106,
+        "name_en": "Ban Rai"
+      },
+      {
+        "code": 6107,
+        "name_en": "Lan Sak"
+      },
+      {
+        "code": 6108,
+        "name_en": "Huai Khot"
+      }
+    ]
+  },
+  {
+    "code": 62,
+    "name_en": "Kamphaeng Phet",
+    "districts": [
+      {
+        "code": 6201,
+        "name_en": "Mueang Kamphaeng Phet"
+      },
+      {
+        "code": 6202,
+        "name_en": "Sai Ngam"
+      },
+      {
+        "code": 6203,
+        "name_en": "Khlong Lan"
+      },
+      {
+        "code": 6204,
+        "name_en": "Khanu Woralaksaburi"
+      },
+      {
+        "code": 6205,
+        "name_en": "Khlong Khlung"
+      },
+      {
+        "code": 6206,
+        "name_en": "Phran Kratai"
+      },
+      {
+        "code": 6207,
+        "name_en": "Lan Krabue"
+      },
+      {
+        "code": 6208,
+        "name_en": "Sai Thong Watthana"
+      },
+      {
+        "code": 6209,
+        "name_en": "Pang Sila Thong"
+      },
+      {
+        "code": 6210,
+        "name_en": "Bueng Samakkhi"
+      },
+      {
+        "code": 6211,
+        "name_en": "Kosamphi Nakhon"
+      }
+    ]
+  },
+  {
+    "code": 63,
+    "name_en": "Tak",
+    "districts": [
+      {
+        "code": 6301,
+        "name_en": "Mueang Tak"
+      },
+      {
+        "code": 6302,
+        "name_en": "Ban Tak"
+      },
+      {
+        "code": 6303,
+        "name_en": "Sam Ngao"
+      },
+      {
+        "code": 6304,
+        "name_en": "Mae Ramat"
+      },
+      {
+        "code": 6305,
+        "name_en": "Tha Song Yang"
+      },
+      {
+        "code": 6306,
+        "name_en": "Mae Sot"
+      },
+      {
+        "code": 6307,
+        "name_en": "Phop Phra"
+      },
+      {
+        "code": 6308,
+        "name_en": "Um Phang"
+      },
+      {
+        "code": 6309,
+        "name_en": "Wang Chao"
+      }
+    ]
+  },
+  {
+    "code": 64,
+    "name_en": "Sukhothai",
+    "districts": [
+      {
+        "code": 6401,
+        "name_en": "Mueang Sukhothai"
+      },
+      {
+        "code": 6402,
+        "name_en": "Ban Dan Lan Hoi"
+      },
+      {
+        "code": 6403,
+        "name_en": "Khiri Mat"
+      },
+      {
+        "code": 6404,
+        "name_en": "Kong Krailat"
+      },
+      {
+        "code": 6405,
+        "name_en": "Si Satchanalai"
+      },
+      {
+        "code": 6406,
+        "name_en": "Si Samrong"
+      },
+      {
+        "code": 6407,
+        "name_en": "Sawankhalok"
+      },
+      {
+        "code": 6408,
+        "name_en": "Si Nakhon"
+      },
+      {
+        "code": 6409,
+        "name_en": "Thung Saliam"
+      }
+    ]
+  },
+  {
+    "code": 65,
+    "name_en": "Phitsanulok",
+    "districts": [
+      {
+        "code": 6501,
+        "name_en": "Mueang Phitsanulok"
+      },
+      {
+        "code": 6502,
+        "name_en": "Nakhon Thai"
+      },
+      {
+        "code": 6503,
+        "name_en": "Chat Trakan"
+      },
+      {
+        "code": 6504,
+        "name_en": "Bang Rakam"
+      },
+      {
+        "code": 6505,
+        "name_en": "Bang Krathum"
+      },
+      {
+        "code": 6506,
+        "name_en": "Phrom Phiram"
+      },
+      {
+        "code": 6507,
+        "name_en": "Wat Bot"
+      },
+      {
+        "code": 6508,
+        "name_en": "Wang Thong"
+      },
+      {
+        "code": 6509,
+        "name_en": "Noen Maprang"
+      }
+    ]
+  },
+  {
+    "code": 66,
+    "name_en": "Phichit",
+    "districts": [
+      {
+        "code": 6601,
+        "name_en": "Mueang Phichit"
+      },
+      {
+        "code": 6602,
+        "name_en": "Wang Sai Phun"
+      },
+      {
+        "code": 6603,
+        "name_en": "Pho Prathap Chang"
+      },
+      {
+        "code": 6604,
+        "name_en": "Taphan Hin"
+      },
+      {
+        "code": 6605,
+        "name_en": "Bang Mun Nak"
+      },
+      {
+        "code": 6606,
+        "name_en": "Pho Thale"
+      },
+      {
+        "code": 6607,
+        "name_en": "Sam Ngam"
+      },
+      {
+        "code": 6608,
+        "name_en": "Tap Khlo"
+      },
+      {
+        "code": 6609,
+        "name_en": "Sak Lek"
+      },
+      {
+        "code": 6610,
+        "name_en": "Bueng Na Rang"
+      },
+      {
+        "code": 6611,
+        "name_en": "Dong Charoen"
+      },
+      {
+        "code": 6612,
+        "name_en": "Wachirabarami"
+      }
+    ]
+  },
+  {
+    "code": 67,
+    "name_en": "Phetchabun",
+    "districts": [
+      {
+        "code": 6701,
+        "name_en": "Mueang Phetchabun"
+      },
+      {
+        "code": 6702,
+        "name_en": "Chon Daen"
+      },
+      {
+        "code": 6703,
+        "name_en": "Lom Sak"
+      },
+      {
+        "code": 6704,
+        "name_en": "Lom Kao"
+      },
+      {
+        "code": 6705,
+        "name_en": "Wichian Buri"
+      },
+      {
+        "code": 6706,
+        "name_en": "Si Thep"
+      },
+      {
+        "code": 6707,
+        "name_en": "Nong Phai"
+      },
+      {
+        "code": 6708,
+        "name_en": "Bueng Sam Phan"
+      },
+      {
+        "code": 6709,
+        "name_en": "Nam Nao"
+      },
+      {
+        "code": 6710,
+        "name_en": "Wang Pong"
+      },
+      {
+        "code": 6711,
+        "name_en": "Khao Kho"
+      }
+    ]
+  },
+  {
+    "code": 70,
+    "name_en": "Ratchaburi",
+    "districts": [
+      {
+        "code": 7001,
+        "name_en": "Mueang Ratchaburi"
+      },
+      {
+        "code": 7002,
+        "name_en": "Chom Bueng"
+      },
+      {
+        "code": 7003,
+        "name_en": "Suan Phueng"
+      },
+      {
+        "code": 7004,
+        "name_en": "Damnoen Saduak"
+      },
+      {
+        "code": 7005,
+        "name_en": "Ban Pong"
+      },
+      {
+        "code": 7006,
+        "name_en": "Bang Phae"
+      },
+      {
+        "code": 7007,
+        "name_en": "Photharam"
+      },
+      {
+        "code": 7008,
+        "name_en": "Pak Tho"
+      },
+      {
+        "code": 7009,
+        "name_en": "Wat Phleng"
+      },
+      {
+        "code": 7010,
+        "name_en": "Ban Kha"
+      }
+    ]
+  },
+  {
+    "code": 71,
+    "name_en": "Kanchanaburi",
+    "districts": [
+      {
+        "code": 7101,
+        "name_en": "Mueang Kanchanaburi"
+      },
+      {
+        "code": 7102,
+        "name_en": "Sai Yok"
+      },
+      {
+        "code": 7103,
+        "name_en": "Bo Phloi"
+      },
+      {
+        "code": 7104,
+        "name_en": "Si Sawat"
+      },
+      {
+        "code": 7105,
+        "name_en": "Tha Maka"
+      },
+      {
+        "code": 7106,
+        "name_en": "Tha Muang"
+      },
+      {
+        "code": 7107,
+        "name_en": "Thong Pha Phum"
+      },
+      {
+        "code": 7108,
+        "name_en": "Sangkhla Buri"
+      },
+      {
+        "code": 7109,
+        "name_en": "Phanom Thuan"
+      },
+      {
+        "code": 7110,
+        "name_en": "Lao Khwan"
+      },
+      {
+        "code": 7111,
+        "name_en": "Dan Makham Tia"
+      },
+      {
+        "code": 7112,
+        "name_en": "Nong Prue"
+      },
+      {
+        "code": 7113,
+        "name_en": "Huai Krachao"
+      }
+    ]
+  },
+  {
+    "code": 72,
+    "name_en": "Suphan Buri",
+    "districts": [
+      {
+        "code": 7201,
+        "name_en": "Mueang Saphan Buri"
+      },
+      {
+        "code": 7202,
+        "name_en": "Doem Bang Nang Buat"
+      },
+      {
+        "code": 7203,
+        "name_en": "Dan Chang"
+      },
+      {
+        "code": 7204,
+        "name_en": "Bang Pla Ma"
+      },
+      {
+        "code": 7205,
+        "name_en": "Si Prachan"
+      },
+      {
+        "code": 7206,
+        "name_en": "Don Chedi"
+      },
+      {
+        "code": 7207,
+        "name_en": "Song Phi Nong"
+      },
+      {
+        "code": 7208,
+        "name_en": "Sam Chuk"
+      },
+      {
+        "code": 7209,
+        "name_en": "U Thong"
+      },
+      {
+        "code": 7210,
+        "name_en": "Nong Ya Sai"
+      }
+    ]
+  },
+  {
+    "code": 73,
+    "name_en": "Nakhon Pathom",
+    "districts": [
+      {
+        "code": 7301,
+        "name_en": "Mueang Nakhon Pathom"
+      },
+      {
+        "code": 7302,
+        "name_en": "Kamphaeng Saen"
+      },
+      {
+        "code": 7303,
+        "name_en": "Nakhon Chai Si"
+      },
+      {
+        "code": 7304,
+        "name_en": "Don Tum"
+      },
+      {
+        "code": 7305,
+        "name_en": "Bang Len"
+      },
+      {
+        "code": 7306,
+        "name_en": "Sam Phran"
+      },
+      {
+        "code": 7307,
+        "name_en": "Phutthamonthon"
+      }
+    ]
+  },
+  {
+    "code": 74,
+    "name_en": "Samut Sakhon",
+    "districts": [
+      {
+        "code": 7401,
+        "name_en": "Mueang Samut Sakhon"
+      },
+      {
+        "code": 7402,
+        "name_en": "Krathum Baen"
+      },
+      {
+        "code": 7403,
+        "name_en": "Ban Phaeo"
+      }
+    ]
+  },
+  {
+    "code": 75,
+    "name_en": "Samut Songkhram",
+    "districts": [
+      {
+        "code": 7501,
+        "name_en": "Mueang Samut Songkhram"
+      },
+      {
+        "code": 7502,
+        "name_en": "Bang Khonthi"
+      },
+      {
+        "code": 7503,
+        "name_en": "Amphawa"
+      }
+    ]
+  },
+  {
+    "code": 76,
+    "name_en": "Phetchaburi",
+    "districts": [
+      {
+        "code": 7601,
+        "name_en": "Mueang Phetchaburi"
+      },
+      {
+        "code": 7602,
+        "name_en": "Khao Yoi"
+      },
+      {
+        "code": 7603,
+        "name_en": "Nong Ya Plong"
+      },
+      {
+        "code": 7604,
+        "name_en": "Cha-Am"
+      },
+      {
+        "code": 7605,
+        "name_en": "Tha Yang"
+      },
+      {
+        "code": 7606,
+        "name_en": "Ban Lat"
+      },
+      {
+        "code": 7607,
+        "name_en": "Ban Laem"
+      },
+      {
+        "code": 7608,
+        "name_en": "Kaeng Krachan"
+      }
+    ]
+  },
+  {
+    "code": 77,
+    "name_en": "Prachuap Khiri Khan",
+    "districts": [
+      {
+        "code": 7701,
+        "name_en": "Mueang Prachuap Khiri Khan"
+      },
+      {
+        "code": 7702,
+        "name_en": "Kui Buri"
+      },
+      {
+        "code": 7703,
+        "name_en": "Thap Sakae"
+      },
+      {
+        "code": 7704,
+        "name_en": "Bang Saphan"
+      },
+      {
+        "code": 7705,
+        "name_en": "Bang Saphan Noi"
+      },
+      {
+        "code": 7706,
+        "name_en": "Pran Buri"
+      },
+      {
+        "code": 7707,
+        "name_en": "Hua Hin"
+      },
+      {
+        "code": 7708,
+        "name_en": "Sam Roi Yot"
+      }
+    ]
+  },
+  {
+    "code": 80,
+    "name_en": "Nakhon Si Thammarat",
+    "districts": [
+      {
+        "code": 8001,
+        "name_en": "Mueang Nakhon Si Thammarat"
+      },
+      {
+        "code": 8002,
+        "name_en": "Phrom Khiri"
+      },
+      {
+        "code": 8003,
+        "name_en": "Lan Saka"
+      },
+      {
+        "code": 8004,
+        "name_en": "Chawang"
+      },
+      {
+        "code": 8005,
+        "name_en": "Phipun"
+      },
+      {
+        "code": 8006,
+        "name_en": "Chian Yai"
+      },
+      {
+        "code": 8007,
+        "name_en": "Cha-Uat"
+      },
+      {
+        "code": 8008,
+        "name_en": "Tha Sala"
+      },
+      {
+        "code": 8009,
+        "name_en": "Thung Song"
+      },
+      {
+        "code": 8010,
+        "name_en": "Na Bon"
+      },
+      {
+        "code": 8011,
+        "name_en": "Thung Yai"
+      },
+      {
+        "code": 8012,
+        "name_en": "Pak Phanang"
+      },
+      {
+        "code": 8013,
+        "name_en": "Ron Phibun"
+      },
+      {
+        "code": 8014,
+        "name_en": "Sichon"
+      },
+      {
+        "code": 8015,
+        "name_en": "Khanom"
+      },
+      {
+        "code": 8016,
+        "name_en": "Hua Sai"
+      },
+      {
+        "code": 8017,
+        "name_en": "Bang Khan"
+      },
+      {
+        "code": 8018,
+        "name_en": "Tham Phannara"
+      },
+      {
+        "code": 8019,
+        "name_en": "Chulabhorn"
+      },
+      {
+        "code": 8020,
+        "name_en": "Phra Phrom"
+      },
+      {
+        "code": 8021,
+        "name_en": "Nopphitam"
+      },
+      {
+        "code": 8022,
+        "name_en": "Chang Klang"
+      },
+      {
+        "code": 8023,
+        "name_en": "Chaloem Phra Kiet"
+      }
+    ]
+  },
+  {
+    "code": 81,
+    "name_en": "Krabi",
+    "districts": [
+      {
+        "code": 8101,
+        "name_en": "Mueang Krabi"
+      },
+      {
+        "code": 8102,
+        "name_en": "Khao Phanom"
+      },
+      {
+        "code": 8103,
+        "name_en": "Ko Lanta"
+      },
+      {
+        "code": 8104,
+        "name_en": "Khlong Thom"
+      },
+      {
+        "code": 8105,
+        "name_en": "Ao Luek"
+      },
+      {
+        "code": 8106,
+        "name_en": "Plai Phraya"
+      },
+      {
+        "code": 8107,
+        "name_en": "Lam Thap"
+      },
+      {
+        "code": 8108,
+        "name_en": "Nuea Khlong"
+      }
+    ]
+  },
+  {
+    "code": 82,
+    "name_en": "Phangnga",
+    "districts": [
+      {
+        "code": 8201,
+        "name_en": "Mueang Phang-Nga"
+      },
+      {
+        "code": 8202,
+        "name_en": "Ko Yao"
+      },
+      {
+        "code": 8203,
+        "name_en": "Kapong"
+      },
+      {
+        "code": 8204,
+        "name_en": "Takua Thung"
+      },
+      {
+        "code": 8205,
+        "name_en": "Takua Pa"
+      },
+      {
+        "code": 8206,
+        "name_en": "Khura Buri"
+      },
+      {
+        "code": 8207,
+        "name_en": "Thap Put"
+      },
+      {
+        "code": 8208,
+        "name_en": "Thai Mueang"
+      }
+    ]
+  },
+  {
+    "code": 83,
+    "name_en": "Phuket",
+    "districts": [
+      {
+        "code": 8301,
+        "name_en": "Mueang Phuket"
+      },
+      {
+        "code": 8302,
+        "name_en": "Kathu"
+      },
+      {
+        "code": 8303,
+        "name_en": "Thalang"
+      }
+    ]
+  },
+  {
+    "code": 84,
+    "name_en": "Surat Thani",
+    "districts": [
+      {
+        "code": 8401,
+        "name_en": "Mueang Surat Thani"
+      },
+      {
+        "code": 8402,
+        "name_en": "Kanchanadit"
+      },
+      {
+        "code": 8403,
+        "name_en": "Don Sak"
+      },
+      {
+        "code": 8404,
+        "name_en": "Ko Samui"
+      },
+      {
+        "code": 8405,
+        "name_en": "Ko Pha-Ngan"
+      },
+      {
+        "code": 8406,
+        "name_en": "Chaiya"
+      },
+      {
+        "code": 8407,
+        "name_en": "Tha Chana"
+      },
+      {
+        "code": 8408,
+        "name_en": "Khiri Rat Nikhom"
+      },
+      {
+        "code": 8409,
+        "name_en": "Ban Ta Khun"
+      },
+      {
+        "code": 8410,
+        "name_en": "Phanom"
+      },
+      {
+        "code": 8411,
+        "name_en": "Tha Chang"
+      },
+      {
+        "code": 8412,
+        "name_en": "Ban Na San"
+      },
+      {
+        "code": 8413,
+        "name_en": "Ban Na Doem"
+      },
+      {
+        "code": 8414,
+        "name_en": "Khian Sa"
+      },
+      {
+        "code": 8415,
+        "name_en": "Wiang Sa"
+      },
+      {
+        "code": 8416,
+        "name_en": "Phrasaeng"
+      },
+      {
+        "code": 8417,
+        "name_en": "Phunphin"
+      },
+      {
+        "code": 8418,
+        "name_en": "Chai Buri"
+      },
+      {
+        "code": 8419,
+        "name_en": "Chai Buri"
+      }
+    ]
+  },
+  {
+    "code": 85,
+    "name_en": "Ranong",
+    "districts": [
+      {
+        "code": 8501,
+        "name_en": "Mueang Ranong"
+      },
+      {
+        "code": 8502,
+        "name_en": "La-Un"
+      },
+      {
+        "code": 8503,
+        "name_en": "Papoe"
+      },
+      {
+        "code": 8504,
+        "name_en": "Kra Buri"
+      },
+      {
+        "code": 8505,
+        "name_en": "Suk Samran"
+      }
+    ]
+  },
+  {
+    "code": 86,
+    "name_en": "Chumphon",
+    "districts": [
+      {
+        "code": 8601,
+        "name_en": "Mueang Chumphon"
+      },
+      {
+        "code": 8602,
+        "name_en": "Tha Sae"
+      },
+      {
+        "code": 8603,
+        "name_en": "Pathio"
+      },
+      {
+        "code": 8604,
+        "name_en": "Lang Suan"
+      },
+      {
+        "code": 8605,
+        "name_en": "Lamae"
+      },
+      {
+        "code": 8606,
+        "name_en": "Phato"
+      },
+      {
+        "code": 8607,
+        "name_en": "Sawi"
+      },
+      {
+        "code": 8608,
+        "name_en": "Thung Tako"
+      }
+    ]
+  },
+  {
+    "code": 90,
+    "name_en": "Songkhla",
+    "districts": [
+      {
+        "code": 9001,
+        "name_en": "Muaeng Songkhla"
+      },
+      {
+        "code": 9002,
+        "name_en": "Sathing Phra"
+      },
+      {
+        "code": 9003,
+        "name_en": "Chana"
+      },
+      {
+        "code": 9004,
+        "name_en": "Na Thawi"
+      },
+      {
+        "code": 9005,
+        "name_en": "Thepha"
+      },
+      {
+        "code": 9006,
+        "name_en": "Saba Yoi"
+      },
+      {
+        "code": 9007,
+        "name_en": "Ranot"
+      },
+      {
+        "code": 9008,
+        "name_en": "Krasae Sin"
+      },
+      {
+        "code": 9009,
+        "name_en": "Rattaphum"
+      },
+      {
+        "code": 9010,
+        "name_en": "Sadao"
+      },
+      {
+        "code": 9011,
+        "name_en": "Hat Yai"
+      },
+      {
+        "code": 9012,
+        "name_en": "Na Mom"
+      },
+      {
+        "code": 9013,
+        "name_en": "Khuan Niang"
+      },
+      {
+        "code": 9014,
+        "name_en": "Bang Klam"
+      },
+      {
+        "code": 9015,
+        "name_en": "Singhanakhon"
+      },
+      {
+        "code": 9016,
+        "name_en": "Khlong Hoi Khong"
+      }
+    ]
+  },
+  {
+    "code": 91,
+    "name_en": "Satun",
+    "districts": [
+      {
+        "code": 9101,
+        "name_en": "Mueang Satun"
+      },
+      {
+        "code": 9102,
+        "name_en": "Khuan Don"
+      },
+      {
+        "code": 9103,
+        "name_en": "Khuan Kalong"
+      },
+      {
+        "code": 9104,
+        "name_en": "Tha Phae"
+      },
+      {
+        "code": 9105,
+        "name_en": "La-Ngu"
+      },
+      {
+        "code": 9106,
+        "name_en": "Thung Wa"
+      },
+      {
+        "code": 9107,
+        "name_en": "Manang"
+      }
+    ]
+  },
+  {
+    "code": 92,
+    "name_en": "Trang",
+    "districts": [
+      {
+        "code": 9201,
+        "name_en": "Mueang Trang"
+      },
+      {
+        "code": 9202,
+        "name_en": "Kantang"
+      },
+      {
+        "code": 9203,
+        "name_en": "Yan Ta Khao"
+      },
+      {
+        "code": 9204,
+        "name_en": "Palian"
+      },
+      {
+        "code": 9205,
+        "name_en": "Sikao"
+      },
+      {
+        "code": 9206,
+        "name_en": "Huai Yot"
+      },
+      {
+        "code": 9207,
+        "name_en": "Wang Wiset"
+      },
+      {
+        "code": 9208,
+        "name_en": "Na Yong"
+      },
+      {
+        "code": 9209,
+        "name_en": "Ratsada"
+      },
+      {
+        "code": 9210,
+        "name_en": "Hat Samran"
+      }
+    ]
+  },
+  {
+    "code": 93,
+    "name_en": "Phatthalung",
+    "districts": [
+      {
+        "code": 9301,
+        "name_en": "Mueang Phatthalung"
+      },
+      {
+        "code": 9302,
+        "name_en": "Kong Ra"
+      },
+      {
+        "code": 9303,
+        "name_en": "Khao Chaison"
+      },
+      {
+        "code": 9304,
+        "name_en": "Tamot"
+      },
+      {
+        "code": 9305,
+        "name_en": "Khuan Khanun"
+      },
+      {
+        "code": 9306,
+        "name_en": "Pak Phayun"
+      },
+      {
+        "code": 9307,
+        "name_en": "Si Banphot"
+      },
+      {
+        "code": 9308,
+        "name_en": "Pa Bon"
+      },
+      {
+        "code": 9309,
+        "name_en": "Bang Kaeo"
+      },
+      {
+        "code": 9310,
+        "name_en": "Pa Phayom"
+      },
+      {
+        "code": 9311,
+        "name_en": "Srinagarindra"
+      }
+    ]
+  },
+  {
+    "code": 94,
+    "name_en": "Pattani",
+    "districts": [
+      {
+        "code": 9401,
+        "name_en": "Mueang Pattani"
+      },
+      {
+        "code": 9402,
+        "name_en": "Khok Pho"
+      },
+      {
+        "code": 9403,
+        "name_en": "Nong Chik"
+      },
+      {
+        "code": 9404,
+        "name_en": "Panare"
+      },
+      {
+        "code": 9405,
+        "name_en": "Mayo"
+      },
+      {
+        "code": 9406,
+        "name_en": "Thung Yang Daeng"
+      },
+      {
+        "code": 9407,
+        "name_en": "Sai Buri"
+      },
+      {
+        "code": 9408,
+        "name_en": "Mai Kaen"
+      },
+      {
+        "code": 9409,
+        "name_en": "Yaring"
+      },
+      {
+        "code": 9410,
+        "name_en": "Yarang"
+      },
+      {
+        "code": 9411,
+        "name_en": "Kapho"
+      },
+      {
+        "code": 9412,
+        "name_en": "Mae Lan"
+      }
+    ]
+  },
+  {
+    "code": 95,
+    "name_en": "Yala",
+    "districts": [
+      {
+        "code": 9501,
+        "name_en": "Mueang Yala"
+      },
+      {
+        "code": 9502,
+        "name_en": "Betong"
+      },
+      {
+        "code": 9503,
+        "name_en": "Bannang Sata"
+      },
+      {
+        "code": 9504,
+        "name_en": "Than To"
+      },
+      {
+        "code": 9505,
+        "name_en": "Yaha"
+      },
+      {
+        "code": 9506,
+        "name_en": "Raman"
+      },
+      {
+        "code": 9507,
+        "name_en": "Kabang"
+      },
+      {
+        "code": 9508,
+        "name_en": "Krong Pinang"
+      }
+    ]
+  },
+  {
+    "code": 96,
+    "name_en": "Narathiwat",
+    "districts": [
+      {
+        "code": 9601,
+        "name_en": "Mueang Narathiwat"
+      },
+      {
+        "code": 9602,
+        "name_en": "Tak Bai"
+      },
+      {
+        "code": 9603,
+        "name_en": "Tak Bai"
+      },
+      {
+        "code": 9604,
+        "name_en": "Yi-Ngo"
+      },
+      {
+        "code": 9605,
+        "name_en": "Ra-Ngae"
+      },
+      {
+        "code": 9606,
+        "name_en": "Rueso"
+      },
+      {
+        "code": 9607,
+        "name_en": "Si Sakhon"
+      },
+      {
+        "code": 9608,
+        "name_en": "Waeng"
+      },
+      {
+        "code": 9609,
+        "name_en": "Sukhirin"
+      },
+      {
+        "code": 9610,
+        "name_en": "Su-Ngai Kolok"
+      },
+      {
+        "code": 9611,
+        "name_en": "Su-Ngai Padi"
+      },
+      {
+        "code": 9612,
+        "name_en": "Chanae"
+      },
+      {
+        "code": 9613,
+        "name_en": "Cho-Airong"
+      }
+    ]
+  }
+]

@@ -1,0 +1,141 @@
+<h2>Homepage Layout Options</h2>
+<p class="subtitle">Which layout structure feels most polished and on-brand for a pet-sitting booking app?</p>
+
+<div class="cards">
+
+  <!-- Option A -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:16px;background:#f8f8f8;min-height:340px;display:flex;flex-direction:column;gap:8px;">
+      <!-- Nav -->
+      <div style="height:36px;background:#1c4f4a;border-radius:8px;display:flex;align-items:center;padding:0 12px;">
+        <span style="color:white;font-size:11px;font-weight:bold;">JOODPAKPAW</span>
+        <span style="color:rgba(255,255,255,0.5);font-size:10px;margin-left:auto;">Login · Sign up</span>
+      </div>
+      <!-- Hero with search inside -->
+      <div style="background:linear-gradient(135deg,#1c4f4a,#2d7a74);border-radius:12px;padding:20px 16px;display:flex;flex-direction:column;gap:10px;">
+        <div style="color:white;font-size:13px;font-weight:700;line-height:1.3;">Find trusted pet sitters<br/>near you</div>
+        <div style="background:white;border-radius:8px;padding:8px 12px;font-size:10px;color:#999;display:flex;align-items:center;gap:6px;">
+          <span style="font-size:12px;">🔍</span> Search by location, type…
+        </div>
+        <!-- filter chips inside hero -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <span style="background:rgba(255,255,255,0.2);color:white;font-size:9px;padding:3px 8px;border-radius:20px;">🐶 Dogs</span>
+          <span style="background:rgba(255,255,255,0.2);color:white;font-size:9px;padding:3px 8px;border-radius:20px;">🐱 Cats</span>
+          <span style="background:rgba(255,255,255,0.2);color:white;font-size:9px;padding:3px 8px;border-radius:20px;">⭐ Top Rated</span>
+        </div>
+      </div>
+      <!-- Sections below -->
+      <div style="font-size:10px;font-weight:700;color:#1c4f4a;margin-top:4px;">Recommended for You</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+        <div style="background:#ddd;border-radius:8px;aspect-ratio:1"></div>
+        <div style="background:#ddd;border-radius:8px;aspect-ratio:1"></div>
+        <div style="background:#ddd;border-radius:8px;aspect-ratio:1"></div>
+        <div style="background:#ddd;border-radius:8px;aspect-ratio:1"></div>
+      </div>
+      <div style="font-size:10px;font-weight:700;color:#1c4f4a;margin-top:4px;">Top Rated</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+        <div style="background:#e8e8e8;border-radius:8px;aspect-ratio:1"></div>
+        <div style="background:#e8e8e8;border-radius:8px;aspect-ratio:1"></div>
+        <div style="background:#e8e8e8;border-radius:8px;aspect-ratio:1"></div>
+        <div style="background:#e8e8e8;border-radius:8px;aspect-ratio:1"></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Hero + Embedded Search</h3>
+      <p>Search bar lives inside a full-width hero banner. Filters are chips inside the hero. Sections begin immediately after. <strong>Airbnb-style.</strong> Clean, modern, immediately actionable.</p>
+    </div>
+  </div>
+
+  <!-- Option B -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:16px;background:#f8f8f8;min-height:340px;display:flex;flex-direction:column;gap:8px;">
+      <!-- Nav -->
+      <div style="height:36px;background:#1c4f4a;border-radius:8px;display:flex;align-items:center;padding:0 12px;">
+        <span style="color:white;font-size:11px;font-weight:bold;">JOODPAKPAW</span>
+        <span style="color:rgba(255,255,255,0.5);font-size:10px;margin-left:auto;">Login · Sign up</span>
+      </div>
+      <!-- Sticky search bar below nav -->
+      <div style="background:white;border:1.5px solid #e0e0e0;border-radius:30px;padding:8px 16px;font-size:10px;color:#999;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <span style="font-size:12px;">🔍</span> Where do you want to stay?
+        <span style="margin-left:auto;background:#ff6f3c;color:white;font-size:9px;padding:3px 10px;border-radius:20px;">Search</span>
+      </div>
+      <!-- Category pills -->
+      <div style="display:flex;gap:6px;overflow:hidden;">
+        <span style="background:#1c4f4a;color:white;font-size:9px;padding:4px 10px;border-radius:20px;white-space:nowrap;">All</span>
+        <span style="background:#f0f0f0;color:#555;font-size:9px;padding:4px 10px;border-radius:20px;white-space:nowrap;">🐶 Dogs</span>
+        <span style="background:#f0f0f0;color:#555;font-size:9px;padding:4px 10px;border-radius:20px;white-space:nowrap;">🐱 Cats</span>
+        <span style="background:#f0f0f0;color:#555;font-size:9px;padding:4px 10px;border-radius:20px;white-space:nowrap;">⭐ Top Rated</span>
+      </div>
+      <!-- Sections -->
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:10px;font-weight:700;color:#1c4f4a;">Recommended for You</span>
+        <span style="font-size:9px;color:#ff6f3c;">See all</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+        <div style="background:#ddd;border-radius:8px;aspect-ratio:1"></div>
+        <div style="background:#ddd;border-radius:8px;aspect-ratio:1"></div>
+        <div style="background:#ddd;border-radius:8px;aspect-ratio:1"></div>
+        <div style="background:#ddd;border-radius:8px;aspect-ratio:1"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:10px;font-weight:700;color:#1c4f4a;">Top Rated</span>
+        <span style="font-size:9px;color:#ff6f3c;">See all</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+        <div style="background:#e8e8e8;border-radius:8px;aspect-ratio:1"></div>
+        <div style="background:#e8e8e8;border-radius:8px;aspect-ratio:1"></div>
+        <div style="background:#e8e8e8;border-radius:8px;aspect-ratio:1"></div>
+        <div style="background:#e8e8e8;border-radius:8px;aspect-ratio:1"></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Pill Search Bar + Category Tabs</h3>
+      <p>Prominent pill-shaped search bar at top (Airbnb pill style), category filter chips below it, then sections. No hero image. <strong>Search-first, content-first.</strong> Fast to use, familiar UX.</p>
+    </div>
+  </div>
+
+  <!-- Option C -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:16px;background:#f8f8f8;min-height:340px;display:flex;flex-direction:column;gap:8px;">
+      <!-- Nav -->
+      <div style="height:36px;background:#1c4f4a;border-radius:8px;display:flex;align-items:center;padding:0 12px;">
+        <span style="color:white;font-size:11px;font-weight:bold;">JOODPAKPAW</span>
+        <span style="color:rgba(255,255,255,0.5);font-size:10px;margin-left:auto;">Login · Sign up</span>
+      </div>
+      <!-- Hero split: text left, image right -->
+      <div style="background:linear-gradient(135deg,#1c4f4a,#2d7a74);border-radius:12px;padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:center;min-height:90px;">
+        <div>
+          <div style="color:white;font-size:12px;font-weight:700;line-height:1.4;">Find trusted<br/>pet sitters</div>
+          <div style="color:rgba(255,255,255,0.7);font-size:9px;margin-top:4px;">Hundreds of verified hosts</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.15);border-radius:8px;height:60px;display:flex;align-items:center;justify-content:center;font-size:24px;">🐾</div>
+      </div>
+      <!-- Search below hero -->
+      <div style="background:white;border:1.5px solid #e0e0e0;border-radius:12px;padding:8px 12px;font-size:10px;color:#999;display:flex;align-items:center;gap:6px;box-shadow:0 2px 6px rgba(0,0,0,0.06);">
+        <span>🔍</span> Search by location or type…
+      </div>
+      <!-- filter chips -->
+      <div style="display:flex;gap:6px;">
+        <span style="background:#f0f0f0;color:#555;font-size:9px;padding:4px 10px;border-radius:20px;">All</span>
+        <span style="background:#f0f0f0;color:#555;font-size:9px;padding:4px 10px;border-radius:20px;">🐶 Dogs</span>
+        <span style="background:#f0f0f0;color:#555;font-size:9px;padding:4px 10px;border-radius:20px;">🐱 Cats</span>
+      </div>
+      <!-- property grid -->
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:10px;font-weight:700;color:#1c4f4a;">Recommended for You</span>
+        <span style="font-size:9px;color:#ff6f3c;">See all</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+        <div style="background:#ddd;border-radius:8px;aspect-ratio:1"></div>
+        <div style="background:#ddd;border-radius:8px;aspect-ratio:1"></div>
+        <div style="background:#ddd;border-radius:8px;aspect-ratio:1"></div>
+        <div style="background:#ddd;border-radius:8px;aspect-ratio:1"></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Small Hero + Search Below + Grid</h3>
+      <p>Compact hero with brand message, search bar underneath it, filter chips, then content. <strong>Balanced approach.</strong> Brand presence without sacrificing content visibility. Like Booking.com.</p>
+    </div>
+  </div>
+
+</div>

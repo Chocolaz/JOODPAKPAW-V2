@@ -1,0 +1,200 @@
+# ==============================================================================
+# JoodPakPaw Multi-Agent Mission Control Configuration (mission_control.yaml)
+# ==============================================================================
+# กำหนดสายพานการทำงาน (Workflow / Chain of Agents), กฎการส่งต่องาน (Handoffs),
+# กฎการจัดการ Git Monorepo และการแยกบทบาท Builder vs. Auditor
+# ==============================================================================
+
+version: "2.1"
+project:
+  name: "JoodPakPaw - Community Pet Boarding Platform (V2 Monorepo)"
+  workspace_root: "d:/Project/joodpakpaw"
+  frontend_dir: "d:/Project/joodpakpaw/joodpakpaw-frontend"
+  backend_dir: "d:/Project/joodpakpaw/joodpakpaw-api"
+  ml_dir: "d:/Project/joodpakpaw/joodpakpaw-ml"
+  blueprint_doc: "d:/Project/joodpakpaw/docs/JoodPakPaw_V2_Blueprint.md"
+  rules_file: "d:/Project/joodpakpaw/AGENTS.md"
+
+# ------------------------------------------------------------------------------
+# 1. Git Monorepo & Free-Tier Deployment Policy
+# ------------------------------------------------------------------------------
+git_policy:
+  repository_mode: "single_monorepo"
+  root_path: "d:/Project/joodpakpaw"
+  branches:
+    production: "main"
+    integration: "develop"
+    phase_prefix: "feat/phase-"
+  rules:
+    - "ห้ามแก้ไขหรือ Commit ลงกิ่ง main โดยตรง"
+    - "แต่ละเฟสต้องแตก Branch จาก develop เช่น feat/phase-0-db-infra"
+    - "Builder Agents ห้ามรัน git commit, git merge หรือ git push เองเด็ดขาด"
+    - "Orchestrator จะทำ Atomic Commit (Conventional Commits) และ Merge เข้า develop เฉพาะเมื่อ qa-auditor ตรวจผ่าน (STATUS: PASS) แล้วเท่านั้น"
+    - "ห้ามรัน git push อัตโนมัติจนกว่าผู้ใช้จะสั่ง"
+
+deployment_compatibility:
+  local_mode: "Docker Compose (joodpakpaw-postgres, joodpakpaw-redis, joodpakpaw-minio, joodpakpaw-api, joodpakpaw-ml, joodpakpaw-frontend)"
+  free_cloud_targets:
+    frontend: "Vercel (Free Hobby Tier - Root Path '/')"
+    database: "Supabase Free Tier / Neon Serverless Postgres (via DATABASE_URL)"
+    storage: "Cloudflare R2 Free 10GB / Supabase S3 Storage (via S3-compatible SDK)"
+    cache_and_queue: "Upstash Free Redis OR automatic In-Memory Cache + node-cron fallback when REDIS_URL is empty"
+    backend_and_ml: "Render / Koyeb Free Web Service (joodpakpaw-api) + Hugging Face Spaces / Render Free (joodpakpaw-ml) with cold-start fallback in API"
+
+# ------------------------------------------------------------------------------
+# 2. Agent Definitions & Assigned Skills
+# ------------------------------------------------------------------------------
+agents:
+  orchestrator:
+    id: "main-pm-orchestrator"
+    role: "Product Manager, Lead Orchestrator & Git Gatekeeper"
+    mode: "planning_and_delegation"
+    responsibilities:
+      - "แตกงานตามเฟส (Phase 0 - Phase 4), สร้างกิ่ง feat/phase-* และควบคุมลำดับการทำงานของ Subagents"
+      - "ส่งต่องานจาก Builder Agent ไปยัง qa-auditor เสมอ ไม่ข้ามขั้นตอนการตรวจทาน"
+      - "เมื่อ qa-auditor ให้ผ่าน (PASS) จึงรัน git commit และ merge เข้ากิ่ง develop"
+
+  builders:
+    - id: "db-infra-architect"
+      role: "Database & Infrastructure Architect"
+      model: "inherit"
+      workspace: "inherit"
+      required_skills:
+        - ".agents/skills/joodpakpaw-db-schema/SKILL.md"
+      owned_paths:
+        - "docker-compose.yml"
+        - "joodpakpaw-api/prisma/**"
+        - "joodpakpaw-api/src/database/**"
+        - "infra/**"
+
+    - id: "backend-core-engineer"
+      role: "Core Backend & Real-Time Engineer"
+      model: "inherit"
+      workspace: "inherit"
+      required_skills:
+        - ".agents/skills/joodpakpaw-api-contract/SKILL.md"
+      owned_paths:
+        - "joodpakpaw-api/src/**"
+        - "joodpakpaw-api/package.json"
+        - "joodpakpaw-api/Dockerfile"
+
+    - id: "ml-recommendation-engineer"
+      role: "Machine Learning & Recommendation Engineer"
+      model: "inherit"
+      workspace: "inherit"
+      required_skills:
+        - ".agents/skills/joodpakpaw-ml-hybrid/SKILL.md"
+      owned_paths:
+        - "joodpakpaw-ml/**"
+
+    - id: "frontend-upgrader"
+      role: "Frontend Product Upgrader"
+      model: "inherit"
+      workspace: "inherit"
+      required_skills:
+        - ".agents/skills/joodpakpaw-fe-upgrader/SKILL.md"
+      owned_paths:
+        - "joodpakpaw-frontend/**"
+
+  reviewers:
+    - id: "qa-auditor"
+      role: "Independent QA Auditor & Security Reviewer"
+      model: "inherit"
+      workspace: "inherit"
+      write_production_code: false
+      required_skills:
+        - ".agents/skills/joodpakpaw-qa-auditor/SKILL.md"
+      audit_domains:
+        - "API Contract & DTO Parity with joodpakpaw-frontend/types/*.ts"
+        - "Custom Error Code Compliance (T-2007, A-3001..A-3012, DB-1002, FF-4101)"
+        - "Race Condition & Concurrency (Room Booking & Real-Time Chat)"
+        - "RBAC, JWT & IDOR Security Verification"
+        - "Admin Ban & Appeal State Machine (TC-151 to TC-155)"
+        - "Git Diff Hygiene & Zero-'catbnb' / Free-Tier Cloud Readiness Check"
+
+# ------------------------------------------------------------------------------
+# 3. Inter-Agent Workflow Chains & Quality Gates (Chain of Agents)
+# ------------------------------------------------------------------------------
+workflows:
+  standard_delivery_loop:
+    steps:
+      - step: 1
+        actor: "orchestrator"
+        action: "checkout_phase_branch_and_dispatch"
+        description: "แตกกิ่ง feat/phase-* จาก develop และส่ง Prompt พร้อมระบุ Skill ที่ต้องใช้ให้ Builder Agent"
+      - step: 2
+        actor: "builder_agent"
+        action: "implement_and_self_check"
+        handoff_to: "qa-auditor"
+        handoff_artifact:
+          required_fields:
+            - "changed_files"
+            - "implemented_endpoints_or_tables"
+            - "build_and_smoke_test_output"
+      - step: 3
+        actor: "qa-auditor"
+        action: "audit_and_verify"
+        quality_gate:
+          on_approve: "orchestrator_commit_and_merge_to_develop"
+          on_reject: "return_defect_report_to_builder_agent"
+          max_retry_loops: 3
+
+  phases:
+    - phase_id: "phase_0_infra_and_db"
+      branch: "feat/phase-0-db-infra"
+      name: "Phase 0: Infrastructure (joodpakpaw-*), PostgreSQL 41 Tables & Seed Data"
+      chain:
+        - agent: "db-infra-architect"
+          task: "สร้าง Docker Compose (joodpakpaw-postgres, joodpakpaw-redis, joodpakpaw-minio), สร้าง Schema ครบ 41 ตาราง (รองรับทั้ง Local Postgres และ Supabase/Neon) และสร้าง Seed Data สำหรับตาราง Lookup ทั้งหมด"
+        - agent: "qa-auditor"
+          task: "ตรวจเทียบตารางทั้ง 41 ตารางกับ Data Dictionary ในรูปเล่ม (หน้า 75-105), ตรวจสอบว่าไม่มีชื่อ catbnb หลงเหลือ และทดสอบการรัน Migration + Seed"
+
+    - phase_id: "phase_1_auth_user_property"
+      branch: "feat/phase-1-auth-property"
+      name: "Phase 1: Auth, User Profile, Host Property/Room CRUD & S3/WebP Pipeline"
+      depends_on: ["phase_0_infra_and_db"]
+      chain:
+        - agent: "backend-core-engineer"
+          task: "พัฒนา joodpakpaw-api: Auth Module, User Module, Property & Room Category CRUD พร้อมระบบแปลงรูปเป็น WebP ขึ้น S3-Compatible Storage (MinIO / Cloudflare R2 / Supabase Storage)"
+        - agent: "frontend-upgrader"
+          task: "ปรับ joodpakpaw-frontend ให้ใช้ Root Path '/' เป็นค่าเริ่มต้น (พร้อม Deploy บน Vercel), เพิ่ม Client-side WebP Image Compression และเชื่อม Env กับ joodpakpaw-api"
+        - agent: "qa-auditor"
+          task: "ตรวจสอบตาม Test Cases Release 1 (TC-001 ถึง TC-045 และ TC-API-001 ถึง TC-API-079) รวมถึงรหัส Error T-2007 และ A-3001..A-3012"
+
+    - phase_id: "phase_2_booking_calendar_favorites"
+      branch: "feat/phase-2-booking-calendar"
+      name: "Phase 2: Booking Engine, Host Room Calendar, Pet Profiles, Favorites & Reviews"
+      depends_on: ["phase_1_auth_user_property"]
+      chain:
+        - agent: "backend-core-engineer"
+          task: "พัฒนาระบบค้นหาห้องว่างและจองห้องพักแบบ Multi-Room พร้อม Row Lock กัน Overbooking, ระบบจัดการปฏิทินห้องพักรายวันของ Host, Pet Profiles CRUD, Favorite Folders (FF-4101) และระบบรีวิว"
+        - agent: "frontend-upgrader"
+          task: "สร้าง UI จัดการปฏิทินวันว่าง-ไม่ว่างและปรับราคารายวันของ Host (room_category_calendars) ในหน้าจัดการที่พัก"
+        - agent: "qa-auditor"
+          task: "จำลองการยิงจองห้องสุดท้ายพร้อมกัน (Race Condition TC-API-085) และตรวจตาม Test Cases Release 2 (TC-046 ถึง TC-104 และ TC-API-080 ถึง TC-API-144)"
+
+    - phase_id: "phase_3_realtime_verification_admin"
+      branch: "feat/phase-3-realtime-admin"
+      name: "Phase 3: Real-Time Socket.IO (Chat & Notification), Host Verification & Admin System"
+      depends_on: ["phase_2_booking_calendar_favorites"]
+      chain:
+        - agent: "backend-core-engineer"
+          task: "พัฒนา Socket.IO v4 Server (/api/socket.io), Notification & SMTP/Check-in Reminder Queue (พร้อม In-Memory Fallback เมื่อไม่ใช้ Redis), Chat Rooms & Messages, Host Verification และระบบ Report & Admin Ban/Appeal State Machine"
+        - agent: "frontend-upgrader"
+          task: "อัปเกรด lib/socket.ts ให้รองรับ WebSocket แท้ผ่าน Env Variable และซิงค์สถานะอ่านแจ้งเตือน (is_read) กับฐานข้อมูล"
+        - agent: "qa-auditor"
+          task: "ตรวจสอบ State Machine การแบนที่พักเดี่ยว vs แบนทั้งบัญชีและการอุทธรณ์ (TC-151 ถึง TC-155) และตรวจตาม Test Cases Release 3"
+
+    - phase_id: "phase_4_ml_hybrid_and_e2e"
+      branch: "feat/phase-4-ml-hybrid"
+      name: "Phase 4: Hybrid ML Recommendation Service (joodpakpaw-ml) & Frontend Optimization"
+      depends_on: ["phase_3_realtime_verification_admin"]
+      chain:
+        - agent: "ml-recommendation-engineer"
+          task: "พัฒนา joodpakpaw-ml (FastAPI พอร์ต 5000) ด้วย 3-Stage Hybrid Recommendation Pipeline พร้อม Dockerfile ที่ Deploy บน Hugging Face Spaces / Render ฟรีได้ทันที"
+        - agent: "backend-core-engineer"
+          task: "เชื่อม Endpoint /api/v1/properties/recommend, /api/v1/properties/recommend/property/:id และ /api/v1/user-behaviors/view-property/:id เข้ากับ joodpakpaw-ml พร้อมระบบ Cold-Start In-Process Fallback"
+        - agent: "frontend-upgrader"
+          task: "ปรับปรุงประสิทธิภาพการดึงข้อมูลหน้า Home (app/(browse)/page.tsx) และทำ Caching"
+        - agent: "qa-auditor"
+          task: "ทดสอบ End-to-End ครบทุก Flow และทดสอบ Concurrency ของระบบแนะนำที่พัก (TC-API-174, TC-API-175)"

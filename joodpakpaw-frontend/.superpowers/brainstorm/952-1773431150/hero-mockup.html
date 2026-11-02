@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Homepage Mockup — JOODPAKPAW</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: #f5f5f5;
+      }
+
+      /* ─── DESKTOP NAV ─── */
+      .desktop-nav {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: white;
+        border-bottom: 1px solid #e8e8e8;
+        padding: 0 48px;
+        height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+      }
+      .nav-logo {
+        font-size: 18px;
+        font-weight: 800;
+        color: #1c4f4a;
+        letter-spacing: 1px;
+      }
+      .nav-links {
+        display: flex;
+        gap: 24px;
+        align-items: center;
+      }
+      .nav-links a {
+        font-size: 14px;
+        color: #555;
+        text-decoration: none;
+      }
+      .nav-links a:hover {
+        color: #1c4f4a;
+      }
+      .nav-auth {
+        display: flex;
+        gap: 10px;
+      }
+      .btn-login {
+        font-size: 13px;
+        color: #1c4f4a;
+        border: 1.5px solid #1c4f4a;
+        padding: 6px 16px;
+        border-radius: 20px;
+        cursor: pointer;
+        background: white;
+        font-weight: 500;
+      }
+      .btn-signup {
+        font-size: 13px;
+        color: white;
+        background: #1c4f4a;
+        padding: 6px 16px;
+        border-radius: 20px;
+        cursor: pointer;
+        border: none;
+        font-weight: 500;
+      }
+
+      /* ─── STICKY SEARCH (appears after scrolling) ─── */
+      .sticky-search {
+        position: sticky;
+        top: 64px;
+        z-index: 90;
+        background: white;
+        padding: 10px 48px;
+        border-bottom: 1px solid #e8e8e8;
+        display: none; /* hidden by default, shown on scroll */
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        animation: slideDown 0.2s ease;
+      }
+      @keyframes slideDown {
+        from {
+          opacity: 0;
+          transform: translateY(-8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .sticky-search.visible {
+        display: block;
+      }
+      .sticky-search-inner {
+        max-width: 560px;
+        background: #f5f5f5;
+        border: 1.5px solid #e0e0e0;
+        border-radius: 30px;
+        padding: 10px 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: text;
+      }
+      .sticky-search-inner span {
+        font-size: 13px;
+        color: #999;
+      }
+
+      /* ─── HERO ─── */
+      .hero {
+        background: linear-gradient(
+          135deg,
+          #1c4f4a 0%,
+          #2d7a74 60%,
+          #3a9088 100%
+        );
+        padding: 56px 48px 48px;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 360px;
+      }
+      /* Paw print pattern */
+      .hero::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='white' fill-opacity='0.06'%3E%3Cellipse cx='30' cy='20' rx='7' ry='9'/%3E%3Cellipse cx='50' cy='20' rx='7' ry='9'/%3E%3Cellipse cx='18' cy='36' rx='5.5' ry='7'/%3E%3Cellipse cx='62' cy='36' rx='5.5' ry='7'/%3E%3Cellipse cx='40' cy='52' rx='14' ry='16'/%3E%3C/g%3E%3C/svg%3E");
+        background-size: 80px 80px;
+        pointer-events: none;
+      }
+      .hero-content {
+        position: relative;
+        z-index: 1;
+        max-width: 560px;
+      }
+      .hero-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(255, 255, 255, 0.15);
+        color: white;
+        font-size: 12px;
+        font-weight: 500;
+        padding: 5px 12px;
+        border-radius: 20px;
+        margin-bottom: 16px;
+      }
+      .hero-title {
+        font-size: 40px;
+        font-weight: 800;
+        color: white;
+        line-height: 1.15;
+        margin-bottom: 8px;
+      }
+      .hero-sub {
+        font-size: 16px;
+        color: rgba(255, 255, 255, 0.75);
+        margin-bottom: 28px;
+      }
+      /* Search bar inside hero */
+      .hero-search {
+        background: white;
+        border-radius: 16px;
+        padding: 6px 6px 6px 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        max-width: 520px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+        margin-bottom: 20px;
+      }
+      .hero-search input {
+        flex: 1;
+        border: none;
+        outline: none;
+        font-size: 15px;
+        color: #333;
+        background: transparent;
+      }
+      .hero-search input::placeholder {
+        color: #aaa;
+      }
+      .hero-search-btn {
+        background: #ff6f3c;
+        color: white;
+        border: none;
+        border-radius: 12px;
+        padding: 10px 20px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      /* Filter chips inside hero */
+      .hero-chips {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .chip {
+        background: rgba(255, 255, 255, 0.18);
+        color: white;
+        font-size: 13px;
+        font-weight: 500;
+        padding: 6px 14px;
+        border-radius: 20px;
+        cursor: pointer;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        transition: background 0.15s;
+      }
+      .chip:hover,
+      .chip.active {
+        background: rgba(255, 255, 255, 0.32);
+      }
+      /* Decorative right side */
+      .hero-deco {
+        position: relative;
+        z-index: 1;
+        font-size: 120px;
+        opacity: 0.18;
+        line-height: 1;
+        user-select: none;
+        flex-shrink: 0;
+      }
+
+      /* ─── SECTIONS ─── */
+      .sections {
+        background: white;
+        padding: 40px 48px 80px;
+      }
+      .section {
+        margin-bottom: 48px;
+      }
+      .section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+      }
+      .section-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: #1c4f4a;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .section-count {
+        font-size: 14px;
+        color: #999;
+        font-weight: 400;
+      }
+      .see-all {
+        font-size: 13px;
+        color: #ff6f3c;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .see-all:hover {
+        text-decoration: underline;
+      }
+      /* Card grid */
+      .card-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 16px;
+      }
+      .prop-card {
+        cursor: pointer;
+      }
+      .prop-img {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        background: linear-gradient(135deg, #d4e8e6, #b8d8d5);
+        border-radius: 16px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        transition:
+          transform 0.25s ease,
+          box-shadow 0.25s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #1c4f4a;
+        font-size: 28px;
+        opacity: 0.5;
+        position: relative;
+        overflow: hidden;
+      }
+      .prop-img:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.14);
+      }
+      .prop-heart {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        font-size: 18px;
+        opacity: 0.8;
+      }
+      .prop-info {
+        margin-top: 8px;
+        padding: 0 2px;
+      }
+      .prop-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: #1c4f4a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .prop-loc {
+        font-size: 12px;
+        color: #888;
+        margin-top: 2px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .prop-price {
+        font-size: 13px;
+        font-weight: 700;
+        color: #1c4f4a;
+        margin-top: 4px;
+      }
+      .prop-rating {
+        font-size: 12px;
+        color: #555;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+      }
+
+      /* divider between sections */
+      .section-divider {
+        border: none;
+        border-top: 1px solid #f0f0f0;
+        margin-bottom: 48px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- DESKTOP NAV -->
+    <nav class="desktop-nav">
+      <div class="nav-logo">JOODPAKPAW</div>
+      <div class="nav-links">
+        <a href="#">Home</a>
+        <a href="#">Explore</a>
+        <a href="#">Favorites</a>
+      </div>
+      <div class="nav-auth">
+        <button class="btn-login">Log in</button>
+        <button class="btn-signup">Sign up</button>
+      </div>
+    </nav>
+
+    <!-- STICKY SEARCH (slides in after hero scrolls out) -->
+    <div class="sticky-search" id="stickySearch">
+      <div class="sticky-search-inner">
+        <span>🔍</span>
+        <span>Search for pet sitters, locations…</span>
+      </div>
+    </div>
+
+    <!-- HERO -->
+    <section class="hero" id="hero">
+      <div class="hero-content">
+        <div class="hero-tag">🐾 Thailand's #1 Pet Sitting Platform</div>
+        <h1 class="hero-title">Find trusted<br />pet sitters<br />near you</h1>
+        <p class="hero-sub">
+          Hundreds of verified hosts, ready to care for your pets.
+        </p>
+
+        <div class="hero-search" id="heroSearch">
+          <input type="text" placeholder="Search by location, pet type…" />
+          <button class="hero-search-btn">🔍 Search</button>
+        </div>
+
+        <div class="hero-chips">
+          <div class="chip active">All</div>
+          <div class="chip">🐶 Dogs</div>
+          <div class="chip">🐱 Cats</div>
+          <div class="chip">🐰 Small Pets</div>
+          <div class="chip">⭐ Top Rated</div>
+          <div class="chip">💰 Budget</div>
+        </div>
+      </div>
+
+      <div class="hero-deco">🐾</div>
+    </section>
+
+    <!-- SECTIONS -->
+    <div class="sections">
+      <!-- Recommended for You -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">
+            ❤️ Recommended for You
+            <span class="section-count">(24)</span>
+          </div>
+          <a class="see-all">See all</a>
+        </div>
+        <div class="card-grid">
+          <div class="prop-card">
+            <div
+              class="prop-img"
+              style="background: linear-gradient(135deg, #fde8dc, #f5c4a8)"
+            >
+              🏠<span class="prop-heart">🤍</span>
+            </div>
+            <div class="prop-info">
+              <div class="prop-name">Cozy Pet Home</div>
+              <div class="prop-loc">
+                <span>Bangkok, Watthana</span>
+                <div class="prop-rating">⭐ 4.9</div>
+              </div>
+              <div class="prop-price">THB 450</div>
+            </div>
+          </div>
+          <div class="prop-card">
+            <div
+              class="prop-img"
+              style="background: linear-gradient(135deg, #dce8fd, #a8c4f5)"
+            >
+              🏡<span class="prop-heart">❤️</span>
+            </div>
+            <div class="prop-info">
+              <div class="prop-name">Garden Villa Stay</div>
+              <div class="prop-loc">
+                <span>Chiang Mai, Mueang</span>
+                <div class="prop-rating">⭐ 4.8</div>
+              </div>
+              <div class="prop-price">THB 620</div>
+            </div>
+          </div>
+          <div class="prop-card">
+            <div
+              class="prop-img"
+              style="background: linear-gradient(135deg, #ddfde8, #a8f5c4)"
+            >
+              🌿<span class="prop-heart">🤍</span>
+            </div>
+            <div class="prop-info">
+              <div class="prop-name">Green Retreat</div>
+              <div class="prop-loc">
+                <span>Phuket, Kathu</span>
+                <div class="prop-rating">⭐ 4.7</div>
+              </div>
+              <div class="prop-price">THB 380</div>
+            </div>
+          </div>
+          <div class="prop-card">
+            <div
+              class="prop-img"
+              style="background: linear-gradient(135deg, #fdfadc, #f5e8a8)"
+            >
+              ☀️<span class="prop-heart">🤍</span>
+            </div>
+            <div class="prop-info">
+              <div class="prop-name">Sunny Nest</div>
+              <div class="prop-loc">
+                <span>Bangkok, Ladprao</span>
+                <div class="prop-rating">New</div>
+              </div>
+              <div class="prop-price">THB 290</div>
+            </div>
+          </div>
+          <div class="prop-card">
+            <div
+              class="prop-img"
+              style="background: linear-gradient(135deg, #f0dcfd, #d4a8f5)"
+            >
+              🏠<span class="prop-heart">🤍</span>
+            </div>
+            <div class="prop-info">
+              <div class="prop-name">Purple Haven</div>
+              <div class="prop-loc">
+                <span>Nonthaburi, Pak Kret</span>
+                <div class="prop-rating">⭐ 4.6</div>
+              </div>
+              <div class="prop-price">THB 510</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <hr class="section-divider" />
+
+      <!-- Top Rated -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">
+            ⭐ Top Rated
+            <span class="section-count">(18)</span>
+          </div>
+          <a class="see-all">See all</a>
+        </div>
+        <div class="card-grid">
+          <div class="prop-card">
+            <div
+              class="prop-img"
+              style="background: linear-gradient(135deg, #d4e8e6, #b8d8d5)"
+            >
+              🏡<span class="prop-heart">🤍</span>
+            </div>
+            <div class="prop-info">
+              <div class="prop-name">Teal Terrace</div>
+              <div class="prop-loc">
+                <span>Bangkok, Sathorn</span>
+                <div class="prop-rating">⭐ 5.0</div>
+              </div>
+              <div class="prop-price">THB 750</div>
+            </div>
+          </div>
+          <div class="prop-card">
+            <div
+              class="prop-img"
+              style="background: linear-gradient(135deg, #e8d4d4, #d8b8b8)"
+            >
+              🌺<span class="prop-heart">❤️</span>
+            </div>
+            <div class="prop-info">
+              <div class="prop-name">Rose Cottage</div>
+              <div class="prop-loc">
+                <span>Chiang Rai, Mueang</span>
+                <div class="prop-rating">⭐ 4.9</div>
+              </div>
+              <div class="prop-price">THB 430</div>
+            </div>
+          </div>
+          <div class="prop-card">
+            <div
+              class="prop-img"
+              style="background: linear-gradient(135deg, #d4d4e8, #b8b8d8)"
+            >
+              🏠<span class="prop-heart">🤍</span>
+            </div>
+            <div class="prop-info">
+              <div class="prop-name">Blue Sky House</div>
+              <div class="prop-loc">
+                <span>Pattaya, Bang Lamung</span>
+                <div class="prop-rating">⭐ 4.9</div>
+              </div>
+              <div class="prop-price">THB 560</div>
+            </div>
+          </div>
+          <div class="prop-card">
+            <div
+              class="prop-img"
+              style="background: linear-gradient(135deg, #e8e8d4, #d8d8b8)"
+            >
+              🌴<span class="prop-heart">🤍</span>
+            </div>
+            <div class="prop-info">
+              <div class="prop-name">Palm Retreat</div>
+              <div class="prop-loc">
+                <span>Samui, Bophut</span>
+                <div class="prop-rating">⭐ 4.8</div>
+              </div>
+              <div class="prop-price">THB 680</div>
+            </div>
+          </div>
+          <div class="prop-card">
+            <div
+              class="prop-img"
+              style="background: linear-gradient(135deg, #e8d4e8, #d8b8d8)"
+            >
+              🌸<span class="prop-heart">🤍</span>
+            </div>
+            <div class="prop-info">
+              <div class="prop-name">Blossom Stay</div>
+              <div class="prop-loc">
+                <span>Hua Hin, Cha-am</span>
+                <div class="prop-rating">⭐ 4.8</div>
+              </div>
+              <div class="prop-price">THB 490</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <hr class="section-divider" />
+
+      <!-- New Listings -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">
+            ✨ New Listings
+            <span class="section-count">(12)</span>
+          </div>
+          <a class="see-all">See all</a>
+        </div>
+        <div class="card-grid">
+          <div class="prop-card">
+            <div
+              class="prop-img"
+              style="background: linear-gradient(135deg, #ffecd2, #fcb69f)"
+            >
+              🏠<span class="prop-heart">🤍</span>
+            </div>
+            <div class="prop-info">
+              <div class="prop-name">Sunset Sitter</div>
+              <div class="prop-loc">
+                <span>Bangkok, On Nut</span>
+                <div class="prop-rating">New</div>
+              </div>
+              <div class="prop-price">THB 350</div>
+            </div>
+          </div>
+          <div class="prop-card">
+            <div
+              class="prop-img"
+              style="background: linear-gradient(135deg, #d4fcef, #a8f0d8)"
+            >
+              🌿<span class="prop-heart">🤍</span>
+            </div>
+            <div class="prop-info">
+              <div class="prop-name">Fresh Air Lodge</div>
+              <div class="prop-loc">
+                <span>Khao Yai, Pak Chong</span>
+                <div class="prop-rating">New</div>
+              </div>
+              <div class="prop-price">THB 420</div>
+            </div>
+          </div>
+          <div class="prop-card">
+            <div
+              class="prop-img"
+              style="background: linear-gradient(135deg, #fce4d4, #f8c4a0)"
+            >
+              🏡<span class="prop-heart">🤍</span>
+            </div>
+            <div class="prop-info">
+              <div class="prop-name">Warm Paws Home</div>
+              <div class="prop-loc">
+                <span>Nakhon Ratchasima</span>
+                <div class="prop-rating">New</div>
+              </div>
+              <div class="prop-price">THB 310</div>
+            </div>
+          </div>
+          <div class="prop-card">
+            <div
+              class="prop-img"
+              style="background: linear-gradient(135deg, #d4e4fc, #a0b8f8)"
+            >
+              🌊<span class="prop-heart">🤍</span>
+            </div>
+            <div class="prop-info">
+              <div class="prop-name">Ocean Breeze Inn</div>
+              <div class="prop-loc">
+                <span>Krabi, Ao Nang</span>
+                <div class="prop-rating">New</div>
+              </div>
+              <div class="prop-price">THB 580</div>
+            </div>
+          </div>
+          <div class="prop-card">
+            <div
+              class="prop-img"
+              style="background: linear-gradient(135deg, #fcd4f4, #f0a0e8)"
+            >
+              🌷<span class="prop-heart">🤍</span>
+            </div>
+            <div class="prop-info">
+              <div class="prop-name">Blossom Pet Care</div>
+              <div class="prop-loc">
+                <span>Udon Thani, Mueang</span>
+                <div class="prop-rating">New</div>
+              </div>
+              <div class="prop-price">THB 270</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Sticky search bar logic
+      const heroSearch = document.getElementById('heroSearch')
+      const stickySearch = document.getElementById('stickySearch')
+
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          stickySearch.classList.toggle('visible', !entry.isIntersecting)
+        },
+        { threshold: 0 }
+      )
+
+      observer.observe(heroSearch)
+
+      // Chip toggle
+      document.querySelectorAll('.chip').forEach((chip) => {
+        chip.addEventListener('click', () => {
+          document
+            .querySelectorAll('.chip')
+            .forEach((c) => c.classList.remove('active'))
+          chip.classList.add('active')
+        })
+      })
+    </script>
+  </body>
+</html>

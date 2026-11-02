@@ -1,0 +1,1358 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JOODPAKPAW — Admin Dashboard Wireframe</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        --bg:           #ececec;
+        --white:        #ffffff;
+        --surface:      #f5f5f5;
+        --border:       #b8b8b8;
+        --border-light: #d4d4d4;
+        --text:         #1c1c1c;
+        --muted:        #777777;
+        --light:        #e0e0e0;
+        --dark:         #3a3a3a;
+        --sidebar-bg:   #3a3a3a;
+        --sidebar-active: #111111;
+        --font:         'DM Sans', Helvetica, Arial, sans-serif;
+        --body:         'DM Sans', Helvetica, Arial, sans-serif;
+        --mono:         'DM Mono', 'Courier New', monospace;
+      }
+
+      html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--body); font-size: 14px; line-height: 1.5; }
+
+      .app { display: flex; height: 100vh; overflow: hidden; }
+
+      /* ── Wireframe label ── */
+      body::before {
+        content: 'WIREFRAME MOCK';
+        position: fixed; bottom: 14px; right: 18px; z-index: 9999;
+        font-family: var(--mono); font-size: 10px; font-weight: 500;
+        color: var(--border); letter-spacing: .1em; text-transform: uppercase;
+        pointer-events: none;
+      }
+
+      /* ── Sidebar ── */
+      .sidebar {
+        width: 230px; min-width: 230px;
+        background: var(--sidebar-bg);
+        display: flex; flex-direction: column;
+        border-right: 2px solid #2a2a2a;
+      }
+      .sidebar-logo {
+        padding: 20px 20px 16px;
+        border-bottom: 1px solid rgba(255,255,255,.12);
+        display: flex; align-items: center; gap: 10px;
+      }
+      .logo-mark {
+        width: 36px; height: 36px; border-radius: 4px;
+        background: #555; border: 2px solid rgba(255,255,255,.3);
+        display: flex; align-items: center; justify-content: center;
+        font-family: var(--font); font-weight: 700; font-size: 16px; color: #fff;
+      }
+      .logo-text { font-family: var(--font); font-weight: 700; font-size: 14px; color: #fff; line-height: 1.2; }
+      .logo-sub { font-size: 10px; color: rgba(255,255,255,.4); letter-spacing: .06em; text-transform: uppercase; }
+
+      .nav { flex: 1; padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; }
+      .nav-section-label {
+        font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+        color: rgba(255,255,255,.3); padding: 8px 12px 4px;
+      }
+      .nav-item {
+        display: flex; align-items: center; gap: 10px;
+        padding: 9px 12px; border-radius: 4px; cursor: pointer;
+        color: rgba(255,255,255,.6); font-size: 13.5px; font-weight: 500;
+        font-family: var(--body);
+        transition: all .15s; border: none; background: none; width: 100%; text-align: left;
+      }
+      .nav-item:hover { background: rgba(255,255,255,.08); color: #fff; }
+      .nav-item.active { background: var(--sidebar-active); color: #fff; border: 1px solid rgba(255,255,255,.15); }
+      .nav-item .icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; opacity: .7; }
+      .nav-item .icon svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+      .nav-badge {
+        margin-left: auto; background: rgba(255,255,255,.15); color: rgba(255,255,255,.8);
+        font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 3px;
+        font-family: var(--mono); border: 1px solid rgba(255,255,255,.2);
+      }
+      .nav-badge.orange { background: rgba(255,255,255,.25); color: #fff; }
+      .sidebar-footer {
+        padding: 14px 20px; border-top: 1px solid rgba(255,255,255,.1);
+        color: rgba(255,255,255,.25); font-size: 11px; font-family: var(--mono);
+      }
+
+      /* ── Main ── */
+      .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+      .topbar {
+        height: 60px; background: var(--white);
+        border-bottom: 2px solid var(--border);
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0 28px; flex-shrink: 0;
+      }
+      .topbar-title { font-family: var(--font); font-weight: 700; font-size: 18px; color: var(--text); }
+      .admin-chip {
+        display: flex; align-items: center; gap: 8px;
+        background: var(--surface); border: 1.5px solid var(--border);
+        border-radius: 4px; padding: 6px 14px 6px 8px; font-size: 13px; font-weight: 500;
+      }
+      .admin-avatar {
+        width: 28px; height: 28px; border-radius: 50%;
+        background: var(--light); border: 1.5px solid var(--border);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 12px; font-weight: 700; color: var(--dark); font-family: var(--font);
+      }
+
+      .content { flex: 1; overflow-y: auto; padding: 24px 28px; }
+      .page { display: none; }
+      .page.active { display: block; }
+
+      /* ── Stats ── */
+      .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+      .stat-card {
+        background: var(--white); border: 1.5px solid var(--border);
+        border-radius: 6px; padding: 18px 20px;
+        display: flex; flex-direction: column; gap: 6px;
+      }
+      .stat-card.accent { background: var(--light); border-color: #999; }
+      .stat-card.accent .stat-label,
+      .stat-card.accent .stat-sub { color: var(--muted); }
+      .stat-card.accent .stat-value { color: var(--text); }
+      .stat-label { font-size: 12px; color: var(--muted); font-weight: 500; letter-spacing: .02em; }
+      .stat-value { font-family: var(--font); font-weight: 800; font-size: 30px; line-height: 1; color: var(--text); }
+      .stat-value.orange { color: var(--text); }
+      .stat-value.red { color: var(--text); }
+      .stat-sub { font-size: 11.5px; color: var(--muted); }
+      .stat-sub.up { color: #555; font-weight: 600; }
+      .stat-sub.down { color: #555; font-weight: 600; }
+      .stat-icon { width: 28px; height: 28px; margin-bottom: 4px; opacity: .35; }
+      .stat-icon svg { width: 22px; height: 22px; stroke: var(--text); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+      /* ── Section ── */
+      .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+      .section-title {
+        font-family: var(--font); font-weight: 700; font-size: 16px; color: var(--text);
+        display: flex; align-items: center; gap: 8px;
+      }
+      .section-title::before { content: ''; width: 3px; height: 18px; background: var(--dark); border-radius: 2px; display: inline-block; }
+
+      /* ── Filter tabs ── */
+      .filter-tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+      .tab-btn {
+        padding: 7px 16px; border-radius: 4px; font-size: 13px; font-weight: 600;
+        border: 1.5px solid var(--border); background: var(--white); color: var(--muted);
+        cursor: pointer; transition: all .15s; font-family: var(--font);
+      }
+      .tab-btn:hover { border-color: var(--dark); color: var(--text); }
+      .tab-btn.active { background: var(--dark); border-color: var(--dark); color: #fff; }
+      .tab-btn .count {
+        display: inline-block; margin-left: 6px;
+        background: rgba(0,0,0,.08); border-radius: 3px;
+        padding: 0 6px; font-size: 11px;
+      }
+      .tab-btn.active .count { background: rgba(255,255,255,.2); }
+
+      /* ── Table ── */
+      .table-wrap {
+        background: var(--white); border: 1.5px solid var(--border);
+        border-radius: 6px; overflow: hidden;
+      }
+      table { width: 100%; border-collapse: collapse; }
+      thead { background: var(--surface); }
+      th {
+        padding: 12px 16px; font-size: 11.5px; font-weight: 600;
+        color: var(--muted); text-transform: uppercase; letter-spacing: .04em;
+        text-align: left; border-bottom: 1.5px solid var(--border);
+        font-family: var(--font);
+      }
+      td {
+        padding: 13px 16px; font-size: 13px;
+        border-bottom: 1px solid var(--border-light);
+        vertical-align: middle; font-family: var(--body);
+      }
+      tr:last-child td { border-bottom: none; }
+      tr:hover td { background: var(--surface); }
+      .mono { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+
+      /* ── Badges (wireframe: simple bordered labels) ── */
+      .badge-status {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 3px 9px; border-radius: 3px; font-size: 11.5px; font-weight: 600;
+        font-family: var(--mono); border: 1.5px solid var(--border);
+        background: var(--white); color: var(--text);
+        text-transform: uppercase; letter-spacing: .04em;
+      }
+      .badge-status::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+      .badge-status.pending   { border-style: dashed; color: var(--dark); }
+      .badge-status.resolved  { background: var(--light); }
+      .badge-status.dismissed { background: var(--surface); color: var(--muted); }
+      .badge-status.active    { background: var(--light); }
+      .badge-status.warned    { border-style: dashed; }
+      .badge-status.banned    { background: var(--dark); color: #fff; border-color: var(--dark); }
+      .badge-status.banned::before { background: #fff; }
+      .badge-status.inactive  { color: var(--muted); }
+      .badge-status.removed   { background: #555; color: #fff; border-color: #555; }
+      .badge-status.removed::before { background: #ccc; }
+
+      .badge-type {
+        display: inline-block; padding: 2px 9px; border-radius: 3px;
+        font-size: 11px; font-weight: 600; font-family: var(--mono);
+        border: 1.5px solid var(--border); background: var(--surface);
+        color: var(--muted); text-transform: uppercase; letter-spacing: .04em;
+      }
+
+      /* ── Buttons ── */
+      .btn {
+        padding: 6px 14px; border-radius: 4px; font-size: 12.5px; font-weight: 600;
+        border: 1.5px solid var(--border); background: var(--white); color: var(--text);
+        cursor: pointer; transition: all .15s; font-family: var(--font);
+      }
+      .btn:hover { border-color: var(--dark); background: var(--surface); }
+      .btn.danger { border-style: dashed; border-color: #999; color: #444; background: var(--surface); }
+      .btn.danger:hover { border-color: var(--dark); border-style: solid; }
+      .btn.primary { background: var(--dark); border-color: var(--dark); color: #fff; }
+      .btn.primary:hover { background: #222; }
+      .btn.orange { background: #555; border-color: #555; color: #fff; }
+      .btn.orange:hover { background: #444; }
+      .btn.amber { border-style: dashed; border-color: #999; color: #444; background: var(--surface); }
+      .btn.amber:hover { border-style: solid; border-color: var(--dark); }
+      .btns { display: flex; gap: 6px; flex-wrap: wrap; }
+
+      /* ── Priority flag ── */
+      .priority-flag {
+        display: inline-flex; align-items: center;
+        padding: 1px 5px; border-radius: 3px; font-size: 11px; font-weight: 700;
+        border: 1.5px solid #999; background: var(--light);
+        color: var(--dark); vertical-align: middle; margin-left: 6px;
+      }
+
+      /* ── Reason badge ── */
+      .reason-tag {
+        display: inline-block; padding: 2px 8px; border-radius: 3px;
+        font-size: 11px; font-family: var(--mono); border: 1px solid var(--border-light);
+        background: var(--surface); color: var(--muted);
+      }
+
+      /* ── Email button ── */
+      .email-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 7px 14px; border-radius: 4px; font-size: 12.5px; font-weight: 600;
+        border: 1.5px solid var(--border); background: var(--white); color: var(--text);
+        cursor: pointer; text-decoration: none; font-family: var(--font);
+        transition: all .15s;
+      }
+      .email-btn:hover { border-color: var(--dark); background: var(--surface); }
+      .email-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+      /* ── Panel ── */
+      .panel-overlay {
+        position: fixed; inset: 0; background: rgba(0,0,0,.2);
+        display: none; z-index: 100;
+      }
+      .panel-overlay.open { display: flex; justify-content: flex-end; }
+      .panel {
+        width: 520px; height: 100vh; background: var(--white);
+        border-left: 2px solid var(--border); overflow-y: auto;
+        display: flex; flex-direction: column;
+        animation: slideIn .2s ease-out;
+      }
+      @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+      .panel-header {
+        padding: 20px 24px; border-bottom: 1.5px solid var(--border);
+        display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+        background: var(--surface);
+      }
+      .panel-header h3 { font-family: var(--font); font-weight: 700; font-size: 16px; color: var(--text); }
+      .panel-close {
+        background: var(--white); border: 1.5px solid var(--border); color: var(--muted);
+        font-size: 18px; cursor: pointer; line-height: 1;
+        width: 32px; height: 32px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
+      }
+      .panel-close:hover { border-color: var(--dark); color: var(--text); }
+      .panel-body { padding: 24px; flex: 1; display: flex; flex-direction: column; gap: 20px; }
+      .panel-section { display: flex; flex-direction: column; gap: 10px; }
+      .panel-section-title {
+        font-family: var(--mono); font-size: 11px; font-weight: 500;
+        letter-spacing: .07em; text-transform: uppercase; color: var(--muted);
+        padding-bottom: 6px; border-bottom: 1px solid var(--border-light);
+      }
+      .info-grid { display: flex; flex-direction: column; gap: 8px; background: var(--surface); border: 1.5px solid var(--border); border-radius: 6px; padding: 14px; }
+      .info-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+      .info-label { color: var(--muted); font-size: 12.5px; min-width: 110px; font-family: var(--mono); }
+      .info-value { font-size: 13px; text-align: right; font-weight: 500; }
+      .quote-box {
+        background: var(--surface); border: 1.5px dashed var(--border);
+        border-radius: 6px; padding: 14px 16px; font-size: 13.5px; color: var(--text);
+        line-height: 1.7; font-style: italic; border-left: 3px solid var(--dark); border-left-style: solid;
+      }
+      .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .action-btn {
+        padding: 12px 14px; border-radius: 6px; font-size: 13px; font-weight: 600;
+        border: 1.5px solid var(--border); background: var(--white); color: var(--text);
+        cursor: pointer; transition: all .15s; font-family: var(--font);
+        display: flex; align-items: center; gap: 8px;
+      }
+      .action-btn:hover { border-color: var(--dark); background: var(--surface); }
+      .action-btn.red { border-style: dashed; background: var(--surface); }
+      .action-btn.red:hover { border-style: solid; border-color: #666; }
+      .action-btn.green { background: var(--light); }
+      .action-btn.green:hover { border-color: var(--dark); }
+      .action-btn.amber { border-style: dashed; }
+      .action-btn.amber:hover { border-style: solid; }
+      .action-btn.teal { background: var(--surface); }
+      .action-btn.teal:hover { border-color: var(--dark); }
+
+      /* ── API box ── */
+      .api-box {
+        background: #2a2a2a; border-radius: 6px;
+        padding: 16px; font-family: var(--mono); font-size: 12px; line-height: 1.9;
+        color: rgba(255,255,255,.5); overflow-x: auto;
+        border: 1px solid #444;
+      }
+      .api-box .key { color: #b0d8d4; }
+      .api-box .str { color: #d4b896; }
+      .api-box .num { color: #a8d4a0; }
+      .api-box .kw  { color: #d4a0a0; }
+      .api-label {
+        font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: .05em;
+        text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+        display: flex; align-items: center; gap: 8px;
+      }
+      .api-label::after { content: ''; flex: 1; height: 1px; background: var(--border-light); }
+
+      /* ── Cards ── */
+      .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+      .card { background: var(--white); border: 1.5px solid var(--border); border-radius: 6px; overflow: hidden; }
+      .card-header { padding: 12px 20px; border-bottom: 1.5px solid var(--border); font-family: var(--font); font-weight: 700; font-size: 13px; color: var(--text); background: var(--surface); display: flex; align-items: center; gap: 8px; }
+      .card-header::before { content: ''; width: 3px; height: 14px; background: var(--dark); border-radius: 2px; flex-shrink: 0; }
+
+      /* ── Activity ── */
+      .activity-list { display: flex; flex-direction: column; }
+      .activity-item { display: flex; gap: 12px; align-items: flex-start; padding: 12px 18px; border-bottom: 1px solid var(--border-light); }
+      .activity-item:last-child { border-bottom: none; }
+      .activity-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; background: var(--border); border: 1.5px solid #999; }
+      .activity-text { font-size: 13px; line-height: 1.5; }
+      .activity-time { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: var(--mono); }
+
+      /* ── Search ── */
+      .search-row { display: flex; gap: 10px; margin-bottom: 16px; }
+      .search-input {
+        flex: 1; background: var(--white); border: 1.5px solid var(--border);
+        border-radius: 4px; padding: 9px 18px; color: var(--text); font-size: 13.5px;
+        font-family: var(--body); outline: none; transition: border-color .15s;
+      }
+      .search-input:focus { border-color: var(--dark); }
+      .search-input::placeholder { color: var(--muted); }
+
+      /* ── Avatar overrides ── */
+      [style*="linear-gradient"] { background: var(--light) !important; }
+
+      /* ── Scrollbar ── */
+      ::-webkit-scrollbar { width: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+      .flex-center { display: flex; align-items: center; gap: 8px; }
+      .text-red { color: var(--dark); font-weight: 600; }
+      .text-amber { color: var(--dark); font-weight: 600; }
+
+      /* ── Verified badge ── */
+      .badge-verified {
+        display: inline-flex; align-items: center; gap: 3px;
+        padding: 2px 7px; border-radius: 3px; font-size: 10.5px; font-weight: 700;
+        font-family: var(--mono); border: 1.5px solid #999; background: var(--surface);
+        color: var(--dark); letter-spacing: .04em; vertical-align: middle;
+      }
+      .badge-verified svg { width: 10px; height: 10px; stroke: currentColor; fill: none; stroke-width: 2.5; flex-shrink: 0; }
+
+      /* ── Verification status badges ── */
+      .badge-vstatus {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 3px 9px; border-radius: 3px; font-size: 11.5px; font-weight: 600;
+        font-family: var(--mono); border: 1.5px solid var(--border);
+        color: var(--muted); background: var(--surface); text-transform: lowercase;
+      }
+      .badge-vstatus::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+      .badge-vstatus.pending  { color: var(--dark); border-style: dashed; }
+      .badge-vstatus.pending::before { background: var(--dark); }
+      .badge-vstatus.approved { background: var(--dark); color: #fff; border-color: var(--dark); }
+      .badge-vstatus.approved::before { background: #fff; }
+      .badge-vstatus.rejected { border-style: dashed; border-color: #999; color: #666; }
+
+      /* ── Document placeholder ── */
+      .doc-placeholder {
+        width: 100%; aspect-ratio: 3/2; border: 1.5px dashed var(--border);
+        border-radius: 4px; background: var(--surface);
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 6px; color: var(--muted); font-size: 11.5px; font-family: var(--mono);
+      }
+      .doc-placeholder svg { width: 28px; height: 28px; stroke: var(--border); fill: none; stroke-width: 1.5; }
+      .doc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; }
+      .doc-label { font-size: 11px; font-family: var(--mono); color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .06em; }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-logo">
+          <div class="logo-mark">J</div>
+          <div>
+            <div class="logo-text">JOODPAKPAW</div>
+            <div class="logo-sub">Admin Panel</div>
+          </div>
+        </div>
+        <nav class="nav">
+          <div class="nav-section-label">Overview</div>
+          <button class="nav-item active" onclick="showPage('dashboard', this)">
+            <span class="icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></span> Dashboard
+          </button>
+          <div class="nav-section-label">Moderation</div>
+          <button class="nav-item" onclick="showPage('reports', this)">
+            <span class="icon"><svg viewBox="0 0 24 24"><path d="M3 3h18v13H3z"/><path d="M12 16v5M8 21h8"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="13" y2="12"/></svg></span> Reports
+            <span class="nav-badge orange">7</span>
+          </button>
+          <button class="nav-item" onclick="showPage('verifications', this)">
+            <span class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg></span> Verifications
+            <span class="nav-badge orange">3</span>
+          </button>
+          <button class="nav-item" onclick="showPage('users', this)">
+            <span class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span> Users
+          </button>
+          <button class="nav-item" onclick="showPage('properties', this)">
+            <span class="icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10H15v-5h-6v5H3z"/></svg></span> Properties
+            <span class="nav-badge">2</span>
+          </button>
+          <button class="nav-item" onclick="showPage('log', this)">
+            <span class="icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg></span> Action Log
+          </button>
+          <div class="nav-section-label">Developer</div>
+          <button class="nav-item" onclick="showPage('api', this)">
+            <span class="icon"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span> API Schema
+          </button>
+        </nav>
+        <div class="sidebar-footer">Mock v1.0 · Frontend → Backend</div>
+      </aside>
+
+      <!-- Main -->
+      <div class="main">
+        <div class="topbar">
+          <span class="topbar-title" id="topbar-title">Dashboard Overview</span>
+          <div class="admin-chip">
+            <div class="admin-avatar">A</div>
+            <span>Admin</span>
+          </div>
+        </div>
+
+        <div class="content">
+
+          <!-- DASHBOARD -->
+          <div class="page active" id="page-dashboard">
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg></div>
+                <div class="stat-label">Pending Reports</div>
+                <div class="stat-value orange">7</div>
+                <div class="stat-sub down">↑ 3 since yesterday</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+                <div class="stat-label">Total Users</div>
+                <div class="stat-value">1,284</div>
+                <div class="stat-sub up">↑ 12 this week</div>
+              </div>
+              <div class="stat-card accent">
+                <div class="stat-icon"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10H15v-5h-6v5H3z"/></svg></div>
+                <div class="stat-label">Active Properties</div>
+                <div class="stat-value">342</div>
+                <div class="stat-sub down">↓ 2 deactivated</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+                <div class="stat-label">Banned Users</div>
+                <div class="stat-value red">5</div>
+                <div class="stat-sub">+1 this month</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg></div>
+                <div class="stat-label">Pending Verifications</div>
+                <div class="stat-value orange">3</div>
+                <div class="stat-sub down">↑ 2 since yesterday</div>
+              </div>
+            </div>
+
+            <div class="two-col">
+              <div class="card">
+                <div class="card-header">Recent Reports</div>
+                <div class="activity-list">
+                  <div class="activity-item">
+                    <div class="activity-dot"></div>
+                    <div><div class="activity-text">Property <strong>#142</strong> reported for misleading photos</div><div class="activity-time">2 min ago · by user #88</div></div>
+                  </div>
+                  <div class="activity-item">
+                    <div class="activity-dot"></div>
+                    <div><div class="activity-text">Review <strong>#501</strong> reported for inappropriate content</div><div class="activity-time">14 min ago · by user #203</div></div>
+                  </div>
+                  <div class="activity-item">
+                    <div class="activity-dot"></div>
+                    <div><div class="activity-text">Property <strong>#87</strong> reported for scam listing</div><div class="activity-time">1 hr ago · by user #415</div></div>
+                  </div>
+                  <div class="activity-item">
+                    <div class="activity-dot"></div>
+                    <div><div class="activity-text">Review <strong>#488</strong> resolved — content removed</div><div class="activity-time">3 hr ago · by Admin</div></div>
+                  </div>
+                  <div class="activity-item">
+                    <div class="activity-dot"></div>
+                    <div><div class="activity-text">Report <strong>#RC-091</strong> dismissed — no violation found</div><div class="activity-time">5 hr ago · by Admin</div></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-header">Recent Actions</div>
+                <div class="activity-list">
+                  <div class="activity-item">
+                    <div class="activity-dot"></div>
+                    <div><div class="activity-text">User <strong>Somchai W.</strong> banned — repeated violations</div><div class="activity-time">Yesterday · Admin</div></div>
+                  </div>
+                  <div class="activity-item">
+                    <div class="activity-dot"></div>
+                    <div><div class="activity-text">Property <strong>#99</strong> deactivated — fraud report</div><div class="activity-time">Yesterday · Admin</div></div>
+                  </div>
+                  <div class="activity-item">
+                    <div class="activity-dot"></div>
+                    <div><div class="activity-text">Warning issued to <strong>Nattaya P.</strong></div><div class="activity-time">2 days ago · Admin</div></div>
+                  </div>
+                  <div class="activity-item">
+                    <div class="activity-dot"></div>
+                    <div><div class="activity-text">Review <strong>#472</strong> removed — hate speech</div><div class="activity-time">2 days ago · Admin</div></div>
+                  </div>
+                  <div class="activity-item">
+                    <div class="activity-dot"></div>
+                    <div><div class="activity-text">Properties of user <strong>#312</strong> deactivated — repeated fraud</div><div class="activity-time">3 days ago · Admin</div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- REPORTS -->
+          <div class="page" id="page-reports">
+            <!-- Type tabs -->
+            <div class="filter-tabs" style="margin-bottom:20px;border-bottom:1.5px solid var(--border);padding-bottom:14px;">
+              <button class="tab-btn active" onclick="switchReportType('property', this)">Property Reports <span class="count">9</span></button>
+              <button class="tab-btn" onclick="switchReportType('review', this)">Review Reports <span class="count">3</span></button>
+            </div>
+
+            <!-- Property Reports -->
+            <div id="report-type-property">
+              <div class="filter-tabs">
+                <button class="tab-btn active" onclick="filterReports('all', this, 'property')">All <span class="count">9</span></button>
+                <button class="tab-btn" onclick="filterReports('pending', this, 'property')">Pending <span class="count">8</span></button>
+                <button class="tab-btn" onclick="filterReports('resolved', this, 'property')">Resolved <span class="count">0</span></button>
+                <button class="tab-btn" onclick="filterReports('dismissed', this, 'property')">Dismissed <span class="count">1</span></button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>ID</th><th>Reported By</th><th>Property</th><th>Reason</th><th>Reports</th><th>Status</th><th>Date</th><th>Actions</th></tr>
+                  </thead>
+                  <tbody id="reports-tbody-property">
+                    <tr>
+                      <td><span class="mono">RPT-001</span></td>
+                      <td>Malee S. <span class="mono">#88</span></td>
+                      <td>Property #142 — <em>Cozy Cat Villa</em></td>
+                      <td><span class="reason-tag">misleading_photos</span></td>
+                      <td><span class="priority-flag">3</span></td>
+                      <td><span class="badge-status pending">pending</span></td>
+                      <td><span class="mono">2025-03-15</span></td>
+                      <td><button class="btn" onclick="openReport({id:'RPT-001',type:'property',reporterName:'Malee S.',reporterId:88,reporterEmail:'malee@mail.com',targetTitle:'Cozy Cat Villa',targetId:142,ownerName:'Nattaya P.',ownerEmail:'nattaya@mail.com',reason:'misleading_photos',detail:'The main photo shows a large garden but when I arrived, there was no garden at all. Very misleading.',status:'pending',date:'2025-03-15',targetReportCount:3})">View</button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="mono">RPT-003</span></td>
+                      <td>Niran A. <span class="mono">#415</span></td>
+                      <td>Property #87 — <em>Dog Paradise Resort</em></td>
+                      <td><span class="reason-tag">scam_fraud</span></td>
+                      <td><span class="priority-flag">4</span></td>
+                      <td><span class="badge-status pending">pending</span></td>
+                      <td><span class="mono">2025-03-14</span></td>
+                      <td><button class="btn" onclick="openReport({id:'RPT-003',type:'property',reporterName:'Niran A.',reporterId:415,reporterEmail:'niran@mail.com',targetTitle:'Dog Paradise Resort',targetId:87,ownerName:'Somchai W.',ownerEmail:'somchai@mail.com',reason:'scam_fraud',detail:'Paid full amount but host disappeared and never provided check-in details. Unable to contact.',status:'pending',date:'2025-03-14',targetReportCount:4})">View</button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="mono">RPT-005</span></td>
+                      <td>Wirut P. <span class="mono">#612</span></td>
+                      <td>Property #201 — <em>Happy Paws Inn</em></td>
+                      <td><span class="reason-tag">wrong_location</span></td>
+                      <td><span class="mono">1</span></td>
+                      <td><span class="badge-status pending">pending</span></td>
+                      <td><span class="mono">2025-03-12</span></td>
+                      <td><button class="btn" onclick="openReport({id:'RPT-005',type:'property',reporterName:'Wirut P.',reporterId:612,reporterEmail:'wirut@mail.com',targetTitle:'Happy Paws Inn',targetId:201,ownerName:'Arisa T.',ownerEmail:'arisa@mail.com',reason:'wrong_location',detail:'The address listed is incorrect. The actual location is about 15km from what is shown on the map.',status:'pending',date:'2025-03-12',targetReportCount:1})">View</button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="mono">RPT-007</span></td>
+                      <td>Anan T. <span class="mono">#900</span></td>
+                      <td>Property #55 — <em>Rabbit Garden</em></td>
+                      <td><span class="reason-tag">inaccurate_info</span></td>
+                      <td><span class="mono">1</span></td>
+                      <td><span class="badge-status dismissed">dismissed</span></td>
+                      <td><span class="mono">2025-03-08</span></td>
+                      <td><button class="btn" onclick="openReport({id:'RPT-007',type:'property',reporterName:'Anan T.',reporterId:900,reporterEmail:'anan@mail.com',targetTitle:'Rabbit Garden',targetId:55,ownerName:'Pornchai B.',ownerEmail:'pornchai@mail.com',reason:'inaccurate_info',detail:'Claimed the listing price is outdated but after review the host updated it within 30 days which is within policy.',status:'dismissed',date:'2025-03-08',targetReportCount:1})">View</button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="mono">RPT-008</span></td>
+                      <td>Chalerm K. <span class="mono">#505</span></td>
+                      <td>Property #142 — <em>Cozy Cat Villa</em></td>
+                      <td><span class="reason-tag">scam_fraud</span></td>
+                      <td><span class="mono">2</span></td>
+                      <td><span class="badge-status pending">pending</span></td>
+                      <td><span class="mono">2025-03-13</span></td>
+                      <td><button class="btn" onclick="openReport({id:'RPT-008',type:'property',reporterName:'Chalerm K.',reporterId:505,reporterEmail:'chalerm@mail.com',targetTitle:'Cozy Cat Villa',targetId:142,ownerName:'Nattaya P.',ownerEmail:'nattaya@mail.com',reason:'scam_fraud',detail:'I paid a deposit but the host stopped responding and the property was unavailable on arrival.',status:'pending',date:'2025-03-13',targetReportCount:3})">View</button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="mono">RPT-009</span></td>
+                      <td>Suda M. <span class="mono">#720</span></td>
+                      <td>Property #142 — <em>Cozy Cat Villa</em></td>
+                      <td><span class="reason-tag">wrong_location</span></td>
+                      <td><span class="mono">1</span></td>
+                      <td><span class="badge-status pending">pending</span></td>
+                      <td><span class="mono">2025-03-11</span></td>
+                      <td><button class="btn" onclick="openReport({id:'RPT-009',type:'property',reporterName:'Suda M.',reporterId:720,reporterEmail:'suda@mail.com',targetTitle:'Cozy Cat Villa',targetId:142,ownerName:'Nattaya P.',ownerEmail:'nattaya@mail.com',reason:'wrong_location',detail:'The pin on the map is completely wrong. The actual location is in a different district entirely.',status:'pending',date:'2025-03-11',targetReportCount:3})">View</button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="mono">RPT-010</span></td>
+                      <td>Kanya R. <span class="mono">#330</span></td>
+                      <td>Property #87 — <em>Dog Paradise Resort</em></td>
+                      <td><span class="reason-tag">misleading_photos</span></td>
+                      <td><span class="priority-flag">3</span></td>
+                      <td><span class="badge-status pending">pending</span></td>
+                      <td><span class="mono">2025-03-13</span></td>
+                      <td><button class="btn" onclick="openReport({id:'RPT-010',type:'property',reporterName:'Kanya R.',reporterId:330,reporterEmail:'kanya@mail.com',targetTitle:'Dog Paradise Resort',targetId:87,ownerName:'Somchai W.',ownerEmail:'somchai@mail.com',reason:'misleading_photos',detail:'All photos show a luxury resort but the real place is a small dirty room. Nothing matches the listing.',status:'pending',date:'2025-03-13',targetReportCount:4})">View</button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="mono">RPT-011</span></td>
+                      <td>Thana B. <span class="mono">#445</span></td>
+                      <td>Property #87 — <em>Dog Paradise Resort</em></td>
+                      <td><span class="reason-tag">scam_fraud</span></td>
+                      <td><span class="mono">2</span></td>
+                      <td><span class="badge-status pending">pending</span></td>
+                      <td><span class="mono">2025-03-12</span></td>
+                      <td><button class="btn" onclick="openReport({id:'RPT-011',type:'property',reporterName:'Thana B.',reporterId:445,reporterEmail:'thana@mail.com',targetTitle:'Dog Paradise Resort',targetId:87,ownerName:'Somchai W.',ownerEmail:'somchai@mail.com',reason:'scam_fraud',detail:'Host collected full payment via transfer then blocked me on all channels. No refund, no response.',status:'pending',date:'2025-03-12',targetReportCount:4})">View</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Review Reports -->
+            <div id="report-type-review" style="display:none">
+              <div class="filter-tabs">
+                <button class="tab-btn active" onclick="filterReports('all', this, 'review')">All <span class="count">3</span></button>
+                <button class="tab-btn" onclick="filterReports('pending', this, 'review')">Pending <span class="count">2</span></button>
+                <button class="tab-btn" onclick="filterReports('resolved', this, 'review')">Resolved <span class="count">1</span></button>
+                <button class="tab-btn" onclick="filterReports('dismissed', this, 'review')">Dismissed <span class="count">0</span></button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>ID</th><th>Reported By</th><th>Review Author</th><th>On Property</th><th>Reason</th><th>Status</th><th>Date</th><th>Actions</th></tr>
+                  </thead>
+                  <tbody id="reports-tbody-review">
+                    <tr>
+                      <td><span class="mono">RPT-002</span></td>
+                      <td>Tanawat K. <span class="mono">#203</span></td>
+                      <td>Tanawat K. <span class="mono">#203</span></td>
+                      <td><em>Cozy Cat Villa</em> <span class="mono">#142</span></td>
+                      <td><span class="reason-tag">inappropriate_content</span></td>
+                      <td><span class="badge-status pending">pending</span></td>
+                      <td><span class="mono">2025-03-15</span></td>
+                      <td><button class="btn" onclick="openReport({id:'RPT-002',type:'review',reporterName:'Tanawat K.',reporterId:203,reporterEmail:'tanawat@mail.com',targetTitle:'Review #501',targetId:501,ownerName:'Nattaya P.',ownerEmail:'nattaya@mail.com',reason:'inappropriate_content',detail:'This review contains personal insults and profanity targeting the host directly.',status:'pending',date:'2025-03-15',reviewAuthorId:203,reviewAuthorName:'Tanawat K.',reviewAuthorEmail:'tanawat@mail.com',propertyId:142,propertyTitle:'Cozy Cat Villa',targetReportCount:1})">View</button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="mono">RPT-004</span></td>
+                      <td>Supatra L. <span class="mono">#310</span></td>
+                      <td>User <span class="mono">#55</span></td>
+                      <td><em>Happy Paws Inn</em> <span class="mono">#201</span></td>
+                      <td><span class="reason-tag">fake_review</span></td>
+                      <td><span class="badge-status pending">pending</span></td>
+                      <td><span class="mono">2025-03-14</span></td>
+                      <td><button class="btn" onclick="openReport({id:'RPT-004',type:'review',reporterName:'Supatra L.',reporterId:310,reporterEmail:'supatra@mail.com',targetTitle:'Review #488',targetId:488,ownerName:'Supatra L.',ownerEmail:'supatra@mail.com',reason:'fake_review',detail:'This review was posted by someone who never completed a booking at my property.',status:'pending',date:'2025-03-14',reviewAuthorId:55,reviewAuthorName:'User #55',reviewAuthorEmail:'user55@mail.com',propertyId:201,propertyTitle:'Happy Paws Inn',targetReportCount:1})">View</button></td>
+                    </tr>
+                    <tr>
+                      <td><span class="mono">RPT-006</span></td>
+                      <td>Pimchanok R. <span class="mono">#180</span></td>
+                      <td>User <span class="mono">#44</span></td>
+                      <td><em>Dog Paradise Resort</em> <span class="mono">#87</span></td>
+                      <td><span class="reason-tag">hate_speech</span></td>
+                      <td><span class="badge-status resolved">resolved</span></td>
+                      <td><span class="mono">2025-03-10</span></td>
+                      <td><button class="btn" onclick="openReport({id:'RPT-006',type:'review',reporterName:'Pimchanok R.',reporterId:180,reporterEmail:'pimchanok@mail.com',targetTitle:'Review #472',targetId:472,ownerName:'Somchai W.',ownerEmail:'somchai@mail.com',reason:'hate_speech',detail:'Review contains discriminatory language targeting the reporter based on nationality.',status:'resolved',date:'2025-03-10',reviewAuthorId:44,reviewAuthorName:'User #44',reviewAuthorEmail:'user44@mail.com',propertyId:87,propertyTitle:'Dog Paradise Resort',targetReportCount:2})">View</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- VERIFICATIONS -->
+          <div class="page" id="page-verifications">
+            <div class="filter-tabs" style="margin-bottom:20px;">
+              <button class="tab-btn active" onclick="filterVerifications('all', this)">All <span class="count">5</span></button>
+              <button class="tab-btn" onclick="filterVerifications('pending', this)">Pending <span class="count">3</span></button>
+              <button class="tab-btn" onclick="filterVerifications('approved', this)">Approved <span class="count">1</span></button>
+              <button class="tab-btn" onclick="filterVerifications('rejected', this)">Rejected <span class="count">1</span></button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Host</th><th>Email</th><th>Submitted</th><th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="verifications-tbody">
+                  <tr>
+                    <td><div class="flex-center"><div style="width:32px;height:32px;border-radius:50%;background:#d0d0d0;border:1.5px solid #bbb;display:flex;align-items:center;justify-content:center;font-family:var(--font);font-weight:700;font-size:13px;color:#555;flex-shrink:0">A</div> Arisa T. <span class="mono">#120</span></div></td>
+                    <td class="mono" style="font-size:12px">arisa@mail.com</td>
+                    <td><span class="mono">2025-03-15</span></td>
+                    <td><span class="badge-vstatus pending">pending</span></td>
+                    <td><button class="btn" onclick="openVerification({id:'VRF-001',hostName:'Arisa T.',hostId:120,hostEmail:'arisa@mail.com',submittedAt:'2025-03-15',status:'pending',rejectionReason:null})">Review</button></td>
+                  </tr>
+                  <tr>
+                    <td><div class="flex-center"><div style="width:32px;height:32px;border-radius:50%;background:#d0d0d0;border:1.5px solid #bbb;display:flex;align-items:center;justify-content:center;font-family:var(--font);font-weight:700;font-size:13px;color:#555;flex-shrink:0">P</div> Pornchai B. <span class="mono">#60</span></div></td>
+                    <td class="mono" style="font-size:12px">pornchai@mail.com</td>
+                    <td><span class="mono">2025-03-13</span></td>
+                    <td><span class="badge-vstatus pending">pending</span></td>
+                    <td><button class="btn" onclick="openVerification({id:'VRF-002',hostName:'Pornchai B.',hostId:60,hostEmail:'pornchai@mail.com',submittedAt:'2025-03-13',status:'pending',rejectionReason:null})">Review</button></td>
+                  </tr>
+                  <tr>
+                    <td><div class="flex-center"><div style="width:32px;height:32px;border-radius:50%;background:#d0d0d0;border:1.5px solid #bbb;display:flex;align-items:center;justify-content:center;font-family:var(--font);font-weight:700;font-size:13px;color:#555;flex-shrink:0">K</div> Kanya M. <span class="mono">#95</span></div></td>
+                    <td class="mono" style="font-size:12px">kanya@mail.com</td>
+                    <td><span class="mono">2025-03-14</span> <span style="font-size:11px;font-family:var(--mono);color:var(--muted)">(resubmit)</span></td>
+                    <td><span class="badge-vstatus pending">pending</span></td>
+                    <td><button class="btn" onclick="openVerification({id:'VRF-003',hostName:'Kanya M.',hostId:95,hostEmail:'kanya@mail.com',submittedAt:'2025-03-14',status:'pending',isResubmission:true,prevRejectionReason:'ID photo is blurry and unreadable. Please resubmit with a clearer image.',rejectionReason:null})">Review</button></td>
+                  </tr>
+                  <tr>
+                    <td><div class="flex-center"><div style="width:32px;height:32px;border-radius:50%;background:#d0d0d0;border:1.5px solid #bbb;display:flex;align-items:center;justify-content:center;font-family:var(--font);font-weight:700;font-size:13px;color:#555;flex-shrink:0">N</div> Nattaya P. <span class="mono">#77</span></div></td>
+                    <td class="mono" style="font-size:12px">nattaya@mail.com</td>
+                    <td><span class="mono">2025-02-20</span></td>
+                    <td><span class="badge-vstatus approved">approved</span></td>
+                    <td><button class="btn" onclick="openVerification({id:'VRF-004',hostName:'Nattaya P.',hostId:77,hostEmail:'nattaya@mail.com',submittedAt:'2025-02-20',status:'approved',rejectionReason:null})">View</button></td>
+                  </tr>
+                  <tr>
+                    <td><div class="flex-center"><div style="width:32px;height:32px;border-radius:50%;background:#d0d0d0;border:1.5px solid #bbb;display:flex;align-items:center;justify-content:center;font-family:var(--font);font-weight:700;font-size:13px;color:#555;flex-shrink:0">S</div> Somchai W. <span class="mono">#44</span></div></td>
+                    <td class="mono" style="font-size:12px">somchai@mail.com</td>
+                    <td><span class="mono">2025-03-01</span></td>
+                    <td><span class="badge-vstatus rejected">rejected</span></td>
+                    <td><button class="btn" onclick="openVerification({id:'VRF-005',hostName:'Somchai W.',hostId:44,hostEmail:'somchai@mail.com',submittedAt:'2025-03-01',status:'rejected',rejectionReason:'Selfie does not clearly match the ID photo provided.'})">View</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- USERS -->
+          <div class="page" id="page-users">
+            <div style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1.5px dashed var(--border);border-radius:4px;font-size:12px;font-family:var(--mono);color:var(--muted);margin-bottom:16px;">
+              ⬡ User detail panel — <strong>to be implemented later</strong> &nbsp;·&nbsp; View button will open full violation history (warnings, bans, linked reports)
+            </div>
+            <div class="search-row">
+              <input class="search-input" placeholder="Search by name, email, or user ID…" />
+              <button class="btn primary">Search</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Violations</th><th>Joined</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><div class="flex-center"><div style="width:32px;height:32px;border-radius:50%;background:#d0d0d0;border:1.5px solid #bbb;display:flex;align-items:center;justify-content:center;font-family:var(--font);font-weight:700;font-size:13px;color:#555;flex-shrink:0">S</div> Somchai W. <span class="mono">#44</span></div></td>
+                    <td class="mono" style="font-size:12px">somchai@mail.com</td>
+                    <td><span class="badge-type host">host</span></td>
+                    <td><span class="badge-status banned">banned</span></td>
+                    <td class="text-red">5</td>
+                    <td><span class="mono">2024-01-10</span></td>
+                    <td><div class="btns"><button class="btn">View</button><button class="btn amber">Unban</button></div></td>
+                  </tr>
+                  <tr>
+                    <td><div class="flex-center"><div style="width:32px;height:32px;border-radius:50%;background:#d0d0d0;border:1.5px solid #bbb;display:flex;align-items:center;justify-content:center;font-family:var(--font);font-weight:700;font-size:13px;color:#555;flex-shrink:0">N</div> Nattaya P. <span class="mono">#77</span> <span class="badge-verified"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> verified</span></div></td>
+                    <td class="mono" style="font-size:12px">nattaya@mail.com</td>
+                    <td><span class="badge-type host">host</span></td>
+                    <td><span class="badge-status warned">warned</span></td>
+                    <td class="text-amber">2</td>
+                    <td><span class="mono">2024-03-22</span></td>
+                    <td><div class="btns"><button class="btn">View</button><button class="btn danger">Ban</button></div></td>
+                  </tr>
+                  <tr>
+                    <td><div class="flex-center"><div style="width:32px;height:32px;border-radius:50%;background:#d0d0d0;border:1.5px solid #bbb;display:flex;align-items:center;justify-content:center;font-family:var(--font);font-weight:700;font-size:13px;color:#555;flex-shrink:0">M</div> Malee S. <span class="mono">#88</span></div></td>
+                    <td class="mono" style="font-size:12px">malee@mail.com</td>
+                    <td><span class="badge-type guest">guest</span></td>
+                    <td><span class="badge-status active">active</span></td>
+                    <td>0</td>
+                    <td><span class="mono">2024-06-05</span></td>
+                    <td><div class="btns"><button class="btn">View</button><button class="btn amber">Warn</button><button class="btn danger">Ban</button></div></td>
+                  </tr>
+                  <tr>
+                    <td><div class="flex-center"><div style="width:32px;height:32px;border-radius:50%;background:#d0d0d0;border:1.5px solid #bbb;display:flex;align-items:center;justify-content:center;font-family:var(--font);font-weight:700;font-size:13px;color:#555;flex-shrink:0">T</div> Tanawat K. <span class="mono">#203</span></div></td>
+                    <td class="mono" style="font-size:12px">tanawat@mail.com</td>
+                    <td><span class="badge-type guest">guest</span></td>
+                    <td><span class="badge-status active">active</span></td>
+                    <td>0</td>
+                    <td><span class="mono">2024-08-11</span></td>
+                    <td><div class="btns"><button class="btn">View</button><button class="btn amber">Warn</button><button class="btn danger">Ban</button></div></td>
+                  </tr>
+                  <tr>
+                    <td><div class="flex-center"><div style="width:32px;height:32px;border-radius:50%;background:#d0d0d0;border:1.5px solid #bbb;display:flex;align-items:center;justify-content:center;font-family:var(--font);font-weight:700;font-size:13px;color:#555;flex-shrink:0">W</div> Wirut P. <span class="mono">#312</span></div></td>
+                    <td class="mono" style="font-size:12px">wirut@mail.com</td>
+                    <td><span class="badge-type guest">guest</span></td>
+                    <td><span class="badge-status active">active</span></td>
+                    <td>1</td>
+                    <td><span class="mono">2024-09-30</span></td>
+                    <td><div class="btns"><button class="btn">View</button><button class="btn amber">Warn</button><button class="btn danger">Ban</button></div></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- PROPERTIES -->
+          <div class="page" id="page-properties">
+            <div class="search-row">
+              <input class="search-input" placeholder="Search by property name, host, or ID…" />
+              <button class="btn primary">Search</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Property</th><th>Host</th><th>Status</th><th>Reports</th><th>Listed</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>Cozy Cat Villa</strong> <span class="mono">#142</span></td>
+                    <td>Nattaya P. <span class="mono">#77</span></td>
+                    <td><span class="badge-status active">active</span></td>
+                    <td class="text-red">3</td>
+                    <td><span class="mono">2024-04-01</span></td>
+                    <td><div class="btns"><button class="btn">View</button><button class="btn amber">Deactivate</button><button class="btn danger">Remove</button></div></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Dog Paradise Resort</strong> <span class="mono">#87</span></td>
+                    <td>Somchai W. <span class="mono">#44</span></td>
+                    <td><span class="badge-status active">active</span></td>
+                    <td class="text-red">4</td>
+                    <td><span class="mono">2024-02-14</span></td>
+                    <td><div class="btns"><button class="btn">View</button><button class="btn amber">Deactivate</button><button class="btn danger">Remove</button></div></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Happy Paws Inn</strong> <span class="mono">#201</span></td>
+                    <td>Arisa T. <span class="mono">#120</span></td>
+                    <td><span class="badge-status inactive">inactive</span></td>
+                    <td>1</td>
+                    <td><span class="mono">2024-05-20</span></td>
+                    <td><div class="btns"><button class="btn">View</button><button class="btn primary">Reactivate</button><button class="btn danger">Remove</button></div></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Rabbit Garden</strong> <span class="mono">#55</span></td>
+                    <td>Pornchai B. <span class="mono">#60</span></td>
+                    <td><span class="badge-status active">active</span></td>
+                    <td>0</td>
+                    <td><span class="mono">2023-11-01</span></td>
+                    <td><div class="btns"><button class="btn">View</button><button class="btn amber">Deactivate</button><button class="btn danger">Remove</button></div></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Bird Sanctuary Lodge</strong> <span class="mono">#99</span></td>
+                    <td>Kanya M. <span class="mono">#95</span></td>
+                    <td><span class="badge-status removed">removed</span></td>
+                    <td class="text-red">6</td>
+                    <td><span class="mono">2023-09-15</span></td>
+                    <td><div class="btns"><button class="btn">View History</button></div></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ACTION LOG -->
+          <div class="page" id="page-log">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Time</th><th>Admin</th><th>Action</th><th>Target</th><th>Reason / Note</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span class="mono">2025-03-15 15:30</span></td>
+                    <td>Admin</td>
+                    <td><span class="reason-tag">verification_rejected</span></td>
+                    <td>Somchai W. <span class="mono">#44</span> (VRF-005)</td>
+                    <td>Selfie does not clearly match the ID photo provided</td>
+                  </tr>
+                  <tr>
+                    <td><span class="mono">2025-02-20 10:15</span></td>
+                    <td>Admin</td>
+                    <td><span class="reason-tag">verification_approved</span></td>
+                    <td>Nattaya P. <span class="mono">#77</span> (VRF-004)</td>
+                    <td>ID and selfie verified successfully</td>
+                  </tr>
+                  <tr>
+                    <td><span class="mono">2025-03-15 14:02</span></td>
+                    <td>Admin</td>
+                    <td><span class="reason-tag">user_banned</span></td>
+                    <td>Somchai W. <span class="mono">#44</span></td>
+                    <td>Repeated fraud reports — ban 30 days</td>
+                  </tr>
+                  <tr>
+                    <td><span class="mono">2025-03-15 13:45</span></td>
+                    <td>Admin</td>
+                    <td><span class="reason-tag">review_deleted</span></td>
+                    <td>Review <span class="mono">#488</span></td>
+                    <td>Fake review confirmed</td>
+                  </tr>
+                  <tr>
+                    <td><span class="mono">2025-03-14 10:30</span></td>
+                    <td>Admin</td>
+                    <td><span class="reason-tag">property_deactivated</span></td>
+                    <td>Property <span class="mono">#99</span> — Bird Sanctuary Lodge</td>
+                    <td>Fraud report confirmed</td>
+                  </tr>
+                  <tr>
+                    <td><span class="mono">2025-03-13 09:15</span></td>
+                    <td>Admin</td>
+                    <td><span class="reason-tag">user_warned</span></td>
+                    <td>Nattaya P. <span class="mono">#77</span></td>
+                    <td>Inappropriate content in listing</td>
+                  </tr>
+                  <tr>
+                    <td><span class="mono">2025-03-12 16:55</span></td>
+                    <td>Admin</td>
+                    <td><span class="reason-tag">dismissed</span></td>
+                    <td>Report <span class="mono">RPT-007</span></td>
+                    <td>No violation found — within policy</td>
+                  </tr>
+                  <tr>
+                    <td><span class="mono">2025-03-10 11:20</span></td>
+                    <td>Admin</td>
+                    <td><span class="reason-tag">review_deleted</span></td>
+                    <td>Review <span class="mono">#472</span></td>
+                    <td>Hate speech confirmed</td>
+                  </tr>
+                  <tr>
+                    <td><span class="mono">2025-03-09 08:40</span></td>
+                    <td>Admin</td>
+                    <td><span class="reason-tag">force_permanent_ban</span></td>
+                    <td>User <span class="mono">#312</span></td>
+                    <td>Scam operation — multiple victims confirmed</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- API SCHEMA -->
+          <div class="page" id="page-api">
+            <p style="color:var(--muted);margin-bottom:24px;font-size:13.5px;line-height:1.7">Expected API response shapes — use these as a contract for backend implementation.</p>
+            <div style="display:flex;flex-direction:column;gap:24px">
+              <div>
+                <div class="api-label">GET /admin/reports?type=property|review &amp;&amp; GET /admin/reports/:id</div>
+                <div class="api-box"><pre>{
+  <span class="key">// ?type=property returns only property reports; ?type=review returns only review reports</span>
+  <span class="key">// omit ?type to get all reports (not recommended for large datasets)</span>
+  <span class="key">"id"</span>: <span class="str">"RPT-001"</span>,
+  <span class="key">"type"</span>: <span class="str">"property"</span> | <span class="str">"review"</span>,
+  <span class="key">"status"</span>: <span class="str">"pending"</span> | <span class="str">"resolved"</span> | <span class="str">"dismissed"</span>,
+  <span class="key">"reason"</span>: <span class="str">"misleading_photos"</span> | <span class="str">"wrong_location"</span> | <span class="str">"scam_fraud"</span> | <span class="str">"inaccurate_info"</span> | <span class="str">"inappropriate_content"</span> | <span class="str">"fake_review"</span> | <span class="str">"hate_speech"</span> | <span class="str">"spam"</span> | <span class="str">"other"</span>,
+  <span class="key">"targetReportCount"</span>: <span class="num">3</span>,  <span class="key">// only for type === "property" — joined count of reports against this property; show HIGH PRIORITY if >= 3. Omit or null for review reports (only owner can report a review)</span>
+  <span class="key">"detail"</span>: <span class="str">"Full description written by reporter..."</span>,
+  <span class="key">"createdAt"</span>: <span class="str">"2025-03-15T10:22:00Z"</span>,
+  <span class="key">"resolvedAt"</span>: <span class="kw">null</span> | <span class="str">"2025-03-16T08:00:00Z"</span>,
+  <span class="key">"actionTaken"</span>: <span class="kw">null</span> | <span class="str">"dismissed"</span> | <span class="str">"user_warned"</span> | <span class="str">"user_banned"</span> | <span class="str">"property_deactivated"</span> | <span class="str">"review_deleted"</span>,
+  <span class="key">"adminNote"</span>: <span class="kw">null</span> | <span class="str">"Confirmed violation, content removed."</span>,
+  <span class="key">"reporter"</span>: { <span class="key">"id"</span>: <span class="num">88</span>, <span class="key">"firstName"</span>: <span class="str">"Malee"</span>, <span class="key">"lastName"</span>: <span class="str">"S."</span>, <span class="key">"email"</span>: <span class="str">"malee@mail.com"</span> },
+  <span class="key">"target"</span>: {
+    <span class="key">"id"</span>: <span class="num">142</span>,
+    <span class="key">"type"</span>: <span class="str">"property"</span> | <span class="str">"review"</span>,
+    <span class="key">"content"</span>: <span class="str">"Preview of flagged content..."</span>,
+
+    <span class="key">// if type === "property"</span>
+    <span class="key">"propertyTitle"</span>: <span class="str">"Cozy Cat Villa"</span>,
+    <span class="key">"ownerId"</span>: <span class="num">77</span>, <span class="key">"ownerName"</span>: <span class="str">"Nattaya P."</span>, <span class="key">"ownerEmail"</span>: <span class="str">"nattaya@mail.com"</span>,
+
+    <span class="key">// if type === "review"</span>
+    <span class="key">"reviewAuthorId"</span>: <span class="num">55</span>, <span class="key">"reviewAuthorName"</span>: <span class="str">"Guest name"</span>, <span class="key">"reviewAuthorEmail"</span>: <span class="str">"guest@mail.com"</span>,
+    <span class="key">"propertyId"</span>: <span class="num">142</span>, <span class="key">"propertyTitle"</span>: <span class="str">"Cozy Cat Villa"</span>
+  }
+}</pre></div>
+              </div>
+              <div>
+                <div class="api-label">PATCH /admin/reports/:id</div>
+                <div class="api-box"><pre>{
+  <span class="key">"status"</span>: <span class="str">"resolved"</span> | <span class="str">"dismissed"</span>,
+  <span class="key">"actionTaken"</span>: <span class="str">"dismissed"</span> | <span class="str">"user_warned"</span> | <span class="str">"user_banned"</span> | <span class="str">"property_deactivated"</span> | <span class="str">"review_deleted"</span>,
+  <span class="key">"adminNote"</span>: <span class="str">"optional"</span>,
+  <span class="key">"notifyReporter"</span>: <span class="kw">true</span> | <span class="kw">false</span>  <span class="key">// if true, send email to reporter.email with the outcome</span>
+}</pre></div>
+              </div>
+              <div>
+                <div class="api-label">GET /admin/users &amp; GET /admin/users/:id</div>
+                <div class="api-box" ><pre>{
+  <span class="key">"id"</span>: <span class="num">77</span>, <span class="key">"firstName"</span>: <span class="str">"Nattaya"</span>, <span class="key">"lastName"</span>: <span class="str">"P."</span>,
+  <span class="key">"email"</span>: <span class="str">"nattaya@mail.com"</span>, <span class="key">"phone"</span>: <span class="str">"+66 81 234 5678"</span>,
+  <span class="key">"status"</span>: <span class="str">"active"</span> | <span class="str">"warned"</span> | <span class="str">"banned"</span>,
+  <span class="key">"avatar"</span>: <span class="str">"https://..."</span> | <span class="kw">null</span>,
+  <span class="key">"createdAt"</span>: <span class="str">"2024-03-22T00:00:00Z"</span>,
+  <span class="key">"isVerified"</span>: <span class="kw">true</span> | <span class="kw">false</span>,
+  <span class="key">"verificationStatus"</span>: <span class="str">"none"</span> | <span class="str">"pending"</span> | <span class="str">"approved"</span> | <span class="str">"rejected"</span>,
+  <span class="key">"verifiedAt"</span>: <span class="kw">null</span> | <span class="str">"2025-02-20T10:00:00Z"</span>,
+  <span class="key">"reportCount"</span>: <span class="num">2</span>, <span class="key">"propertyCount"</span>: <span class="num">3</span>,
+  <span class="key">"warnCount"</span>: <span class="num">1</span>,
+  <span class="key">"banCount"</span>: <span class="num">0</span>,
+  <span class="key">"violationCount"</span>: <span class="num">1</span>,  <span class="key">// warnCount + banCount — if >= 3, next ban is forced permanent</span>
+  <span class="key">"banReason"</span>: <span class="kw">null</span> | <span class="str">"Repeated fraud reports"</span>,
+  <span class="key">"banExpiresAt"</span>: <span class="kw">null</span> | <span class="str">"2025-06-15T00:00:00Z"</span>,  <span class="key">// null = permanent ban</span>
+  <span class="key">"warnings"</span>: [{ <span class="key">"reason"</span>: <span class="str">"Inappropriate review"</span>, <span class="key">"date"</span>: <span class="str">"2025-02-10"</span> }],
+  <span class="key">"bans"</span>: [{ <span class="key">"reason"</span>: <span class="str">"..."</span>, <span class="key">"bannedAt"</span>: <span class="str">"2025-01-05T00:00:00Z"</span>, <span class="key">"banExpiresAt"</span>: <span class="str">"2025-02-05T00:00:00Z"</span> | <span class="kw">null</span> }]
+}</pre></div>
+              </div>
+              <div>
+                <div class="api-label">PATCH /admin/users/:id</div>
+                <div class="api-box"><pre>{
+  <span class="key">"action"</span>: <span class="str">"warn"</span> | <span class="str">"ban"</span> | <span class="str">"unban"</span> | <span class="str">"force_permanent_ban"</span>,
+  <span class="key">"reason"</span>: <span class="str">"..."</span>  <span class="key">// required for force_permanent_ban</span>
+}
+
+<span class="key">// Ban escalation (enforced by backend, based on user.banCount):</span>
+<span class="key">// banCount 0 → 7 days</span>
+<span class="key">// banCount 1 → 14 days</span>
+<span class="key">// banCount 2 → 30 days</span>
+<span class="key">// banCount 3+ → permanent</span>
+<span class="key">// force_permanent_ban → always permanent, skips escalation, reason required</span></pre></div>
+              </div>
+              <div>
+                <div class="api-label">GET /admin/properties &amp; DELETE /admin/properties/:id</div>
+                <div class="api-box"><pre>{
+  <span class="key">"id"</span>: <span class="num">142</span>, <span class="key">"title"</span>: <span class="str">"Cozy Cat Villa"</span>,
+  <span class="key">"status"</span>: <span class="str">"active"</span> | <span class="str">"inactive"</span> | <span class="str">"removed"</span>,
+  <span class="key">"reportCount"</span>: <span class="num">3</span>, <span class="key">"createdAt"</span>: <span class="str">"2024-04-01T00:00:00Z"</span>,
+  <span class="key">"host"</span>: { <span class="key">"id"</span>: <span class="num">77</span>, <span class="key">"firstName"</span>: <span class="str">"Nattaya"</span>, <span class="key">"lastName"</span>: <span class="str">"P."</span>, <span class="key">"status"</span>: <span class="str">"warned"</span> }
+}</pre></div>
+              </div>
+              <div>
+                <div class="api-label">GET /admin/verifications &amp; GET /admin/verifications/:id</div>
+                <div class="api-box"><pre>{
+  <span class="key">"id"</span>: <span class="str">"VRF-001"</span>,
+  <span class="key">"hostId"</span>: <span class="num">120</span>, <span class="key">"hostName"</span>: <span class="str">"Arisa T."</span>, <span class="key">"hostEmail"</span>: <span class="str">"arisa@mail.com"</span>,
+  <span class="key">"status"</span>: <span class="str">"pending"</span> | <span class="str">"approved"</span> | <span class="str">"rejected"</span>,
+  <span class="key">"isResubmission"</span>: <span class="kw">false</span>,  <span class="key">// true if host is resubmitting after a rejection</span>
+  <span class="key">"submittedAt"</span>: <span class="str">"2025-03-15T09:00:00Z"</span>,
+  <span class="key">"reviewedAt"</span>: <span class="kw">null</span> | <span class="str">"2025-03-16T10:00:00Z"</span>,
+  <span class="key">"rejectionReason"</span>: <span class="kw">null</span> | <span class="str">"ID photo is blurry and unreadable."</span>,
+  <span class="key">"documents"</span>: {
+    <span class="key">"idPhoto"</span>: <span class="str">"https://storage/.../id.jpg"</span>,    <span class="key">// government ID image</span>
+    <span class="key">"selfieWithId"</span>: <span class="str">"https://storage/.../selfie.jpg"</span>  <span class="key">// selfie holding the ID</span>
+  }
+}</pre></div>
+              </div>
+              <div>
+                <div class="api-label">PATCH /admin/verifications/:id</div>
+                <div class="api-box"><pre>{
+  <span class="key">"action"</span>: <span class="str">"approve"</span> | <span class="str">"reject"</span>,
+  <span class="key">"rejectionReason"</span>: <span class="str">"..."</span>  <span class="key">// required if action === "reject" — shown to host in email + app</span>
+}
+
+<span class="key">// On approve: user.isVerified = true, user.verifiedAt set, email sent to host</span>
+<span class="key">// On reject: host notified by email with reason, can resubmit (new request, isResubmission: true)</span>
+<span class="key">// Verification is NOT revoked separately — handled by existing ban/deactivate flow</span></pre></div>
+              </div>
+              <div>
+                <div class="api-label">GET /admin/logs</div>
+                <div class="api-box"><pre>{
+  <span class="key">"id"</span>: <span class="str">"LOG-001"</span>,
+  <span class="key">"adminId"</span>: <span class="num">1</span>, <span class="key">"adminName"</span>: <span class="str">"Admin"</span>,
+  <span class="key">"action"</span>: <span class="str">"user_warned"</span> | <span class="str">"user_banned"</span> | <span class="str">"force_permanent_ban"</span> | <span class="str">"user_unbanned"</span> | <span class="str">"review_deleted"</span> | <span class="str">"property_deactivated"</span> | <span class="str">"dismissed"</span> | <span class="str">"verification_approved"</span> | <span class="str">"verification_rejected"</span>,
+  <span class="key">"targetType"</span>: <span class="str">"user"</span> | <span class="str">"review"</span> | <span class="str">"property"</span> | <span class="str">"report"</span>,
+  <span class="key">"targetId"</span>: <span class="num">77</span>,
+  <span class="key">"note"</span>: <span class="str">"Reason or admin note"</span>,
+  <span class="key">"createdAt"</span>: <span class="str">"2025-03-15T14:02:00Z"</span>
+}</pre></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Detail Panel -->
+    <div class="panel-overlay" id="panel-overlay" onclick="closePanel(event)">
+      <div class="panel" id="report-panel">
+        <div class="panel-header">
+          <h3 id="panel-title">Report Detail</h3>
+          <button class="panel-close" onclick="closePanel()">×</button>
+        </div>
+        <div class="panel-body" id="panel-body"></div>
+      </div>
+    </div>
+
+    <script>
+      function showPage(name, btn) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'))
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'))
+        document.getElementById('page-' + name).classList.add('active')
+        btn.classList.add('active')
+        const titles = { dashboard: 'Dashboard Overview', reports: 'Report Management', verifications: 'Host Verifications', users: 'User Management', properties: 'Property Management', log: 'Admin Action Log', api: 'API Schema Reference' }
+        document.getElementById('topbar-title').textContent = titles[name]
+      }
+
+      function filterVerifications(status, btn) {
+        document.querySelectorAll('#page-verifications .filter-tabs .tab-btn').forEach(b => b.classList.remove('active'))
+        btn.classList.add('active')
+        document.querySelectorAll('#verifications-tbody tr').forEach(row => {
+          const badge = row.querySelector('.badge-vstatus')
+          if (!badge) return
+          row.style.display = (status === 'all' || badge.classList.contains(status)) ? '' : 'none'
+        })
+      }
+
+      function openVerification(data) {
+        document.getElementById('panel-title').textContent = `Verification ${data.id}`
+        const isApproved = data.status === 'approved'
+        const isRejected = data.status === 'rejected'
+        const isPending = data.status === 'pending'
+
+        document.getElementById('panel-body').innerHTML = `
+          <div class="panel-section">
+            <div class="panel-section-title">Host Info</div>
+            <div class="info-grid">
+              ${data.isResubmission ? `<div style="background:var(--light);border:1.5px dashed #999;border-radius:6px;padding:10px 14px;font-size:12px;font-family:var(--mono);color:var(--dark);margin-bottom:4px;">↩ Resubmission — previous rejection reason: <em>"${data.prevRejectionReason}"</em></div>` : ''}
+              <div class="info-row"><span class="info-label">Request ID</span><span class="info-value mono">${data.id}</span></div>
+              <div class="info-row"><span class="info-label">Host</span><span class="info-value">${data.hostName} <span class="mono">#${data.hostId}</span></span></div>
+              <div class="info-row"><span class="info-label">Email</span><span class="info-value mono">${data.hostEmail}</span></div>
+              <div class="info-row"><span class="info-label">Submitted</span><span class="info-value mono">${data.submittedAt}</span></div>
+              <div class="info-row"><span class="info-label">Status</span><span class="info-value"><span class="badge-vstatus ${data.status}">${data.status}</span></span></div>
+              ${isRejected ? `<div class="info-row"><span class="info-label">Rejection Reason</span><span class="info-value" style="color:var(--dark);font-weight:500">${data.rejectionReason}</span></div>` : ''}
+            </div>
+          </div>
+          <div class="panel-section">
+            <div class="panel-section-title">Submitted Documents</div>
+            <div class="doc-grid">
+              <div>
+                <div class="doc-label">Government ID</div>
+                <div class="doc-placeholder">
+                  <svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="14" x2="10" y2="14"/><line x1="6" y1="17" x2="14" y2="17"/></svg>
+                  ID Document
+                </div>
+              </div>
+              <div>
+                <div class="doc-label">Selfie with ID</div>
+                <div class="doc-placeholder">
+                  <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><rect x="14" y="2" width="8" height="6" rx="1"/><line x1="16" y1="5" x2="20" y2="5"/></svg>
+                  Selfie + ID
+                </div>
+              </div>
+            </div>
+          </div>
+          ${isPending ? `
+          <div class="panel-section">
+            <div class="panel-section-title">Admin Actions</div>
+            <div class="action-grid">
+              <button class="action-btn green" onclick="approveVerification('${data.id}','${data.hostName}')">Approve</button>
+              <button class="action-btn red" onclick="rejectVerification('${data.id}','${data.hostName}')">Reject</button>
+            </div>
+          </div>
+          <div class="panel-section">
+            <div class="api-label">PATCH /admin/verifications/${data.id}</div>
+            <div class="api-box"><pre>{ <span class="key">"action"</span>: <span class="str">"approve"</span> | <span class="str">"reject"</span>, <span class="key">"rejectionReason"</span>: <span class="str">"..."</span> <span class="key">// required if reject</span> }</pre></div>
+          </div>
+          ` : `
+          <div class="panel-section">
+            <div class="api-label">GET /admin/verifications/${data.id}</div>
+            <div class="api-box"><pre>{ <span class="key">"status"</span>: <span class="str">"${data.status}"</span>${data.rejectionReason ? `, <span class="key">"rejectionReason"</span>: <span class="str">"${data.rejectionReason}"</span>` : ''} }</pre></div>
+          </div>
+          `}
+        `
+        document.getElementById('panel-overlay').classList.add('open')
+      }
+
+      function approveVerification(id, hostName) {
+        const confirmed = confirm(`Approve verification for ${hostName}?\n\nThis will mark their account as verified and allow them to list properties.`)
+        if (!confirmed) return
+        alert(`Action sent:\nPATCH /admin/verifications/${id}\n{ action: "approve" }\n\n→ User isVerified set to true\n→ Email sent to host`)
+        closePanel()
+      }
+
+      function rejectVerification(id, hostName) {
+        const reason = prompt(`Reject verification for ${hostName}.\n\nRejection reason is required — the host will see this:\n`)
+        if (!reason || reason.trim() === '') return alert('Cancelled — rejection reason is required.')
+        alert(`Action sent:\nPATCH /admin/verifications/${id}\n{ action: "reject", rejectionReason: "${reason}" }\n\n→ Host notified by email with rejection reason\n→ Host can resubmit`)
+        closePanel()
+      }
+
+      function switchReportType(type, btn) {
+        btn.closest('.filter-tabs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
+        btn.classList.add('active')
+        document.getElementById('report-type-property').style.display = type === 'property' ? '' : 'none'
+        document.getElementById('report-type-review').style.display = type === 'review' ? '' : 'none'
+        // reset inner status filter tabs and show all rows
+        const activeDiv = document.getElementById('report-type-' + type)
+        activeDiv.querySelectorAll('.filter-tabs .tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0))
+        activeDiv.querySelectorAll('tbody tr').forEach(row => row.style.display = '')
+      }
+
+      function filterByTarget(targetId, targetTitle, type) {
+        closePanel()
+        // switch to reports page
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'))
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'))
+        document.getElementById('page-reports').classList.add('active')
+        document.querySelectorAll('.nav-item')[1].classList.add('active')
+        document.getElementById('topbar-title').textContent = `Reports — ${targetTitle}`
+
+        // switch to correct report type tab
+        const typeToUse = type || 'property'
+        document.getElementById('report-type-property').style.display = typeToUse === 'property' ? '' : 'none'
+        document.getElementById('report-type-review').style.display = typeToUse === 'review' ? '' : 'none'
+        document.querySelectorAll('[onclick*="switchReportType"]').forEach(b => {
+          b.classList.toggle('active', b.getAttribute('onclick').includes(`'${typeToUse}'`))
+        })
+
+        // reset inner status filter tabs
+        const activeDiv = document.getElementById('report-type-' + typeToUse)
+        activeDiv.querySelectorAll('.filter-tabs .tab-btn').forEach((b, i) => b.classList.toggle('active', i === 0))
+
+        // filter rows by target
+        const tbodyId = typeToUse === 'review' ? 'reports-tbody-review' : 'reports-tbody-property'
+        document.querySelectorAll('#' + tbodyId + ' tr').forEach(row => {
+          const viewBtn = row.querySelector('.btn')
+          if (!viewBtn) return
+          const match = viewBtn.getAttribute('onclick')?.includes(`targetId:${targetId},`) || viewBtn.getAttribute('onclick')?.includes(`targetId:${targetId}}`)
+          row.style.display = match ? '' : 'none'
+        })
+
+        // show active filter label
+        const existing = document.getElementById('target-filter-label')
+        if (existing) existing.remove()
+        const label = document.createElement('div')
+        label.id = 'target-filter-label'
+        label.style.cssText = 'display:inline-flex;align-items:center;gap:10px;padding:7px 14px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:var(--mono);color:var(--dark);margin-bottom:12px;background:var(--light);'
+        label.innerHTML = `Filtered: <strong>${targetTitle}</strong> &nbsp;<button onclick="clearTargetFilter('${typeToUse}')" style="background:none;border:none;cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--muted);text-decoration:underline;">clear</button>`
+        const typeTabs = document.querySelector('[onclick*="switchReportType"]').closest('.filter-tabs')
+        document.getElementById('page-reports').insertBefore(label, typeTabs)
+      }
+
+      function clearTargetFilter(type) {
+        const label = document.getElementById('target-filter-label')
+        if (label) label.remove()
+        const tbodyId = (type === 'review') ? 'reports-tbody-review' : 'reports-tbody-property'
+        document.querySelectorAll('#' + tbodyId + ' tr').forEach(row => row.style.display = '')
+        document.getElementById('topbar-title').textContent = 'Report Management'
+      }
+
+      function filterReports(status, btn, type) {
+        btn.closest('.filter-tabs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
+        btn.classList.add('active')
+        const tbodyId = type === 'review' ? 'reports-tbody-review' : 'reports-tbody-property'
+        document.querySelectorAll('#' + tbodyId + ' tr').forEach(row => {
+          const badge = row.querySelector('.badge-status')
+          if (!badge) return
+          row.style.display = (status === 'all' || badge.classList.contains(status)) ? '' : 'none'
+        })
+      }
+
+      function openReport(data) {
+        document.getElementById('panel-title').textContent = `Report ${data.id}`
+        document.getElementById('panel-body').innerHTML = `
+          <div class="panel-section">
+            <div class="panel-section-title">Report Info</div>
+            <div class="info-grid">
+              ${data.type === 'property' && data.targetReportCount >= 3 ? `<div style="background:var(--light);border:1.5px dashed #999;border-radius:6px;padding:10px 14px;font-size:12.5px;font-weight:600;font-family:var(--mono);color:var(--dark);margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;">⚑ HIGH PRIORITY — reported ${data.targetReportCount} times <button onclick="filterByTarget(${data.targetId},'${data.targetTitle}','${data.type}')" style="font-size:11.5px;font-family:var(--mono);font-weight:600;background:var(--white);border:1.5px solid var(--border);border-radius:3px;padding:3px 10px;cursor:pointer;color:var(--dark);">See all ${data.targetReportCount} reports →</button></div>` : ''}
+              <div class="info-row"><span class="info-label">Report ID</span><span class="info-value mono">${data.id}</span></div>
+              <div class="info-row"><span class="info-label">Report Type</span><span class="info-value"><span class="badge-type ${data.type}">${data.type}</span></span></div>
+              <div class="info-row"><span class="info-label">Status</span><span class="info-value"><span class="badge-status ${data.status}">${data.status}</span></span></div>
+              <div class="info-row"><span class="info-label">Reason</span><span class="info-value"><span class="reason-tag">${data.reason}</span></span></div>
+              <div class="info-row"><span class="info-label">Reported by</span><span class="info-value">${data.reporterName} <span class="mono">#${data.reporterId}</span></span></div>
+              <div class="info-row"><span class="info-label">Date</span><span class="info-value mono">${data.date}</span></div>
+              ${data.type === 'review' ? `
+              <div class="info-row"><span class="info-label">Review Author</span><span class="info-value">${data.reviewAuthorName} <span class="mono">#${data.reviewAuthorId}</span></span></div>
+              <div class="info-row"><span class="info-label">On Property</span><span class="info-value">${data.propertyTitle} <span class="mono">#${data.propertyId}</span></span></div>
+              ` : `
+              <div class="info-row"><span class="info-label">Property</span><span class="info-value">${data.targetTitle} <span class="mono">#${data.targetId}</span></span></div>
+              `}
+            </div>
+          </div>
+          <div class="panel-section">
+            <div class="panel-section-title">Reporter's Description</div>
+            <div class="quote-box">"${data.detail}"</div>
+          </div>
+          <div class="panel-section">
+            <div class="panel-section-title">Contact</div>
+            <a class="email-btn" href="mailto:${data.reporterEmail}?subject=Regarding your report ${data.id} on JOODPAKPAW">
+              <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,13 22,4"/></svg>
+              Reporter — ${data.reporterName} (${data.reporterEmail})
+            </a>
+            <a class="email-btn" href="mailto:${data.ownerEmail}?subject=Regarding report ${data.id} on JOODPAKPAW">
+              <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,13 22,4"/></svg>
+              ${data.type === 'review' ? 'Review Author' : 'Property Owner'} — ${data.ownerName} (${data.ownerEmail})
+            </a>
+          </div>
+          <div class="panel-section">
+            <div class="panel-section-title">Admin Actions</div>
+            <div class="action-grid">
+              <button class="action-btn green" onclick="takeAction('${data.id}','resolved','dismissed')">Dismiss Report</button>
+              <button class="action-btn amber" onclick="takeAction('${data.id}','resolved','user_warned')">Warn User</button>
+              ${data.type === 'property'
+                ? `<button class="action-btn teal" onclick="takeAction('${data.id}','resolved','property_deactivated')">Deactivate Property</button>`
+                : `<button class="action-btn red" onclick="takeAction('${data.id}','resolved','review_deleted')">Delete Review</button>`
+              }
+              <button class="action-btn red" onclick="banUser('${data.id}')">Ban User</button>
+              <button class="action-btn red" onclick="forcePermanentBan('${data.id}')" style="grid-column:span 2;border-style:solid;font-weight:700;">Force Permanent Ban</button>
+            </div>
+          </div>
+          <div class="panel-section">
+            <div class="api-label">PATCH /admin/reports/${data.id}</div>
+            <div class="api-box"><pre>{ <span class="key">"status"</span>: <span class="str">"resolved"</span>, <span class="key">"actionTaken"</span>: <span class="str">"&lt;chosen_action&gt;"</span> }</pre></div>
+          </div>
+        `
+        document.getElementById('panel-overlay').classList.add('open')
+      }
+
+      function banUser(reportId) {
+        const banCount = parseInt(prompt('(Simulating user data)\nHow many times has this user been banned before?\nEnter a number:'))
+        if (isNaN(banCount) || banCount === null) return
+
+        const escalation = { 0: 7, 1: 14, 2: 30 }
+        const nextDuration = banCount >= 3 ? null : escalation[banCount]
+        const label = nextDuration ? `${nextDuration} days` : 'permanent'
+        const history = banCount === 0
+          ? 'First ban.'
+          : `Banned ${banCount} time(s) before.`
+
+        const confirm = prompt(`${history}\nNext ban: ${label.toUpperCase()}\n(Duration is automatic — type "yes" to confirm)`)
+        if (confirm?.toLowerCase() !== 'yes') return
+
+        alert(`Action sent:\nPATCH /admin/reports/${reportId}\n{ status: "resolved", actionTaken: "user_banned" }\n\nPATCH /admin/users/:id\n{ action: "ban" }  // backend sets banDuration: ${nextDuration} (${label})`)
+        closePanel()
+      }
+
+      function forcePermanentBan(reportId) {
+        const reason = prompt('Force Permanent Ban — reason is required.\n\nThis skips the escalation system. Use only for severe violations (fraud, scam, hate speech).\n\nEnter reason:')
+        if (!reason || reason.trim() === '') return alert('Cancelled — reason is required for a forced permanent ban.')
+        alert(`Action sent:\nPATCH /admin/reports/${reportId}\n{ status: "resolved", actionTaken: "user_banned" }\n\nPATCH /admin/users/:id\n{ action: "force_permanent_ban", reason: "${reason}" }`)
+        closePanel()
+      }
+
+      function takeAction(id, status, action) {
+        alert(`Action sent:\nPATCH /admin/reports/${id}\n{ status: "${status}", actionTaken: "${action}" }`)
+        closePanel()
+      }
+
+      function closePanel(e) {
+        if (!e || e.target === document.getElementById('panel-overlay')) {
+          document.getElementById('panel-overlay').classList.remove('open')
+        }
+      }
+    </script>
+  </body>
+</html>
