@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "joodpakpaw-v2-core-collection",
+    "_postman_id": "7fca6682-eae7-4b19-94fa-0b405c0d2492",
     "name": "JoodPakPaw V2 Core API",
     "description": "Comprehensive Postman Collection for JoodPakPaw V2 API Server (Sprint 0 - Sprint 4).\nBase URL defaults to `{{baseUrl}}` (e.g., http://localhost:8000).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
