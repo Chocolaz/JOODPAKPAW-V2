@@ -1,5 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Prisma schema file for JoodPakPaw V2 Platform
+// PostgreSQL 16 Architecture (41 tables across 8 domains)
 
 generator client {
   provider = "prisma-client-js"
@@ -10,15 +10,841 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// Baseline model from Domain 1: Users, RBAC & Host Verification
+// ==============================================================================
+// Domain 1: Users, RBAC & Host Verification (7 Tables)
+// ==============================================================================
+
+model User {
+  id                         Int       @id @default(autoincrement())
+  email                      String    @unique @db.VarChar(100)
+  firstName                  String?   @map("first_name") @db.VarChar(100)
+  lastName                   String?   @map("last_name") @db.VarChar(100)
+  avatar                     String?   @db.Text
+  phone                      String?   @unique @db.VarChar(20)
+  password                   String    @db.Text
+  resetPasswordToken         String?   @map("reset_password_token") @db.Text
+  resetPasswordExpiredAt     DateTime? @map("reset_password_expired_at") @db.Timestamptz
+  otp                        String?   @db.VarChar(6)
+  otpExpiredAt               DateTime? @map("otp_expired_at") @db.Timestamptz
+  isVerified                 Boolean   @default(false) @map("is_verified")
+  isBecomeToHost             Boolean   @default(false) @map("is_become_to_host")
+  isVerifiedHost             Boolean   @default(false) @map("is_verified_host")
+  isBannedReview             Boolean   @default(false) @map("is_banned_review")
+  isBannedAllProperties      Boolean   @default(false) @map("is_banned_all_properties")
+  bannedAt                   DateTime? @map("banned_at") @db.Timestamptz
+  createdAt                  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt                  DateTime? @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  userRoles                  UserRole[]
+  verifications              UserVerification[]
+  hostedProperties           Property[]               @relation("HostProperties")
+  bookings                   Booking[]                @relation("GuestBookings")
+  petProfiles                PetProfile[]             @relation("GuestPets")
+  chatRoomsAsParticipant1    ChatRoom[]               @relation("ChatParticipant1")
+  chatRoomsAsParticipant2    ChatRoom[]               @relation("ChatParticipant2")
+  chatMessages               ChatMessage[]            @relation("SentChatMessages")
+  auditLogs                  AuditLog[]
+  actionLogsAsActor          ActionLog[]              @relation("ActionLogActor")
+  actionLogsAsTarget         ActionLog[]              @relation("ActionLogTarget")
+  reports                    Report[]                 @relation("ReporterReports")
+  favoriteFolders            FavoriteFolder[]
+  notifications              Notification[]
+  userBehaviors              UserBehavior[]
+
+  @@index([isVerifiedHost])
+  @@index([deletedAt])
+  @@map("users")
+}
+
 model Role {
-  id          Int       @id @default(autoincrement())
-  name        String    @unique @db.VarChar(100)
-  label       String?   @db.VarChar(100)
-  description String?   @db.Text
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+  id               Int              @id @default(autoincrement())
+  name             String           @unique @db.VarChar(100)
+  label            String?          @db.VarChar(100)
+  description      String?          @db.Text
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt        DateTime?        @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  userRoles        UserRole[]
+  rolesPermissions RolePermission[]
+  notifications    Notification[]
 
   @@map("roles")
+}
+
+model UserRole {
+  userId Int  @map("user_id")
+  roleId Int  @map("role_id")
+
+  // Relations
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model GroupPermission {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique @db.VarChar(100)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  permissions Permission[]
+
+  @@map("group_permissions")
+}
+
+model Permission {
+  id                Int              @id @default(autoincrement())
+  name              String           @unique @db.VarChar(100)
+  description       String?          @db.Text
+  groupPermissionId Int?             @map("group_permission_id")
+  menuId            Int?             @map("menu_id")
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  groupPermission   GroupPermission? @relation(fields: [groupPermissionId], references: [id], onDelete: SetNull)
+  rolesPermissions  RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       Int        @map("role_id")
+  permissionId Int        @map("permission_id")
+
+  // Relations
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("roles_permissions")
+}
+
+model UserVerification {
+  id                        Int       @id @default(autoincrement())
+  userId                    Int       @map("user_id")
+  status                    String    @default("pending") @db.VarChar(30)
+  isResubmit                Boolean   @default(false) @map("is_resubmit")
+  submittedAt               DateTime? @map("submitted_at") @db.Timestamptz
+  rejectDescription         String?   @map("reject_description") @db.Text
+  previousRejectDescription String?   @map("previous_reject_description") @db.Text
+  idPhoto                   String    @map("id_photo") @db.Text
+  selfieWithId              String    @map("selfie_with_id") @db.Text
+  createdAt                 DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                 DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  user                      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@map("user_verifications")
+}
+
+// ==============================================================================
+// Domain 2: Properties, Room Categories & Calendars (8 Tables)
+// ==============================================================================
+
+model PropertyType {
+  id         Int        @id @default(autoincrement())
+  name       String     @db.VarChar(100)
+  label      String?    @db.VarChar(100)
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt  DateTime?  @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  properties Property[]
+
+  @@map("property_types")
+}
+
+model Property {
+  id                       Int                    @id @default(autoincrement())
+  title                    String                 @db.VarChar(255)
+  description              String?                @db.Text
+  address                  String?                @db.Text
+  province                 String?                @db.VarChar(100)
+  district                 String?                @db.VarChar(100)
+  subdistrict              String?                @db.VarChar(100)
+  country                  String?                @default("Thailand") @db.VarChar(100)
+  zipcode                  String?                @db.VarChar(10)
+  latitude                 Float?
+  longitude                Float?
+  isActive                 Boolean                @default(false) @map("is_active")
+  isBannedByAdmin          Boolean                @default(false) @map("is_banned_by_admin")
+  isBannedBeforeAccountBan Boolean                @default(false) @map("is_banned_before_account_ban")
+  reportCount              Int                    @default(0) @map("report_count")
+  publishedAt              DateTime?              @map("published_at") @db.Timestamptz
+  hostId                   Int                    @map("host_id")
+  propertyTypeId           Int?                   @map("property_type_id")
+  createdAt                DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt                DateTime?              @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  host                     User                   @relation("HostProperties", fields: [hostId], references: [id], onDelete: Cascade)
+  propertyType             PropertyType?          @relation(fields: [propertyTypeId], references: [id], onDelete: SetNull)
+  images                   PropertyImage[]
+  roomCategories           RoomCategory[]
+  facilities               PropertyFacility[]
+  bookings                 Booking[]
+  bookingOrders            BookingOrder[]
+  reports                  Report[]
+  favoriteProperties       FavoriteProperty[]
+
+  @@index([hostId])
+  @@index([propertyTypeId])
+  @@index([province])
+  @@index([district])
+  @@index([isActive])
+  @@index([isBannedByAdmin])
+  @@index([deletedAt])
+  @@map("properties")
+}
+
+model PropertyImage {
+  id                Int       @id @default(autoincrement())
+  fileName          String?   @map("file_name") @db.VarChar(255)
+  filePath          String    @map("file_path") @db.Text
+  fileContentType   String?   @map("file_content_type") @db.VarChar(100)
+  fileExtensionName String?   @map("file_extension_name") @db.VarChar(50)
+  fileSize          Int?      @map("file_size")
+  propertyId        Int       @map("property_id")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt         DateTime? @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  property          Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@map("property_images")
+}
+
+model RoomCategory {
+  id                 Int                    @id @default(autoincrement())
+  name               String?                @db.VarChar(255)
+  totalRoom          Int                    @map("total_room")
+  numberOfPets       Int                    @map("number_of_pets")
+  basePrice          Decimal                @map("base_price") @db.Decimal(13, 2)
+  roomSizeWidth      Decimal?               @map("room_size_width") @db.Decimal(8, 2)
+  roomSizeLength     Decimal?               @map("room_size_length") @db.Decimal(8, 2)
+  roomSizeHeight     Decimal?               @map("room_size_height") @db.Decimal(8, 2)
+  propertyId         Int                    @map("property_id")
+  petSizeCategoryId  Int?                   @map("pet_size_category_id")
+  createdAt          DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt          DateTime?              @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  property           Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  petSizeCategory    PetSizeCategory?       @relation(fields: [petSizeCategoryId], references: [id], onDelete: SetNull)
+  facilities         RoomCategoryFacility[]
+  pets               RoomCategoryPet[]
+  images             RoomCategoryImage[]
+  calendars          RoomCategoryCalendar[]
+  bookingOrders      BookingOrder[]
+
+  @@index([propertyId])
+  @@index([petSizeCategoryId])
+  @@index([deletedAt])
+  @@map("room_categories")
+}
+
+model RoomCategoryFacility {
+  roomCategoryId Int          @map("room_category_id")
+  facilityId     Int          @map("facility_id")
+
+  // Relations
+  roomCategory   RoomCategory @relation(fields: [roomCategoryId], references: [id], onDelete: Cascade)
+  facility       Facility     @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  @@id([roomCategoryId, facilityId])
+  @@map("room_category_has_facilities")
+}
+
+model RoomCategoryPet {
+  roomCategoryId Int          @map("room_category_id")
+  petId          Int          @map("pet_id")
+
+  // Relations
+  roomCategory   RoomCategory @relation(fields: [roomCategoryId], references: [id], onDelete: Cascade)
+  pet            Pet          @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@id([roomCategoryId, petId])
+  @@map("room_has_pets")
+}
+
+model RoomCategoryImage {
+  id                Int          @id @default(autoincrement())
+  fileName          String?      @map("file_name") @db.VarChar(255)
+  filePath          String       @map("file_path") @db.Text
+  fileContentType   String?      @map("file_content_type") @db.VarChar(100)
+  fileExtensionName String?      @map("file_extension_name") @db.VarChar(50)
+  fileSize          Int?         @map("file_size")
+  roomCategoryId    Int          @map("room_category_id")
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt         DateTime?    @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  roomCategory      RoomCategory @relation(fields: [roomCategoryId], references: [id], onDelete: Cascade)
+
+  @@index([roomCategoryId])
+  @@map("room_category_images")
+}
+
+model RoomCategoryCalendar {
+  id               Int            @id @default(autoincrement())
+  date             DateTime       @db.Date
+  availableRooms   Int            @map("available_rooms")
+  bookedRooms      Int            @default(0) @map("booked_rooms")
+  unavailableRooms Int            @default(0) @map("unavailable_rooms")
+  priceAdjustment  Decimal        @default(0) @map("price_adjustment") @db.Decimal(13, 2)
+  roomCategoryId   Int            @map("room_category_id")
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt        DateTime?      @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  roomCategory     RoomCategory   @relation(fields: [roomCategoryId], references: [id], onDelete: Cascade)
+  bookingOrders    BookingOrder[]
+
+  @@unique([roomCategoryId, date])
+  @@index([roomCategoryId, date])
+  @@index([deletedAt])
+  @@map("room_category_calendars")
+}
+
+// ==============================================================================
+// Domain 3: Facilities (3 Tables)
+// ==============================================================================
+
+model FacilityCategory {
+  id         Int        @id @default(autoincrement())
+  name       String     @db.VarChar(255)
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt  DateTime?  @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  facilities Facility[]
+
+  @@map("facility_categories")
+}
+
+model Facility {
+  id             Int                    @id @default(autoincrement())
+  name           String                 @db.VarChar(100)
+  categoryId     Int                    @map("category_id")
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt      DateTime?              @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  category       FacilityCategory       @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  properties     PropertyFacility[]
+  roomCategories RoomCategoryFacility[]
+
+  @@index([categoryId])
+  @@map("facilities")
+}
+
+model PropertyFacility {
+  propertyId Int      @map("property_id")
+  facilityId Int      @map("facility_id")
+
+  // Relations
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  facility   Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  @@id([propertyId, facilityId])
+  @@map("properties_has_facilities")
+}
+
+// ==============================================================================
+// Domain 4: Bookings, Orders & Reviews (4 Tables)
+// ==============================================================================
+
+model Booking {
+  id                 Int                  @id @default(autoincrement())
+  checkInDate        DateTime             @map("check_in_date") @db.Date
+  checkOutDate       DateTime             @map("check_out_date") @db.Date
+  numberOfPets       Int?                 @default(0) @map("number_of_pets")
+  totalPrice         Decimal?             @map("total_price") @db.Decimal(13, 2)
+  bookingStatus      String               @default("pending") @map("booking_status") @db.VarChar(30)
+  guestNote          String?              @map("guest_note") @db.VarChar(255)
+  paymentSlipUrl     String?              @map("payment_slip_url") @db.Text
+  rating             Int?
+  comment            String?              @db.VarChar(500)
+  successedAt        DateTime?            @map("successed_at") @db.Timestamptz
+  confirmedAt        DateTime?            @map("confirmed_at") @db.Timestamptz
+  reviewedAt         DateTime?            @map("reviewed_at") @db.Timestamptz
+  guestId            Int                  @map("guest_id")
+  propertyId         Int                  @map("property_id")
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt          DateTime?            @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  guest              User                 @relation("GuestBookings", fields: [guestId], references: [id], onDelete: Cascade)
+  property           Property             @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  bookingOrders      BookingOrder[]
+  bookingPetProfiles BookingPetProfile[]
+  reviewImages       BookingReviewImage[]
+  reports            Report[]
+
+  @@index([guestId])
+  @@index([propertyId])
+  @@index([bookingStatus])
+  @@index([checkInDate, checkOutDate])
+  @@index([deletedAt])
+  @@map("bookings")
+}
+
+model BookingOrder {
+  id                     Int                   @id @default(autoincrement())
+  checkInDate            DateTime              @map("check_in_date") @db.Date
+  checkOutDate           DateTime              @map("check_out_date") @db.Date
+  roomsBooked            Int                   @map("rooms_booked")
+  pricePerRoom           Decimal               @map("price_per_room") @db.Decimal(13, 2)
+  totalPrice             Decimal               @map("total_price") @db.Decimal(13, 2)
+  roomCategoryId         Int                   @map("room_category_id")
+  propertyId             Int                   @map("property_id")
+  roomCategoryCalendarId Int?                  @map("room_category_calendar_id")
+  bookingId              Int                   @map("booking_id")
+  createdAt              DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime              @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt              DateTime?             @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  roomCategory           RoomCategory          @relation(fields: [roomCategoryId], references: [id], onDelete: Cascade)
+  property               Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  calendar               RoomCategoryCalendar? @relation(fields: [roomCategoryCalendarId], references: [id], onDelete: SetNull)
+  booking                Booking               @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([roomCategoryId])
+  @@index([propertyId])
+  @@index([deletedAt])
+  @@map("booking_orders")
+}
+
+model BookingPetProfile {
+  bookingId    Int        @map("booking_id")
+  petProfileId Int        @map("pet_profile_id")
+
+  // Relations
+  booking      Booking    @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  petProfile   PetProfile @relation(fields: [petProfileId], references: [id], onDelete: Cascade)
+
+  @@id([bookingId, petProfileId])
+  @@map("booking_pet_profiles")
+}
+
+model BookingReviewImage {
+  id                Int       @id @default(autoincrement())
+  fileName          String?   @map("file_name") @db.VarChar(255)
+  filePath          String    @map("file_path") @db.Text
+  fileContentType   String?   @map("file_content_type") @db.VarChar(100)
+  fileExtensionName String?   @map("file_extension_name") @db.VarChar(50)
+  fileSize          Int?      @map("file_size")
+  bookingId         Int       @map("booking_id")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt         DateTime? @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  booking           Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@map("booking_review_images")
+}
+
+// ==============================================================================
+// Domain 5: Pets, Breeds, Sizes, Energies & Pet Profiles (5 Tables)
+// ==============================================================================
+
+model PetSizeCategory {
+  id             Int            @id @default(autoincrement())
+  name           String         @db.VarChar(100)
+  code           Int            @unique
+  min            Int
+  max            Int
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt      DateTime?      @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  roomCategories RoomCategory[]
+  petProfiles    PetProfile[]
+
+  @@map("pet_size_categories")
+}
+
+model Pet {
+  id             Int               @id @default(autoincrement())
+  name           String            @db.VarChar(50)
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt      DateTime?         @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  breeds         PetBreed[]
+  roomCategories RoomCategoryPet[]
+  petProfiles    PetProfile[]
+
+  @@map("pets")
+}
+
+model PetBreed {
+  id          Int          @id @default(autoincrement())
+  breed       String       @db.VarChar(100)
+  imageUrl    String?      @map("image_url") @db.Text
+  petId       Int          @map("pet_id")
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime?    @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  pet         Pet          @relation(fields: [petId], references: [id], onDelete: Cascade)
+  petProfiles PetProfile[]
+
+  @@index([petId])
+  @@map("pet_breeds")
+}
+
+model PetProfileEnergy {
+  id          Int          @id @default(autoincrement())
+  rating      Int
+  description String?      @db.Text
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  petProfiles PetProfile[]
+
+  @@map("pet_profile_energies")
+}
+
+model PetProfile {
+  id                 Int                 @id @default(autoincrement())
+  name               String              @db.VarChar(100)
+  image              String?             @db.Text
+  petSex             String?             @map("pet_sex") @db.VarChar(20)
+  birthDate          DateTime?           @map("birth_date") @db.Date
+  weight             Decimal?            @db.Decimal(5, 2)
+  contactName        String              @map("contact_name") @db.VarChar(100)
+  contactPhone       String              @map("contact_phone") @db.VarChar(20)
+  note               String?             @db.Text
+  guestId            Int                 @map("guest_id")
+  breedId            Int?                @map("breed_id")
+  petTypeId          Int                 @map("pet_type_id")
+  petSizeCategoryId  Int?                @map("pet_size_category_id")
+  petEnergyId        Int?                @map("pet_energy_id")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt          DateTime?           @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  guest              User                @relation("GuestPets", fields: [guestId], references: [id], onDelete: Cascade)
+  breed              PetBreed?           @relation(fields: [breedId], references: [id], onDelete: SetNull)
+  petType            Pet                 @relation(fields: [petTypeId], references: [id], onDelete: Cascade)
+  petSizeCategory    PetSizeCategory?    @relation(fields: [petSizeCategoryId], references: [id], onDelete: SetNull)
+  energy             PetProfileEnergy?   @relation(fields: [petEnergyId], references: [id], onDelete: SetNull)
+  bookingPetProfiles BookingPetProfile[]
+
+  @@index([guestId])
+  @@index([petTypeId])
+  @@index([breedId])
+  @@index([petSizeCategoryId])
+  @@index([deletedAt])
+  @@map("pet_profiles")
+}
+
+// ==============================================================================
+// Domain 6: Real-Time Chat (3 Tables)
+// ==============================================================================
+
+model ChatRoom {
+  id             Int                     @id @default(autoincrement())
+  lastMessageAt  DateTime?               @map("last_message_at") @db.Timestamptz
+  participant1Id Int                     @map("participant_1_id")
+  participant2Id Int                     @map("participant_2_id")
+  lastMessageId  Int?                    @map("last_message_id")
+  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  participant1   User                    @relation("ChatParticipant1", fields: [participant1Id], references: [id], onDelete: Cascade)
+  participant2   User                    @relation("ChatParticipant2", fields: [participant2Id], references: [id], onDelete: Cascade)
+  messages       ChatMessage[]
+
+  @@unique([participant1Id, participant2Id])
+  @@index([participant1Id])
+  @@index([participant2Id])
+  @@index([lastMessageAt])
+  @@map("chat_rooms")
+}
+
+model ChatMessage {
+  id          Int                     @id @default(autoincrement())
+  content     String                  @db.Text
+  isDeleted   Boolean                 @default(false) @map("is_deleted")
+  readAt      DateTime?               @map("read_at") @db.Timestamptz
+  roomId      Int                     @map("room_id")
+  senderId    Int                     @map("sender_id")
+  createdAt   DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  room        ChatRoom                @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender      User                    @relation("SentChatMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  attachments ChatMessageAttachment[]
+
+  @@index([roomId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@map("chat_messages")
+}
+
+model ChatMessageAttachment {
+  id                Int         @id @default(autoincrement())
+  fileName          String?     @map("file_name") @db.VarChar(255)
+  filePath          String      @map("file_path") @db.Text
+  fileContentType   String?     @map("file_content_type") @db.VarChar(100)
+  fileExtensionName String?     @map("file_extension_name") @db.VarChar(50)
+  fileSize          Int?        @map("file_size")
+  messageId         Int         @map("message_id")
+  createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime    @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  message           ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@map("chat_message_attachments")
+}
+
+// ==============================================================================
+// Domain 7: Reports, Audit Logs & Action Logs (5 Tables)
+// ==============================================================================
+
+model AuditLog {
+  id        String    @id @default(uuid()) @db.VarChar(255)
+  modelName String?   @map("model_name") @db.VarChar(255)
+  messages  String?   @db.Text
+  recordId  String?   @map("record_id") @db.VarChar(255)
+  action    String?   @db.VarChar(50)
+  oldValue  String?   @map("old_value") @db.Text
+  newValue  String?   @map("new_value") @db.Text
+  editValue String?   @map("edit_value") @db.Text
+  userAgent String?   @map("user_agent") @db.VarChar(500)
+  userId    Int?      @map("user_id")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([modelName, recordId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model ActionLog {
+  id        Int      @id @default(autoincrement())
+  modelName String?  @map("model_name") @db.VarChar(255)
+  messages  String?  @db.Text
+  recordId  String?  @map("record_id") @db.VarChar(255)
+  action    String?  @db.VarChar(50)
+  actorId   Int?     @map("actor_id")
+  targetId  Int?     @map("target_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  actor     User?    @relation("ActionLogActor", fields: [actorId], references: [id], onDelete: SetNull)
+  target    User?    @relation("ActionLogTarget", fields: [targetId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([targetId])
+  @@index([createdAt])
+  @@map("action_logs")
+}
+
+model ReportCategory {
+  id        Int       @id @default(autoincrement())
+  name      String    @db.VarChar(255)
+  label     String?   @db.VarChar(255)
+  type      String    @db.VarChar(50)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  reports   Report[]
+
+  @@index([type])
+  @@map("report_categories")
+}
+
+model Report {
+  id               Int            @id @default(autoincrement())
+  description      String?        @db.Text
+  status           String         @default("pending") @db.VarChar(30)
+  adminNote        String?        @map("admin_note") @db.Text
+  resolvedAction   String?        @map("resolved_action") @db.VarChar(50)
+  reportCategoryId Int            @map("report_category_id")
+  propertyId       Int?           @map("property_id")
+  bookingId        Int?           @map("booking_id")
+  reporterId       Int            @map("reporter_id")
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt        DateTime?      @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  reportCategory   ReportCategory @relation(fields: [reportCategoryId], references: [id], onDelete: Cascade)
+  property         Property?      @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  booking          Booking?       @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  reporter         User           @relation("ReporterReports", fields: [reporterId], references: [id], onDelete: Cascade)
+  images           ReportImage[]
+
+  @@index([reporterId])
+  @@index([propertyId])
+  @@index([bookingId])
+  @@index([status])
+  @@index([reportCategoryId])
+  @@index([deletedAt])
+  @@map("reports")
+}
+
+model ReportImage {
+  id                Int       @id @default(autoincrement())
+  fileName          String?   @map("file_name") @db.VarChar(255)
+  filePath          String    @map("file_path") @db.Text
+  fileContentType   String?   @map("file_content_type") @db.VarChar(100)
+  fileExtensionName String?   @map("file_extension_name") @db.VarChar(50)
+  fileSize          Int?      @map("file_size")
+  reportId          Int       @map("report_id")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt         DateTime? @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  report            Report    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@map("report_images")
+}
+
+// ==============================================================================
+// Domain 8: Favorites, Notifications & ML Behavior Logs (6 Tables)
+// ==============================================================================
+
+model FavoriteFolder {
+  id                 Int                @id @default(autoincrement())
+  name               String             @db.VarChar(255)
+  userId             Int                @map("user_id")
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt          DateTime?          @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  favoriteProperties FavoriteProperty[]
+
+  @@index([userId])
+  @@index([deletedAt])
+  @@map("favorite_folders")
+}
+
+model FavoriteProperty {
+  folderId   Int            @map("folder_id")
+  propertyId Int            @map("property_id")
+
+  // Relations
+  folder     FavoriteFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  property   Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@id([folderId, propertyId])
+  @@map("favorite_properties")
+}
+
+model NotificationAction {
+  id            Int            @id @default(autoincrement())
+  name          String         @unique @db.VarChar(100)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  notifications Notification[]
+
+  @@map("notification_actions")
+}
+
+model Notification {
+  id                   Int                 @id @default(autoincrement())
+  title                String              @db.VarChar(100)
+  message              String?             @db.Text
+  category             String?             @db.VarChar(50)
+  type                 String?             @db.VarChar(50)
+  isRead               Boolean             @default(false) @map("is_read")
+  referenceTable       String?             @map("reference_table") @db.VarChar(100)
+  referenceId          Int?                @map("reference_id")
+  userId               Int                 @map("user_id")
+  roleId               Int?                @map("role_id")
+  notificationActionId Int?                @map("notification_action_id")
+  createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt            DateTime?           @map("deleted_at") @db.Timestamptz
+
+  // Relations
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role                 Role?               @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  action               NotificationAction? @relation(fields: [notificationActionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([deletedAt])
+  @@map("notifications")
+}
+
+model UserBehaviorCategory {
+  id             Int            @id @default(autoincrement())
+  name           String         @unique @db.VarChar(100)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  userBehaviors  UserBehavior[]
+
+  @@map("user_behavior_categories")
+}
+
+model UserBehavior {
+  id                 Int                  @id @default(autoincrement())
+  referenceTable     String               @map("reference_table") @db.VarChar(100)
+  referenceRecord    String               @map("reference_record") @db.VarChar(255)
+  userId             Int                  @map("user_id")
+  behaviorCategoryId Int                  @map("behavior_category_id")
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category           UserBehaviorCategory @relation(fields: [behaviorCategoryId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([behaviorCategoryId])
+  @@index([referenceTable])
+  @@index([createdAt])
+  @@map("user_behaviors")
 }
