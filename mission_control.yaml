@@ -2,10 +2,10 @@
 # JoodPakPaw Multi-Agent Mission Control Configuration (mission_control.yaml)
 # ==============================================================================
 # กำหนดสายพานการทำงาน (Workflow / Chain of Agents), กฎการส่งต่องาน (Handoffs),
-# กฎการจัดการ Git Monorepo และการแยกบทบาท Builder vs. Auditor
+# ตาราง Sprint 0-4 (PBI-01 ถึง PBI-21) และข้อความ Atomic Git Commit ประจำแต่ละ PBI
 # ==============================================================================
 
-version: "2.1"
+version: "2.2"
 project:
   name: "JoodPakPaw - Community Pet Boarding Platform (V2 Monorepo)"
   workspace_root: "d:/Project/joodpakpaw"
@@ -13,10 +13,11 @@ project:
   backend_dir: "d:/Project/joodpakpaw/joodpakpaw-api"
   ml_dir: "d:/Project/joodpakpaw/joodpakpaw-ml"
   blueprint_doc: "d:/Project/joodpakpaw/docs/JoodPakPaw_V2_Blueprint.md"
+  backlog_doc: "d:/Project/joodpakpaw/docs/BACKLOG_AND_GIT_PLAN.md"
   rules_file: "d:/Project/joodpakpaw/AGENTS.md"
 
 # ------------------------------------------------------------------------------
-# 1. Git Monorepo & Free-Tier Deployment Policy
+# 1. Git Monorepo & 1-PBI-per-Commit Policy
 # ------------------------------------------------------------------------------
 git_policy:
   repository_mode: "single_monorepo"
@@ -25,11 +26,14 @@ git_policy:
     production: "main"
     integration: "develop"
     phase_prefix: "feat/phase-"
+  commit_granularity: "1_pbi_equals_1_atomic_commit"
+  merge_granularity: "1_sprint_phase_merges_into_develop"
   rules:
     - "ห้ามแก้ไขหรือ Commit ลงกิ่ง main โดยตรง"
-    - "แต่ละเฟสต้องแตก Branch จาก develop เช่น feat/phase-0-db-infra"
+    - "1 Phase = 1 Sprint = 1 Feature Branch แตกจาก develop (เช่น feat/phase-0-db-infra)"
+    - "1 PBI = 1 Atomic Git Commit เมื่อผ่านการตรวจจาก qa-auditor (STATUS: PASS) เท่านั้น"
     - "Builder Agents ห้ามรัน git commit, git merge หรือ git push เองเด็ดขาด"
-    - "Orchestrator จะทำ Atomic Commit (Conventional Commits) และ Merge เข้า develop เฉพาะเมื่อ qa-auditor ตรวจผ่าน (STATUS: PASS) แล้วเท่านั้น"
+    - "เมื่อครบทุก PBI ใน Sprint จึง Merge กิ่ง feat/phase-* เข้าสู่ develop (--no-ff)"
     - "ห้ามรัน git push อัตโนมัติจนกว่าผู้ใช้จะสั่ง"
 
 deployment_compatibility:
@@ -50,9 +54,9 @@ agents:
     role: "Product Manager, Lead Orchestrator & Git Gatekeeper"
     mode: "planning_and_delegation"
     responsibilities:
-      - "แตกงานตามเฟส (Phase 0 - Phase 4), สร้างกิ่ง feat/phase-* และควบคุมลำดับการทำงานของ Subagents"
-      - "ส่งต่องานจาก Builder Agent ไปยัง qa-auditor เสมอ ไม่ข้ามขั้นตอนการตรวจทาน"
-      - "เมื่อ qa-auditor ให้ผ่าน (PASS) จึงรัน git commit และ merge เข้ากิ่ง develop"
+      - "แตกงานตาม Sprint 0-4 (PBI-01 ถึง PBI-21), สร้างกิ่ง feat/phase-* และควบคุมลำดับการทำงานของ Subagents"
+      - "ส่งต่องานของแต่ละ PBI จาก Builder Agent ไปยัง qa-auditor เสมอ ไม่ข้ามขั้นตอนการตรวจทาน"
+      - "เมื่อ qa-auditor ให้ผ่าน (PASS) ในแต่ละ PBI จึงอัปเดตสถานะใน docs/BACKLOG_AND_GIT_PLAN.md และรัน git commit ตามข้อความที่กำหนด"
 
   builders:
     - id: "db-infra-architect"
@@ -113,88 +117,149 @@ agents:
         - "Git Diff Hygiene & Zero-'catbnb' / Free-Tier Cloud Readiness Check"
 
 # ------------------------------------------------------------------------------
-# 3. Inter-Agent Workflow Chains & Quality Gates (Chain of Agents)
+# 3. Sprint & PBI Pipeline (Sprint 0 to Sprint 4 | PBI-01 to PBI-21)
 # ------------------------------------------------------------------------------
-workflows:
-  standard_delivery_loop:
-    steps:
-      - step: 1
-        actor: "orchestrator"
-        action: "checkout_phase_branch_and_dispatch"
-        description: "แตกกิ่ง feat/phase-* จาก develop และส่ง Prompt พร้อมระบุ Skill ที่ต้องใช้ให้ Builder Agent"
-      - step: 2
-        actor: "builder_agent"
-        action: "implement_and_self_check"
-        handoff_to: "qa-auditor"
-        handoff_artifact:
-          required_fields:
-            - "changed_files"
-            - "implemented_endpoints_or_tables"
-            - "build_and_smoke_test_output"
-      - step: 3
-        actor: "qa-auditor"
-        action: "audit_and_verify"
-        quality_gate:
-          on_approve: "orchestrator_commit_and_merge_to_develop"
-          on_reject: "return_defect_report_to_builder_agent"
-          max_retry_loops: 3
+sprints:
+  - sprint_id: "sprint_0"
+    phase_id: "phase_0_infra_and_db"
+    branch: "feat/phase-0-db-infra"
+    name: "Phase 0 / Sprint 0: Foundation, Monorepo Infra & Database Schema"
+    merge_commit: "chore(sprint-0): merge phase 0 database and infrastructure into develop"
+    pbis:
+      - id: "PBI-01"
+        title: "Docker Compose & joodpakpaw-api Skeleton"
+        builder: "db-infra-architect"
+        reviewer: "qa-auditor"
+        commit_message: "feat(infra): [PBI-01] setup joodpakpaw docker-compose and api project skeleton"
+      - id: "PBI-02"
+        title: "Complete 41-Table PostgreSQL Schema & Migrations"
+        builder: "db-infra-architect"
+        reviewer: "qa-auditor"
+        commit_message: "feat(db): [PBI-02] implement complete postgresql schema, constraints, and indexes"
+      - id: "PBI-03"
+        title: "Master Lookup & Demo Seed Data"
+        builder: "db-infra-architect"
+        reviewer: "qa-auditor"
+        commit_message: "feat(seed): [PBI-03] add master lookup seed data and demo accounts/properties"
 
-  phases:
-    - phase_id: "phase_0_infra_and_db"
-      branch: "feat/phase-0-db-infra"
-      name: "Phase 0: Infrastructure (joodpakpaw-*), PostgreSQL 41 Tables & Seed Data"
-      chain:
-        - agent: "db-infra-architect"
-          task: "สร้าง Docker Compose (joodpakpaw-postgres, joodpakpaw-redis, joodpakpaw-minio), สร้าง Schema ครบ 41 ตาราง (รองรับทั้ง Local Postgres และ Supabase/Neon) และสร้าง Seed Data สำหรับตาราง Lookup ทั้งหมด"
-        - agent: "qa-auditor"
-          task: "ตรวจเทียบตารางทั้ง 41 ตารางกับ Data Dictionary ในรูปเล่ม (หน้า 75-105), ตรวจสอบว่าไม่มีชื่อ catbnb หลงเหลือ และทดสอบการรัน Migration + Seed"
+  - sprint_id: "sprint_1"
+    phase_id: "phase_1_auth_user_property"
+    branch: "feat/phase-1-auth-property"
+    depends_on: ["sprint_0"]
+    name: "Phase 1 / Sprint 1: Auth, User, Property/Room CRUD & Cloud Storage"
+    merge_commit: "chore(sprint-1): merge phase 1 auth, user, property CRUD, and S3 WebP pipeline into develop"
+    pbis:
+      - id: "PBI-04"
+        title: "Authentication & Password Policy API (/api/v1/auth/*)"
+        builder: "backend-core-engineer"
+        reviewer: "qa-auditor"
+        commit_message: "feat(auth): [PBI-04] implement JWT auth, OTP verification, and password reset APIs"
+      - id: "PBI-05"
+        title: "S3 WebP Storage Adapter & User Profile API (/api/v1/users/*)"
+        builder: "backend-core-engineer"
+        reviewer: "qa-auditor"
+        commit_message: "feat(users): [PBI-05] implement S3 WebP storage adapter and user profile APIs"
+      - id: "PBI-06"
+        title: "Master Lookups & Public Property Discovery API (/api/v1/properties/*)"
+        builder: "backend-core-engineer"
+        reviewer: "qa-auditor"
+        commit_message: "feat(properties): [PBI-06] implement lookup endpoints and public property search APIs"
+      - id: "PBI-07"
+        title: "Host Property & Room Category CRUD API (/api/v1/hosts/properties/*)"
+        builder: "backend-core-engineer"
+        reviewer: "qa-auditor"
+        commit_message: "feat(host): [PBI-07] implement host property and room category CRUD APIs"
+      - id: "PBI-08"
+        title: "Frontend Core & Client WebP Upgrade (Root Path '/' for Vercel & imageCompression.ts)"
+        builder: "frontend-upgrader"
+        reviewer: "qa-auditor"
+        commit_message: "feat(fe-core): [PBI-08] configure root path for Vercel and add client-side WebP compression"
 
-    - phase_id: "phase_1_auth_user_property"
-      branch: "feat/phase-1-auth-property"
-      name: "Phase 1: Auth, User Profile, Host Property/Room CRUD & S3/WebP Pipeline"
-      depends_on: ["phase_0_infra_and_db"]
-      chain:
-        - agent: "backend-core-engineer"
-          task: "พัฒนา joodpakpaw-api: Auth Module, User Module, Property & Room Category CRUD พร้อมระบบแปลงรูปเป็น WebP ขึ้น S3-Compatible Storage (MinIO / Cloudflare R2 / Supabase Storage)"
-        - agent: "frontend-upgrader"
-          task: "ปรับ joodpakpaw-frontend ให้ใช้ Root Path '/' เป็นค่าเริ่มต้น (พร้อม Deploy บน Vercel), เพิ่ม Client-side WebP Image Compression และเชื่อม Env กับ joodpakpaw-api"
-        - agent: "qa-auditor"
-          task: "ตรวจสอบตาม Test Cases Release 1 (TC-001 ถึง TC-045 และ TC-API-001 ถึง TC-API-079) รวมถึงรหัส Error T-2007 และ A-3001..A-3012"
+  - sprint_id: "sprint_2"
+    phase_id: "phase_2_booking_calendar_favorites"
+    branch: "feat/phase-2-booking-calendar"
+    depends_on: ["sprint_1"]
+    name: "Phase 2 / Sprint 2: Booking Engine, Host Calendar UI, Pets, Favorites & Reviews"
+    merge_commit: "chore(sprint-2): merge phase 2 booking engine, host calendar UI, pets, favorites, and reviews into develop"
+    pbis:
+      - id: "PBI-09"
+        title: "Pet Profile CRUD API with Active-Booking Guard (/api/v1/profiles/pet-profiles/*)"
+        builder: "backend-core-engineer"
+        reviewer: "qa-auditor"
+        commit_message: "feat(pets): [PBI-09] implement pet profile CRUD APIs with active-booking deletion guard"
+      - id: "PBI-10"
+        title: "Room Availability Search & Row-Locked Multi-Room Booking Engine"
+        builder: "backend-core-engineer"
+        reviewer: "qa-auditor"
+        commit_message: "feat(booking): [PBI-10] implement room search and row-locked multi-room booking engine"
+      - id: "PBI-11"
+        title: "Booking Payment, Cancel & Host Booking Management API"
+        builder: "backend-core-engineer"
+        reviewer: "qa-auditor"
+        commit_message: "feat(booking-flow): [PBI-11] implement payment confirmation, cancellation, checkout, and host booking APIs"
+      - id: "PBI-12"
+        title: "Host Room Availability & Dynamic Pricing Calendar (API + UI)"
+        builder: "backend-core-engineer + frontend-upgrader"
+        reviewer: "qa-auditor"
+        commit_message: "feat(calendar): [PBI-12] implement host room availability and daily pricing calendar API and UI"
+      - id: "PBI-13"
+        title: "Favorite Folders (FF-4101) & Booking Review System"
+        builder: "backend-core-engineer"
+        reviewer: "qa-auditor"
+        commit_message: "feat(favorites-reviews): [PBI-13] implement favorite folders with FF-4101 and booking review system"
 
-    - phase_id: "phase_2_booking_calendar_favorites"
-      branch: "feat/phase-2-booking-calendar"
-      name: "Phase 2: Booking Engine, Host Room Calendar, Pet Profiles, Favorites & Reviews"
-      depends_on: ["phase_1_auth_user_property"]
-      chain:
-        - agent: "backend-core-engineer"
-          task: "พัฒนาระบบค้นหาห้องว่างและจองห้องพักแบบ Multi-Room พร้อม Row Lock กัน Overbooking, ระบบจัดการปฏิทินห้องพักรายวันของ Host, Pet Profiles CRUD, Favorite Folders (FF-4101) และระบบรีวิว"
-        - agent: "frontend-upgrader"
-          task: "สร้าง UI จัดการปฏิทินวันว่าง-ไม่ว่างและปรับราคารายวันของ Host (room_category_calendars) ในหน้าจัดการที่พัก"
-        - agent: "qa-auditor"
-          task: "จำลองการยิงจองห้องสุดท้ายพร้อมกัน (Race Condition TC-API-085) และตรวจตาม Test Cases Release 2 (TC-046 ถึง TC-104 และ TC-API-080 ถึง TC-API-144)"
+  - sprint_id: "sprint_3"
+    phase_id: "phase_3_realtime_verification_admin"
+    branch: "feat/phase-3-realtime-admin"
+    depends_on: ["sprint_2"]
+    name: "Phase 3 / Sprint 3: Real-Time Socket.IO, Chat, KYC & Admin Backoffice"
+    merge_commit: "chore(sprint-3): merge phase 3 real-time socket, chat, KYC, and admin system into develop"
+    pbis:
+      - id: "PBI-14"
+        title: "Socket.IO v4 Server, Notifications & Check-in Reminder Scheduler"
+        builder: "backend-core-engineer"
+        reviewer: "qa-auditor"
+        commit_message: "feat(notifications): [PBI-14] implement Socket.IO server, notification APIs, and check-in reminder scheduler"
+      - id: "PBI-15"
+        title: "Real-Time Chat Rooms & Messaging API (/api/v1/chat-rooms/*)"
+        builder: "backend-core-engineer"
+        reviewer: "qa-auditor"
+        commit_message: "feat(chat): [PBI-15] implement real-time chat rooms and messaging APIs with Socket.IO"
+      - id: "PBI-16"
+        title: "Frontend Real-Time & Notification Read State Sync Upgrade"
+        builder: "frontend-upgrader"
+        reviewer: "qa-auditor"
+        commit_message: "feat(fe-realtime): [PBI-16] upgrade socket client to WebSocket transport and sync notification read state"
+      - id: "PBI-17"
+        title: "Host KYC Verification Workflow (/api/v1/user-verifications/* & Admin review)"
+        builder: "backend-core-engineer"
+        reviewer: "qa-auditor"
+        commit_message: "feat(kyc): [PBI-17] implement host KYC verification submission and admin review workflow"
+      - id: "PBI-18"
+        title: "Report System, Cascading Admin Ban/Appeal State Machine & Action Logs"
+        builder: "backend-core-engineer"
+        reviewer: "qa-auditor"
+        commit_message: "feat(admin): [PBI-18] implement report system, cascading ban/appeal state machine, and admin dashboard"
 
-    - phase_id: "phase_3_realtime_verification_admin"
-      branch: "feat/phase-3-realtime-admin"
-      name: "Phase 3: Real-Time Socket.IO (Chat & Notification), Host Verification & Admin System"
-      depends_on: ["phase_2_booking_calendar_favorites"]
-      chain:
-        - agent: "backend-core-engineer"
-          task: "พัฒนา Socket.IO v4 Server (/api/socket.io), Notification & SMTP/Check-in Reminder Queue (พร้อม In-Memory Fallback เมื่อไม่ใช้ Redis), Chat Rooms & Messages, Host Verification และระบบ Report & Admin Ban/Appeal State Machine"
-        - agent: "frontend-upgrader"
-          task: "อัปเกรด lib/socket.ts ให้รองรับ WebSocket แท้ผ่าน Env Variable และซิงค์สถานะอ่านแจ้งเตือน (is_read) กับฐานข้อมูล"
-        - agent: "qa-auditor"
-          task: "ตรวจสอบ State Machine การแบนที่พักเดี่ยว vs แบนทั้งบัญชีและการอุทธรณ์ (TC-151 ถึง TC-155) และตรวจตาม Test Cases Release 3"
-
-    - phase_id: "phase_4_ml_hybrid_and_e2e"
-      branch: "feat/phase-4-ml-hybrid"
-      name: "Phase 4: Hybrid ML Recommendation Service (joodpakpaw-ml) & Frontend Optimization"
-      depends_on: ["phase_3_realtime_verification_admin"]
-      chain:
-        - agent: "ml-recommendation-engineer"
-          task: "พัฒนา joodpakpaw-ml (FastAPI พอร์ต 5000) ด้วย 3-Stage Hybrid Recommendation Pipeline พร้อม Dockerfile ที่ Deploy บน Hugging Face Spaces / Render ฟรีได้ทันที"
-        - agent: "backend-core-engineer"
-          task: "เชื่อม Endpoint /api/v1/properties/recommend, /api/v1/properties/recommend/property/:id และ /api/v1/user-behaviors/view-property/:id เข้ากับ joodpakpaw-ml พร้อมระบบ Cold-Start In-Process Fallback"
-        - agent: "frontend-upgrader"
-          task: "ปรับปรุงประสิทธิภาพการดึงข้อมูลหน้า Home (app/(browse)/page.tsx) และทำ Caching"
-        - agent: "qa-auditor"
-          task: "ทดสอบ End-to-End ครบทุก Flow และทดสอบ Concurrency ของระบบแนะนำที่พัก (TC-API-174, TC-API-175)"
+  - sprint_id: "sprint_4"
+    phase_id: "phase_4_ml_hybrid_and_e2e"
+    branch: "feat/phase-4-ml-hybrid"
+    depends_on: ["sprint_3"]
+    name: "Phase 4 / Sprint 4: Hybrid ML Service (joodpakpaw-ml) & Production Polish"
+    merge_commit: "chore(sprint-4): merge phase 4 hybrid ML service and frontend optimization into develop"
+    pbis:
+      - id: "PBI-19"
+        title: "joodpakpaw-ml 3-Stage Pet-Aware Hybrid Recommendation Service"
+        builder: "ml-recommendation-engineer"
+        reviewer: "qa-auditor"
+        commit_message: "feat(ml): [PBI-19] implement joodpakpaw-ml FastAPI 3-stage pet-aware hybrid recommendation service"
+      - id: "PBI-20"
+        title: "Backend ML Integration & 1.5s Cold-Start Fallback"
+        builder: "backend-core-engineer"
+        reviewer: "qa-auditor"
+        commit_message: "feat(api-ml): [PBI-20] integrate recommendation endpoints with 1.5s cold-start fallback"
+      - id: "PBI-21"
+        title: "Frontend Home Feed Optimization & Free Cloud Deployment Guide"
+        builder: "frontend-upgrader"
+        reviewer: "qa-auditor"
+        commit_message: "feat(fe-perf): [PBI-21] optimize home feed requests and add free-tier cloud deployment guide"
