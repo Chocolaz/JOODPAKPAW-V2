@@ -1,6 +1,11 @@
 // lib/api.ts
 import request from './apiClient'
 import {
+  compressFormDataImages,
+  compressImagesToWebP,
+  compressImageToWebP,
+} from './imageCompression'
+import {
   BookingRequestBody,
   CreatePropertyResponse,
   FacilitiesResponse,
@@ -120,11 +125,12 @@ export const getProfile = (): Promise<ProfileResponse> => {
   })
 }
 
-export const updateUserProfile = (userId: string, formData: FormData) => {
+export const updateUserProfile = async (userId: string, formData: FormData) => {
+  const compressedFormData = await compressFormDataImages(formData)
   return request({
     endpoint: `api/v1/users/${userId}`,
     method: 'PUT',
-    body: formData,
+    body: compressedFormData,
     requiresAuth: true,
     errorContext: 'Update Profile',
   })
@@ -148,21 +154,23 @@ export const getPetProfileById = (id: string): Promise<PetProfile> => {
   })
 }
 
-export const createPetProfile = (formData: FormData) => {
+export const createPetProfile = async (formData: FormData) => {
+  const compressedFormData = await compressFormDataImages(formData)
   return request({
     endpoint: 'api/v1/profiles/pet-profiles',
     method: 'POST',
-    body: formData,
+    body: compressedFormData,
     requiresAuth: true,
     errorContext: 'Create Pet Profile',
   })
 }
 
-export const updatePetProfile = (id: string, formData: FormData) => {
+export const updatePetProfile = async (id: string, formData: FormData) => {
+  const compressedFormData = await compressFormDataImages(formData)
   return request({
     endpoint: `api/v1/profiles/pet-profiles/${id}`,
     method: 'PUT',
-    body: formData,
+    body: compressedFormData,
     requiresAuth: true,
     errorContext: 'Update Pet Profile',
   })
@@ -239,10 +247,17 @@ export const getVerificationStatus = (): Promise<VerificationResponse> =>
     errorContext: 'Get Verification Status',
   })
 
-export const submitVerification = (idPhoto: File, selfieWithId: File): Promise<void> => {
+export const submitVerification = async (
+  idPhoto: File,
+  selfieWithId: File
+): Promise<void> => {
+  const [compressedIdPhoto, compressedSelfie] = await Promise.all([
+    compressImageToWebP(idPhoto),
+    compressImageToWebP(selfieWithId),
+  ])
   const formData = new FormData()
-  formData.append('idPhoto', idPhoto)
-  formData.append('selfieWithId', selfieWithId)
+  formData.append('idPhoto', compressedIdPhoto)
+  formData.append('selfieWithId', compressedSelfie)
   return request<void>({
     endpoint: 'api/v1/user-verifications',
     method: 'POST',
@@ -362,7 +377,7 @@ export const getPetSizeCategories = (): Promise<PetSizeCategoriesResponse> => {
 }
 
 // --- Chat Functions ---
-export const createChatRoom = (
+export const createChatRoom = async (
   participantId: number,
   content?: string,
   images?: File[]
@@ -370,7 +385,10 @@ export const createChatRoom = (
   const formData = new FormData()
   formData.append('participantId', String(participantId))
   if (content) formData.append('content', content)
-  if (images) images.forEach((img) => formData.append('images', img))
+  if (images && images.length > 0) {
+    const compressedImages = await compressImagesToWebP(images)
+    compressedImages.forEach((img) => formData.append('images', img))
+  }
   return request<ChatRoom>({
     endpoint: 'api/v1/chat-rooms',
     method: 'POST',
@@ -398,15 +416,16 @@ export const getChatRoomById = (id: number): Promise<ChatRoomDetail> => {
   })
 }
 
-export const sendChatMessage = (
+export const sendChatMessage = async (
   roomId: number,
   content: string,
   images?: File[]
 ): Promise<ChatMessage> => {
   if (images && images.length > 0) {
+    const compressedImages = await compressImagesToWebP(images)
     const formData = new FormData()
     if (content) formData.append('content', content)
-    images.forEach((img) => formData.append('images', img))
+    compressedImages.forEach((img) => formData.append('images', img))
     return request<ChatMessage>({
       endpoint: `api/v1/chat-rooms/${roomId}/messages`,
       method: 'POST',
@@ -454,12 +473,13 @@ export const deleteRoomCategory = (
   })
 }
 
-export const createProperty = (data: PropertyFormData) => {
+export const createProperty = async (data: PropertyFormData) => {
   const formData = new FormData()
 
-  Object.entries(data).forEach(([key, value]) => {
+  for (const [key, value] of Object.entries(data)) {
     if (key === 'images') {
-      ;(value as File[]).forEach((file: File) => {
+      const compressedImages = await compressImagesToWebP((value as File[]) || [])
+      compressedImages.forEach((file: File) => {
         formData.append('images', file)
       })
     } else if (key === 'facilities') {
@@ -467,7 +487,7 @@ export const createProperty = (data: PropertyFormData) => {
     } else if (value !== null) {
       formData.append(key, String(value))
     }
-  })
+  }
 
   return request<CreatePropertyResponse>({
     endpoint: 'api/v1/hosts/properties',
@@ -478,11 +498,12 @@ export const createProperty = (data: PropertyFormData) => {
   })
 }
 
-export const updateProperty = (propertyId: string, data: FormData) => {
+export const updateProperty = async (propertyId: string, data: FormData) => {
+  const compressedFormData = await compressFormDataImages(data)
   return request({
     endpoint: `api/v1/hosts/properties/${propertyId}`,
     method: 'PUT',
-    body: data,
+    body: compressedFormData,
     requiresAuth: true,
     errorContext: 'Update Property',
   })
@@ -497,21 +518,22 @@ export const deleteProperty = (propertyId: string): Promise<void> => {
   })
 }
 
-export const createRoomCategory = (
+export const createRoomCategory = async (
   propertyId: number,
   data: RoomCategoryFormData
 ) => {
   const formData = new FormData()
 
-  Object.entries(data).forEach(([key, value]) => {
+  for (const [key, value] of Object.entries(data)) {
     if (key === 'pets' || key === 'facilities') {
       formData.append(key, JSON.stringify(value))
     } else if (key === 'images') {
-      (value as File[]).forEach((file) => formData.append('images', file))
+      const compressedImages = await compressImagesToWebP((value as File[]) || [])
+      compressedImages.forEach((file) => formData.append('images', file))
     } else {
       formData.append(key, String(value))
     }
-  })
+  }
 
   return request({
     endpoint: `api/v1/hosts/properties/${propertyId}/room-categories`,
@@ -522,7 +544,7 @@ export const createRoomCategory = (
   })
 }
 
-export const updateRoomCategory = (
+export const updateRoomCategory = async (
   propertyId: number,
   roomId: number,
   data: import('@/types').EditRoomCategoryFormData
@@ -535,7 +557,8 @@ export const updateRoomCategory = (
   formData.append('pets', JSON.stringify(data.pets))
   formData.append('facilities', JSON.stringify(data.facilities))
   formData.append('petSizeCategories', String(data.petSizeCategoryId))
-  data.newImages.forEach((file) => formData.append('images', file))
+  const compressedNewImages = await compressImagesToWebP(data.newImages || [])
+  compressedNewImages.forEach((file) => formData.append('images', file))
   formData.append('deleteImageIds', JSON.stringify(data.deleteImageIds))
 
   return request({
@@ -615,7 +638,22 @@ export const getBookingById = (
   })
 }
 
-export const confirmPayment = (bookingId: number): Promise<void> => {
+export const confirmPayment = async (
+  bookingId: number,
+  slipImage?: File
+): Promise<void> => {
+  if (slipImage) {
+    const compressedSlip = await compressImageToWebP(slipImage)
+    const formData = new FormData()
+    formData.append('slip', compressedSlip)
+    return request<void>({
+      endpoint: `api/v1/bookings/${bookingId}/confirm-payment`,
+      method: 'PATCH',
+      body: formData,
+      requiresAuth: true,
+      errorContext: 'Confirm Payment',
+    })
+  }
   return request<void>({
     endpoint: `api/v1/bookings/${bookingId}/confirm-payment`,
     method: 'PATCH',
@@ -623,6 +661,8 @@ export const confirmPayment = (bookingId: number): Promise<void> => {
     errorContext: 'Confirm Payment',
   })
 }
+
+export const confirmBookingPayment = confirmPayment
 
 export const cancelBooking = (bookingId: string): Promise<void> => {
   return request<void>({
@@ -827,14 +867,17 @@ export const deleteFavoriteProperty = (propertyId: number): Promise<void> => {
 }
 
 // --- Review Functions ---
-export const submitReview = (
+export const submitReview = async (
   bookingId: string,
   data: { rating: number; comment: string; images?: File[] }
 ): Promise<void> => {
   const formData = new FormData()
   formData.append('rating', String(data.rating))
   formData.append('comment', data.comment)
-  if (data.images) data.images.forEach((img) => formData.append('images', img))
+  if (data.images && data.images.length > 0) {
+    const compressedImages = await compressImagesToWebP(data.images)
+    compressedImages.forEach((img) => formData.append('images', img))
+  }
   return request<void>({
     endpoint: `api/v1/bookings/${bookingId}/review`,
     method: 'POST',
@@ -843,6 +886,8 @@ export const submitReview = (
     errorContext: 'Submit Review',
   })
 }
+
+export const submitBookingReview = submitReview
 
 // --- Notification Functions ---
 export const getNotifications = (): Promise<NotificationsResponse> => {
@@ -891,7 +936,7 @@ export const getReportCategories = (type: string): Promise<ReportCategoriesRespo
   })
 }
 
-export const submitPropertyReport = (
+export const submitPropertyReport = async (
   propertyId: number,
   reportCategoryId: number,
   description: string,
@@ -901,7 +946,10 @@ export const submitPropertyReport = (
   formData.append('propertyId', String(propertyId))
   formData.append('reportCategoryId', String(reportCategoryId))
   formData.append('description', description)
-  if (images) images.forEach((img) => formData.append('images', img))
+  if (images && images.length > 0) {
+    const compressedImages = await compressImagesToWebP(images)
+    compressedImages.forEach((img) => formData.append('images', img))
+  }
   return request<void>({
     endpoint: 'api/v1/reports/property',
     method: 'POST',
@@ -911,7 +959,9 @@ export const submitPropertyReport = (
   })
 }
 
-export const submitReviewReport = (
+export const reportProperty = submitPropertyReport
+
+export const submitReviewReport = async (
   bookingId: number,
   reportCategoryId: number,
   description: string,
@@ -921,7 +971,10 @@ export const submitReviewReport = (
   formData.append('bookingId', String(bookingId))
   formData.append('reportCategoryId', String(reportCategoryId))
   formData.append('description', description)
-  if (images) images.forEach((img) => formData.append('images', img))
+  if (images && images.length > 0) {
+    const compressedImages = await compressImagesToWebP(images)
+    compressedImages.forEach((img) => formData.append('images', img))
+  }
   return request<void>({
     endpoint: 'api/v1/reports/review',
     method: 'POST',
@@ -931,7 +984,9 @@ export const submitReviewReport = (
   })
 }
 
-export const submitUnbanPropertyRequest = (
+export const reportReview = submitReviewReport
+
+export const submitUnbanPropertyRequest = async (
   reportCategoryId: number,
   description: string,
   propertyId?: number,
@@ -941,7 +996,10 @@ export const submitUnbanPropertyRequest = (
   formData.append('reportCategoryId', String(reportCategoryId))
   formData.append('description', description)
   if (propertyId) formData.append('propertyId', String(propertyId))
-  if (images) images.forEach((img) => formData.append('images', img))
+  if (images && images.length > 0) {
+    const compressedImages = await compressImagesToWebP(images)
+    compressedImages.forEach((img) => formData.append('images', img))
+  }
   return request<void>({
     endpoint: 'api/v1/reports/unban-property',
     method: 'POST',
@@ -950,6 +1008,8 @@ export const submitUnbanPropertyRequest = (
     errorContext: 'Submit Unban Property Request',
   })
 }
+
+export const requestUnbanProperty = submitUnbanPropertyRequest
 
 // --- Admin: Dashboard ---
 export interface AdminDashboardData {
@@ -1094,4 +1154,3 @@ export const rejectVerification = (id: number, rejectDescription: string): Promi
     errorContext: 'Reject Verification',
   })
 }
-

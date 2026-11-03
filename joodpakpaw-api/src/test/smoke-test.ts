@@ -1,4 +1,7 @@
 import http from 'http'
+import fs from 'fs'
+import path from 'path'
+import { pathToFileURL } from 'url'
 import { createApp } from '../app'
 import { prisma, checkDatabaseHealth } from '../database/prisma'
 import { optionalAuthenticateToken, requireRoles } from '../middlewares/auth.middleware'
@@ -1445,6 +1448,84 @@ async function main() {
       )
       if (okPropDel.statusCode !== 200) {
         throw new Error(`Expected 200 when deleting property without active bookings, got ${okPropDel.statusCode}`)
+      }
+    })
+
+    // =========================================================================
+    // PBI-08 QA Audit Tests: Frontend Core & Client WebP Upgrade
+    // =========================================================================
+
+    // Test 30: Verify next.config.ts, .env.example, lib/imageCompression.ts, and lib/api.ts WebP integration
+    await runTest('PBI-08 Frontend Core & Client WebP Upgrade (next.config.ts, imageCompression.ts, api.ts, .env.example) contract verification', async () => {
+      const feRoot = path.resolve(__dirname, '../../../joodpakpaw-frontend')
+      const nextConfigSrc = fs.readFileSync(path.join(feRoot, 'next.config.ts'), 'utf-8')
+      const envExampleSrc = fs.readFileSync(path.join(feRoot, '.env.example'), 'utf-8')
+      const imgCompSrc = fs.readFileSync(path.join(feRoot, 'lib/imageCompression.ts'), 'utf-8')
+      const feApiSrc = fs.readFileSync(path.join(feRoot, 'lib/api.ts'), 'utf-8')
+
+      // 1. Verify zero legacy university path/domain in next.config.ts and .env.example
+      if (nextConfigSrc.includes('/capstone25/cp25nk2') || nextConfigSrc.includes('bscit.sit.kmutt.ac.th')) {
+        throw new Error('next.config.ts still contains legacy /capstone25/cp25nk2 or bscit.sit.kmutt.ac.th')
+      }
+      if (envExampleSrc.includes('/capstone25/cp25nk2') || envExampleSrc.includes('bscit.sit.kmutt.ac.th')) {
+        throw new Error('.env.example still contains legacy /capstone25/cp25nk2 or bscit.sit.kmutt.ac.th')
+      }
+
+      // 2. Verify required cloud storage domains in next.config.ts
+      for (const domain of ['localhost', 'joodpakpaw-minio', '**.r2.dev', '**.supabase.co']) {
+        if (!nextConfigSrc.includes(domain)) {
+          throw new Error(`next.config.ts missing remotePattern hostname: ${domain}`)
+        }
+      }
+
+      // 3. Verify imageCompression.ts exports and SSR/FormData safety
+      if (
+        !imgCompSrc.includes('export async function compressImageToWebP') ||
+        !imgCompSrc.includes('export async function compressImagesToWebP') ||
+        !imgCompSrc.includes('export async function compressFormDataImages') ||
+        !imgCompSrc.includes('1920') ||
+        !imgCompSrc.includes('0.82')
+      ) {
+        throw new Error('lib/imageCompression.ts missing required WebP compression exports or 1920px / 0.82 defaults')
+      }
+
+      const imgCompModuleUrl = pathToFileURL(path.join(feRoot, 'lib/imageCompression.ts')).href
+      const {
+        compressImageToWebP,
+        compressImagesToWebP,
+        compressFormDataImages,
+      } = await import(imgCompModuleUrl)
+
+      const dummyArray = await compressImagesToWebP([])
+      if (!Array.isArray(dummyArray) || dummyArray.length !== 0) {
+        throw new Error('Expected compressImagesToWebP([]) to return empty array')
+      }
+
+      const sampleFormData = new FormData()
+      sampleFormData.append('firstName', 'Alicia')
+      sampleFormData.append('phone', '0812345678')
+      const outFormData = await compressFormDataImages(sampleFormData)
+      if (outFormData.get('firstName') !== 'Alicia' || outFormData.get('phone') !== '0812345678') {
+        throw new Error('compressFormDataImages failed to preserve FormData text fields in SSR/Node mode')
+      }
+      if (typeof compressImageToWebP !== 'function') {
+        throw new Error('compressImageToWebP is not a function')
+      }
+
+      // 4. Verify lib/api.ts integrates WebP compression across multipart endpoints
+      for (const fnCheck of [
+        'compressFormDataImages',
+        'compressImageToWebP',
+        'compressImagesToWebP',
+        'confirmBookingPayment',
+        'submitBookingReview',
+        'reportProperty',
+        'reportReview',
+        'requestUnbanProperty',
+      ]) {
+        if (!feApiSrc.includes(fnCheck)) {
+          throw new Error(`joodpakpaw-frontend/lib/api.ts missing ${fnCheck}`)
+        }
       }
     })
   } finally {

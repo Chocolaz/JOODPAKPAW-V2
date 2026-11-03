@@ -1,18 +1,32 @@
 import type { NextConfig } from 'next'
 import type { RuleSetRule } from 'webpack'
 
-const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || '/capstone25/cp25nk2'
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || ''
 
 const nextConfig: NextConfig = {
   output: 'standalone',
-  basePath: BASE_PATH,
-  assetPrefix: BASE_PATH + '/',
+  ...(BASE_PATH
+    ? {
+        basePath: BASE_PATH,
+        assetPrefix: `${BASE_PATH}/`,
+      }
+    : {}),
   trailingSlash: true,
 
   images: {
     remotePatterns: [
-      { hostname: 'cp25nk2.sit.kmutt.ac.th' },
-      { hostname: 'bscit.sit.kmutt.ac.th' },
+      { protocol: 'http', hostname: 'localhost' },
+      { protocol: 'https', hostname: 'localhost' },
+      { protocol: 'http', hostname: '127.0.0.1' },
+      { protocol: 'https', hostname: '127.0.0.1' },
+      { protocol: 'http', hostname: 'joodpakpaw-minio' },
+      { protocol: 'https', hostname: '**.r2.dev' },
+      { protocol: 'https', hostname: '**.cloudflarestorage.com' },
+      { protocol: 'https', hostname: '**.supabase.co' },
+      { protocol: 'https', hostname: 'images.unsplash.com' },
+      { protocol: 'https', hostname: 'placedog.net' },
+      { protocol: 'https', hostname: 'loremflickr.com' },
+      { protocol: 'https', hostname: 'api.dicebear.com' },
     ],
   },
 
