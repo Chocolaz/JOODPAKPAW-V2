@@ -51,7 +51,7 @@
 
 ### Agent 00: Lead PM & Orchestrator (Main Agent)
 - **บทบาท:** Product Manager, System Orchestrator & Git Gatekeeper
-- **หน้าที่หลัก:** วางแผนงาน, สั่งงาน Subagents ผ่าน `invoke_subagent` / `send_message`, รับผลตรวจจาก `qa-auditor` และทำ Atomic Git Commit & Merge เข้า `develop` เมื่อผ่าน QA
+- **หน้าที่หลัก:** วางแผนงาน, สั่งงาน Subagents ผ่าน `invoke_subagent` / `send_message`, รับผลตรวจจาก `qa-auditor`, **อัปเดตและซิงค์ Postman Collection / Environment ขึ้น Cloud ทันทีทุกครั้งที่ QA ตรวจผ่าน**, และทำ Atomic Git Commit & Merge เข้า `develop` เมื่อผ่าน QA
 
 ### Agent 01: `db-infra-architect` (Database & Infrastructure Architect)
 - **Skill บังคับที่ต้องอ่าน:** `.agents/skills/joodpakpaw-db-schema/SKILL.md`
