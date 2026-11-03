@@ -613,18 +613,319 @@
       ]
     },
     {
-      "name": "02 - Properties & Calendars (Sprint 1)",
-      "description": "Browse properties, view room categories and daily availability calendars (PBI-06)",
+      "name": "02 - Master Lookups (PBI-06 - PASS)",
+      "description": "Facilities, Pet Types, Pet Breeds, Pet Size Categories, and Report Categories (24/24 QA Tests Passed)",
       "item": [
         {
-          "name": "List / Search Properties",
+          "name": "Get All Host Facilities",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Returns facilities list\", function () {",
+                  "    pm.expect(json.facilities).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/properties?page=1&limit=10",
+              "raw": "{{baseUrl}}/api/v1/hosts/facilities/all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "hosts", "facilities", "all"]
+            },
+            "description": "List all property & room facilities grouped with their category."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Pet Types",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Returns normalized pet types\", function () {",
+                  "    pm.expect(json.pets).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pets/all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "pets", "all"]
+            },
+            "description": "List all pet types (`Dog`, `Cat`, etc.)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Pet Breeds by Pet Type ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Returns petBreeds array\", function () {",
+                  "    pm.expect(json.petBreeds).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pets/1/pet-breeds/all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "pets", "1", "pet-breeds", "all"]
+            },
+            "description": "List pet breeds for a specific petTypeId."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Pet Size Categories",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Returns petSizeCategories array\", function () {",
+                  "    pm.expect(json.petSizeCategories).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pet-size-categories/all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "pet-size-categories", "all"]
+            },
+            "description": "List pet weight size categories (Small, Medium, Large, Giant)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Report Categories",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Returns reportCategories array\", function () {",
+                  "    pm.expect(json.reportCategories).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/report-categories?type=property",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "report-categories"],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "property"
+                }
+              ]
+            },
+            "description": "List report categories filtered by `type=property|review|unban`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 - Public Property Discovery (PBI-06 - PASS)",
+      "description": "Search properties, view property details, host public profile, host reviews, and search room availability across date ranges",
+      "item": [
+        {
+          "name": "Search & Filter Properties",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Returns paginated properties\", function () {",
+                  "    pm.expect(json.data).to.be.an(\"array\");",
+                  "});",
+                  "if (json.data && json.data.length > 0 && json.data[0].id) {",
+                  "    pm.environment.set(\"sample_property_id\", String(json.data[0].id));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/properties?page=1&limit=10&sortBy=rating",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "properties"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "rating"
+                }
+              ]
+            },
+            "description": "Public property search supporting `page`, `limit`, `minRating`, `sortBy`, `days`, `search`, `petTypes`, `maxPrice`, `province`."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Property Details by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Returns property object\", function () {",
+                  "    pm.expect(json.property).to.be.an(\"object\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/properties/{{sample_property_id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "properties", "{{sample_property_id}}"]
+            },
+            "description": "Get complete property details, room categories, facilities, host info, and reviews."
+          },
+          "response": []
+        },
+        {
+          "name": "Search Property Room Categories by Date Range",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Returns roomCategories with availability\", function () {",
+                  "    pm.expect(json.roomCategories).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/properties/{{sample_property_id}}/room-categories/search?checkIn=2026-11-10&checkOut=2026-11-12",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "properties", "{{sample_property_id}}", "room-categories", "search"],
+              "query": [
+                {
+                  "key": "checkIn",
+                  "value": "2026-11-10"
+                },
+                {
+                  "key": "checkOut",
+                  "value": "2026-11-12"
+                }
+              ]
+            },
+            "description": "Calculate real-time `availableRooms = totalRoom - bookedRooms - unavailableRooms` and `priceAdjustment` across `[checkIn, checkOut)`."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Host Public Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/properties/hosts/2/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "properties", "hosts", "2", "profile"]
+            },
+            "description": "Get public host profile, rating stats, and active properties."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Host Public Reviews",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/properties/hosts/2/reviews?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "properties", "hosts", "2", "reviews"],
               "query": [
                 {
                   "key": "page",
@@ -636,55 +937,7 @@
                 }
               ]
             },
-            "description": "Public property search with pagination, filters, and pet compatibility."
-          },
-          "response": []
-        },
-        {
-          "name": "Get Property Details",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/properties/{{sample_property_id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "properties", "{{sample_property_id}}"]
-            },
-            "description": "Get complete property details, room categories, facilities, and host info."
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "03 - Master Lookups (Sprint 1)",
-      "description": "Pet types, breeds, size categories, and facilities (PBI-06)",
-      "item": [
-        {
-          "name": "List All Pet Types",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/pets/all",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "pets", "all"]
-            },
-            "description": "List pet types (Dog, Cat)."
-          },
-          "response": []
-        },
-        {
-          "name": "List Pet Size Categories",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/pet-size-categories/all",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "pet-size-categories", "all"]
-            },
-            "description": "List pet weight size categories (Small, Medium, Large, Giant)."
+            "description": "Get paginated customer reviews across a host's properties."
           },
           "response": []
         }

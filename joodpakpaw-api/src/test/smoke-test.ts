@@ -88,6 +88,7 @@ interface MockUserRecord {
   isBannedAllProperties: boolean
   bannedAt: Date | null
   deletedAt: Date | null
+  createdAt: Date
   updatedAt: Date
   userRoles: Array<{ role: { id: number; name: string } }>
 }
@@ -103,6 +104,18 @@ function installPrismaAuthMock() {
     userUpdate: prisma.user.update,
     roleUpsert: prisma.role.upsert,
     reportFindMany: prisma.report.findMany,
+    facilityFindMany: prisma.facility.findMany,
+    petFindMany: prisma.pet.findMany,
+    petBreedFindMany: prisma.petBreed.findMany,
+    petSizeCategoryFindMany: prisma.petSizeCategory.findMany,
+    reportCategoryFindMany: prisma.reportCategory.findMany,
+    favoritePropertyFindMany: prisma.favoriteProperty.findMany,
+    propertyFindMany: prisma.property.findMany,
+    propertyFindUnique: prisma.property.findUnique,
+    bookingFindMany: prisma.booking.findMany,
+    bookingCount: prisma.booking.count,
+    chatRoomFindFirst: prisma.chatRoom.findFirst,
+    roomCategoryFindMany: prisma.roomCategory.findMany,
   }
 
   ;(prisma.role as any).upsert = async (args: any) => {
@@ -166,6 +179,7 @@ function installPrismaAuthMock() {
       isBannedAllProperties: false,
       bannedAt: null,
       deletedAt: null,
+      createdAt: new Date(),
       updatedAt: new Date(),
       userRoles: [{ role: { id: roleId, name: roleName } }],
     }
@@ -186,6 +200,159 @@ function installPrismaAuthMock() {
     return []
   }
 
+  // Mock data for PBI-06 Master Lookups & Public Property Discovery
+  const mockFacilities = [
+    { id: 1, name: 'Air Conditioning', categoryId: 1, deletedAt: null, category: { id: 1, name: 'Comfort' } },
+    { id: 2, name: 'CCTV 24/7', categoryId: 2, deletedAt: null, category: { id: 2, name: 'Safety' } },
+  ]
+  const mockPets = [
+    { id: 1, name: 'สุนัข (Dog)', deletedAt: null },
+    { id: 2, name: 'แมว (Cat)', deletedAt: null },
+  ]
+  const mockBreeds = [
+    { id: 10, breed: 'Golden Retriever', petId: 1, imageUrl: 'https://example.com/golden.webp', deletedAt: null, pet: mockPets[0] },
+    { id: 20, breed: 'Persian', petId: 2, imageUrl: 'https://example.com/persian.webp', deletedAt: null, pet: mockPets[1] },
+  ]
+  const mockPetSizes = [
+    { id: 1, name: 'Small (S)', code: 1, min: 0, max: 5, deletedAt: null },
+    { id: 2, name: 'Medium (M)', code: 2, min: 5, max: 15, deletedAt: null },
+  ]
+  const nowDate = new Date()
+  const mockReportCategories = [
+    { id: 1, name: 'fake_listing', label: 'Fake Listing', type: 'property', createdAt: nowDate, updatedAt: nowDate },
+    { id: 2, name: 'spam_review', label: 'Spam Review', type: 'review', createdAt: nowDate, updatedAt: nowDate },
+    { id: 3, name: 'fixed_violation', label: 'Fixed Violation', type: 'unban_property', createdAt: nowDate, updatedAt: nowDate },
+  ]
+
+  const makeMockProperty = (overrides: any) => {
+    const hostUser = users.get(overrides.hostId || 2) || {
+      id: 2,
+      firstName: 'Bob',
+      lastName: 'Builder',
+      avatar: null,
+      isVerifiedHost: true,
+      isBannedAllProperties: false,
+      bannedAt: null,
+      deletedAt: null,
+    }
+    return {
+      id: 101,
+      title: 'Pawradise Luxury Cat & Dog Hotel',
+      description: 'Spacious rooms with 24/7 care',
+      address: '123 Sukhumvit',
+      province: 'Bangkok',
+      district: 'Watthana',
+      subdistrict: 'Khlong Tan Nuea',
+      country: 'Thailand',
+      latitude: 13.7367,
+      longitude: 100.5602,
+      zipcode: '10110',
+      isActive: true,
+      isBannedByAdmin: false,
+      isBannedBeforeAccountBan: false,
+      hostId: hostUser.id,
+      propertyTypeId: 1,
+      propertyType: { id: 1, name: 'Pet Hotel' },
+      deletedAt: null,
+      createdAt: nowDate,
+      publishedAt: nowDate,
+      updatedAt: nowDate,
+      images: [
+        { id: 1, fileName: 'front.webp', filePath: 'http://localhost:9000/joodpakpaw-media/properties/front.webp', fileContentType: 'image/webp', fileExtensionName: 'webp', fileSize: 10240 },
+      ],
+      facilities: [{ facility: mockFacilities[0] }, { facility: mockFacilities[1] }],
+      roomCategories: [
+        {
+          id: 501,
+          name: 'VIP Suite',
+          totalRoom: 3,
+          numberOfPets: 2,
+          basePrice: 800,
+          roomSizeWidth: 2.5,
+          roomSizeLength: 3.0,
+          roomSizeHeight: 2.2,
+          propertyId: 101,
+          petSizeCategoryId: 2,
+          petSizeCategory: mockPetSizes[1],
+          pets: [{ pet: mockPets[0] }, { pet: mockPets[1] }],
+          facilities: [{ facility: mockFacilities[0] }],
+          images: [],
+          calendars: [
+            {
+              date: new Date('2026-12-01T00:00:00.000Z'),
+              bookedRooms: 1,
+              unavailableRooms: 1,
+              priceAdjustment: 150,
+              deletedAt: null,
+            },
+          ],
+        },
+      ],
+      host: hostUser,
+      bookings: [
+        {
+          id: 9001,
+          rating: 5,
+          comment: 'Amazing stay for my dog!',
+          reviewedAt: nowDate,
+          updatedAt: nowDate,
+          createdAt: nowDate,
+          property: { id: 101, title: 'Pawradise Luxury Cat & Dog Hotel' },
+          guest: { id: 1, firstName: 'Alicia', lastName: 'Wonderland', avatar: '' },
+          reviewImages: [],
+        },
+      ],
+      ...overrides,
+    }
+  }
+
+  ;(prisma.facility as any).findMany = async () => mockFacilities
+  ;(prisma.pet as any).findMany = async () => mockPets
+  ;(prisma.petBreed as any).findMany = async (args: any) =>
+    mockBreeds.filter((b) => b.petId === args?.where?.petId)
+  ;(prisma.petSizeCategory as any).findMany = async () => mockPetSizes
+  ;(prisma.reportCategory as any).findMany = async (args: any) => {
+    const t = args?.where?.type
+    if (!t) return mockReportCategories
+    if (typeof t === 'string') return mockReportCategories.filter((c) => c.type === t)
+    if (Array.isArray(t.in)) return mockReportCategories.filter((c) => t.in.includes(c.type))
+    return mockReportCategories
+  }
+
+  ;(prisma.favoriteProperty as any).findMany = async (args: any) => {
+    const uid = args?.where?.folder?.userId
+    if (uid === 1) {
+      return [{ propertyId: 101, folderId: 77 }]
+    }
+    return []
+  }
+
+  ;(prisma.property as any).findMany = async () => {
+    // Only return active, non-banned property 101 (simulating Prisma WHERE filter on isActive: true, isBannedByAdmin: false)
+    return [makeMockProperty({ id: 101, isActive: true, isBannedByAdmin: false })]
+  }
+
+  ;(prisma.property as any).findUnique = async (args: any) => {
+    const id = args?.where?.id
+    if (id === 101) return makeMockProperty({ id: 101, isActive: true, isBannedByAdmin: false })
+    if (id === 102) return makeMockProperty({ id: 102, isActive: false, isBannedByAdmin: false })
+    if (id === 103) return makeMockProperty({ id: 103, isActive: true, isBannedByAdmin: true })
+    return null
+  }
+
+  ;(prisma.booking as any).findMany = async () => {
+    return makeMockProperty({ id: 101 }).bookings
+  }
+  ;(prisma.booking as any).count = async () => 1
+  ;(prisma.chatRoom as any).findFirst = async () => ({ id: 42 })
+  ;(prisma.roomCategory as any).findMany = async (args: any) => {
+    const propId = args?.where?.propertyId
+    if (propId === 101) {
+      return makeMockProperty({ id: 101 }).roomCategories
+    }
+    return []
+  }
+
   return {
     users,
     restore() {
@@ -195,6 +362,18 @@ function installPrismaAuthMock() {
       prisma.user.update = originals.userUpdate
       prisma.role.upsert = originals.roleUpsert
       prisma.report.findMany = originals.reportFindMany
+      prisma.facility.findMany = originals.facilityFindMany
+      prisma.pet.findMany = originals.petFindMany
+      prisma.petBreed.findMany = originals.petBreedFindMany
+      prisma.petSizeCategory.findMany = originals.petSizeCategoryFindMany
+      prisma.reportCategory.findMany = originals.reportCategoryFindMany
+      prisma.favoriteProperty.findMany = originals.favoritePropertyFindMany
+      prisma.property.findMany = originals.propertyFindMany
+      prisma.property.findUnique = originals.propertyFindUnique
+      prisma.booking.findMany = originals.bookingFindMany
+      prisma.booking.count = originals.bookingCount
+      prisma.chatRoom.findFirst = originals.chatRoomFindFirst
+      prisma.roomCategory.findMany = originals.roomCategoryFindMany
     },
   }
 }
@@ -734,6 +913,146 @@ async function main() {
         badPhoneRes.body.errors.some((e: any) => e.field === 'phone' && e.tag === 'phone')
       if (!hasPhoneTag) {
         throw new Error(`Expected field: 'phone', tag: 'phone' in errors array`)
+      }
+    })
+
+    // =========================================================================
+    // PBI-06 QA Audit Tests: Master Lookups & Public Property Discovery API
+    // =========================================================================
+
+    // Test 20: Master Lookup Endpoints (facilities, pets, pet-breeds, pet-size-categories, report-categories)
+    await runTest('Master Lookup endpoints return exact frontend DTO envelopes (facilities, pets, petBreeds, petSizeCategories, reportCategories)', async () => {
+      const facRes = await makeRequest(pipePath, '/api/v1/hosts/facilities/all', 'GET')
+      if (facRes.statusCode !== 200 || !Array.isArray(facRes.body?.facilities) || facRes.body.facilities.length !== 2) {
+        throw new Error(`Expected facilities array of length 2, got ${JSON.stringify(facRes.body)}`)
+      }
+      if (!facRes.body.facilities[0].category?.name) {
+        throw new Error('Expected facility.category.name to be present')
+      }
+
+      const petsRes = await makeRequest(pipePath, '/api/v1/pets/all', 'GET')
+      if (petsRes.statusCode !== 200 || !Array.isArray(petsRes.body?.pets) || petsRes.body.pets[0]?.name !== 'Dog') {
+        throw new Error(`Expected normalized pet name 'Dog', got ${JSON.stringify(petsRes.body?.pets)}`)
+      }
+
+      const breedsRes = await makeRequest(pipePath, '/api/v1/pets/1/pet-breeds/all', 'GET')
+      if (breedsRes.statusCode !== 200 || !Array.isArray(breedsRes.body?.petBreeds) || breedsRes.body.petBreeds[0]?.breed !== 'Golden Retriever') {
+        throw new Error(`Expected petBreeds for petTypeId=1, got ${JSON.stringify(breedsRes.body)}`)
+      }
+
+      const sizesRes = await makeRequest(pipePath, '/api/v1/pet-size-categories/all', 'GET')
+      if (sizesRes.statusCode !== 200 || !Array.isArray(sizesRes.body?.petSizeCategories) || typeof sizesRes.body.petSizeCategories[0]?.min !== 'number') {
+        throw new Error(`Expected petSizeCategories with min/max numbers, got ${JSON.stringify(sizesRes.body)}`)
+      }
+
+      const repCatRes = await makeRequest(pipePath, '/api/v1/report-categories?type=unban', 'GET')
+      if (repCatRes.statusCode !== 200 || !Array.isArray(repCatRes.body?.reportCategories) || repCatRes.body.reportCategories.length !== 1) {
+        throw new Error(`Expected 1 unban reportCategory, got ${JSON.stringify(repCatRes.body)}`)
+      }
+    })
+
+    // Test 21: GET /api/v1/properties (guest vs authenticated isFavorite, filters, pagination)
+    await runTest('GET /api/v1/properties returns paginated PropertiesResponse and hydrates isFavorite for authenticated user', async () => {
+      const guestList = await makeRequest(pipePath, '/api/v1/properties?page=1&limit=12&sortBy=rating', 'GET')
+      if (guestList.statusCode !== 200 || !Array.isArray(guestList.body?.data) || guestList.body.totalRows !== 1) {
+        throw new Error(`Expected PropertiesResponse with 1 active property, got ${JSON.stringify(guestList.body)}`)
+      }
+      if (guestList.body.data[0].isFavorite !== false) {
+        throw new Error('Expected isFavorite=false for unauthenticated guest')
+      }
+
+      const authList = await makeRequest(
+        pipePath,
+        '/api/v1/properties?page=1&limit=12&petTypes=Dog&maxPrice=1000',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (authList.statusCode !== 200 || authList.body?.data?.[0]?.isFavorite !== true) {
+        throw new Error(`Expected isFavorite=true for authenticated User A, got ${JSON.stringify(authList.body?.data?.[0])}`)
+      }
+    })
+
+    // Test 22: GET /api/v1/properties/:propertyId (active property detail & 404 guard on inactive/banned property)
+    await runTest('GET /api/v1/properties/:propertyId returns { property } and blocks inactive (102) or admin-banned (103) properties for guests', async () => {
+      const detailRes = await makeRequest(
+        pipePath,
+        '/api/v1/properties/101',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (detailRes.statusCode !== 200 || detailRes.body?.property?.id !== 101) {
+        throw new Error(`Expected 200 with property.id=101, got ${detailRes.statusCode}`)
+      }
+      if (!Array.isArray(detailRes.body.property.reviews) || detailRes.body.property.chatRoomId !== 42) {
+        throw new Error(`Expected reviews array and chatRoomId=42 on property detail`)
+      }
+
+      // Inactive property 102 -> 404 DB-1002 for non-owner
+      const inactiveRes = await makeRequest(pipePath, '/api/v1/properties/102', 'GET')
+      if (inactiveRes.statusCode !== 404 || inactiveRes.body?.code !== 'DB-1002') {
+        throw new Error(`Expected 404 DB-1002 for inactive property 102, got ${inactiveRes.statusCode}`)
+      }
+
+      // Admin-banned property 103 -> 404 DB-1002 for non-owner
+      const bannedPropRes = await makeRequest(pipePath, '/api/v1/properties/103', 'GET')
+      if (bannedPropRes.statusCode !== 404 || bannedPropRes.body?.code !== 'DB-1002') {
+        throw new Error(`Expected 404 DB-1002 for admin-banned property 103, got ${bannedPropRes.statusCode}`)
+      }
+    })
+
+    // Test 23: GET /api/v1/properties/hosts/:hostId/profile & /reviews (route ordering before /:propertyId)
+    await runTest('GET /api/v1/properties/hosts/:hostId/profile and /reviews match before /:propertyId and return HostProfileResponse & HostReviewsResponse', async () => {
+      const hostProfRes = await makeRequest(
+        pipePath,
+        `/api/v1/properties/hosts/${userBId}/profile`,
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (hostProfRes.statusCode !== 200 || hostProfRes.body?.host?.id !== userBId) {
+        throw new Error(`Expected 200 with host.id=${userBId}, got ${hostProfRes.statusCode}: ${JSON.stringify(hostProfRes.body)}`)
+      }
+      if (!Array.isArray(hostProfRes.body.host.properties) || typeof hostProfRes.body.host.avgRating !== 'number') {
+        throw new Error('Expected host.properties array and host.avgRating number')
+      }
+
+      const hostRevRes = await makeRequest(
+        pipePath,
+        `/api/v1/properties/hosts/${userBId}/reviews?page=1&limit=10`,
+        'GET'
+      )
+      if (hostRevRes.statusCode !== 200 || !Array.isArray(hostRevRes.body?.data) || hostRevRes.body.totalRows !== 1) {
+        throw new Error(`Expected HostReviewsResponse with 1 review, got ${JSON.stringify(hostRevRes.body)}`)
+      }
+      if (!hostRevRes.body.data[0]?.guestProfile?.firstName || !hostRevRes.body.data[0]?.propertyName) {
+        throw new Error('Expected guestProfile and propertyName in HostReview item')
+      }
+    })
+
+    // Test 24: GET /api/v1/properties/:propertyId/room-categories/search (calendar availability & priceAdjustment calculation)
+    await runTest('GET /api/v1/properties/:propertyId/room-categories/search computes availableRooms and priceAdjustment across date range', async () => {
+      const searchRes = await makeRequest(
+        pipePath,
+        '/api/v1/properties/101/room-categories/search?checkInDate=2026-12-01&checkOutDate=2026-12-03&numberOfPets=2',
+        'GET'
+      )
+      if (searchRes.statusCode !== 200 || !Array.isArray(searchRes.body?.roomCategories)) {
+        throw new Error(`Expected 200 with roomCategories array, got ${searchRes.statusCode}`)
+      }
+      const rc = searchRes.body.roomCategories[0]
+      // On 2026-12-01: totalRoom(3) - booked(1) - unavailable(1) = 1 availableRoom, finalPrice = 800 + 150 = 950
+      // On 2026-12-02: totalRoom(3) - 0 - 0 = 3 availableRooms, finalPrice = 800
+      // Across range: minAvailableRooms = 1, roomsNeeded = ceil(2/2) = 1, totalPrice = (950 + 800) * 1 = 1750
+      if (
+        !rc ||
+        rc.availability?.availableRooms !== 1 ||
+        rc.availability?.roomsNeeded !== 1 ||
+        rc.availability?.totalPrice !== 1750 ||
+        rc.isAvailable !== true
+      ) {
+        throw new Error(`Unexpected availability calculation: ${JSON.stringify(rc?.availability)}`)
       }
     })
   } finally {
