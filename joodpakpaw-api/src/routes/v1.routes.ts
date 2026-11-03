@@ -1,4 +1,6 @@
 import { Router, Request, Response } from 'express';
+import { authRouter } from './auth.routes';
+import { userRouter } from './user.routes';
 
 export const v1Router = Router();
 
@@ -19,3 +21,6 @@ v1Router.get('/', (_req: Request, res: Response) => {
     },
   });
 });
+
+v1Router.use('/auth', authRouter);
+v1Router.use('/users', userRouter);
