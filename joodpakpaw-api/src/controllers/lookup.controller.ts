@@ -39,14 +39,25 @@ export async function getAllFacilities(
       orderBy: [{ categoryId: 'asc' }, { id: 'asc' }],
     });
 
-    const facilities = dbFacilities.map((f) => ({
-      id: f.id,
-      name: f.name,
-      category: {
-        id: f.category.id,
-        name: f.category.name,
-      },
-    }));
+    const hasExplicitIndoor = dbFacilities.some(
+      (f) => f.category.name.toLowerCase() === 'indoor'
+    );
+
+    const facilities = dbFacilities.map((f) => {
+      const catName =
+        !hasExplicitIndoor &&
+        f.category.name.toLowerCase().includes('comfort')
+          ? 'indoor'
+          : f.category.name;
+      return {
+        id: f.id,
+        name: f.name,
+        category: {
+          id: f.category.id,
+          name: catName,
+        },
+      };
+    });
 
     res.status(200).json({
       code: 'S-0000',

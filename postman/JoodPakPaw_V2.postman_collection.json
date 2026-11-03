@@ -942,6 +942,341 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "04 - Host Property & Room Category CRUD (PBI-07 - PASS)",
+      "description": "Host management for properties and room categories with multi-image WebP upload, IDOR protection (403 A-3007), active booking deletion guard (409 B-4001), and admin-ban guard (403 A-3002) (29/29 QA Tests Passed)",
+      "item": [
+        {
+          "name": "Get All Host Properties",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Returns properties array\", function () {",
+                  "    pm.expect(json.properties).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/hosts/properties/all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "hosts", "properties", "all"]
+            },
+            "description": "Get all properties owned by the authenticated Host."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Host Property by ID",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/hosts/properties/{{sample_property_id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "hosts", "properties", "{{sample_property_id}}"]
+            },
+            "description": "Get detailed host view of a specific property (requires ownership)."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Host Property (Multipart WebP)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.id) {",
+                  "    pm.environment.set(\"created_property_id\", String(json.data.id));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "title", "value": "JoodPakPaw Luxury Pet Villa", "type": "text" },
+                { "key": "description", "value": "วิลล่าส่วนตัวต้อนรับน้องหมาและน้องแมว พร้อมสนามหญ้าส่วนตัว", "type": "text" },
+                { "key": "propertyTypeId", "value": "1", "type": "text" },
+                { "key": "latitude", "value": "13.7563", "type": "text" },
+                { "key": "longitude", "value": "100.5018", "type": "text" },
+                { "key": "country", "value": "Thailand", "type": "text" },
+                { "key": "province", "value": "กรุงเทพมหานคร", "type": "text" },
+                { "key": "district", "value": "วัฒนา", "type": "text" },
+                { "key": "address", "value": "99 สุขุมวิท 55", "type": "text" },
+                { "key": "zipcode", "value": "10110", "type": "text" },
+                { "key": "facilities", "value": "[1, 2]", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/hosts/properties",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "hosts", "properties"]
+            },
+            "description": "Create a new property with facilities and optional `.webp` images."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Host Property",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "title", "value": "JoodPakPaw Luxury Pet Villa (Updated)", "type": "text" },
+                { "key": "description", "value": "อัปเดตรายละเอียดวิลล่าต้อนรับสัตว์เลี้ยง", "type": "text" },
+                { "key": "facilities", "value": "[1, 2, 3]", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/hosts/properties/{{sample_property_id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "hosts", "properties", "{{sample_property_id}}"]
+            },
+            "description": "Update property details, facilities, deleted image IDs, and new images."
+          },
+          "response": []
+        },
+        {
+          "name": "Toggle Property Active Status",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/hosts/properties/{{sample_property_id}}/is-active",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "hosts", "properties", "{{sample_property_id}}", "is-active"]
+            },
+            "description": "Toggle property visibility (`isActive`). Blocks enabling with 403 A-3002 if banned by admin."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Room Categories for Host Property",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/hosts/properties/{{sample_property_id}}/room-categories/all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "hosts", "properties", "{{sample_property_id}}", "room-categories", "all"]
+            },
+            "description": "List all room categories belonging to a host's property."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Room Category",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "Deluxe Pet Suite", "type": "text" },
+                { "key": "totalRoom", "value": "3", "type": "text" },
+                { "key": "numberOfPets", "value": "2", "type": "text" },
+                { "key": "basePrice", "value": "1800", "type": "text" },
+                { "key": "petSizeCategoryId", "value": "2", "type": "text" },
+                { "key": "pets", "value": "[1, 2]", "type": "text" },
+                { "key": "facilities", "value": "[1, 2]", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/hosts/properties/{{sample_property_id}}/room-categories",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "hosts", "properties", "{{sample_property_id}}", "room-categories"]
+            },
+            "description": "Create a new room category under a property."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Room Category",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "Deluxe Pet Suite (Updated)", "type": "text" },
+                { "key": "totalRoom", "value": "4", "type": "text" },
+                { "key": "numberOfPets", "value": "2", "type": "text" },
+                { "key": "basePrice", "value": "1950", "type": "text" },
+                { "key": "petSizeCategoryId", "value": "2", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/hosts/properties/{{sample_property_id}}/room-categories/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "hosts", "properties", "{{sample_property_id}}", "room-categories", "1"]
+            },
+            "description": "Update room category fields, allowed pet types, facilities, and images."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Room Category (With Active Booking Guard)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/hosts/properties/{{sample_property_id}}/room-categories/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "hosts", "properties", "{{sample_property_id}}", "room-categories", "1"]
+            },
+            "description": "Soft-delete a room category. Blocks with 409 B-4001 if active/upcoming bookings exist."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Host Property (With Active Booking Guard)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/hosts/properties/{{sample_property_id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "hosts", "properties", "{{sample_property_id}}"]
+            },
+            "description": "Soft-delete a property. Blocks with 409 B-4001 if active/upcoming bookings exist."
+          },
+          "response": []
+        }
+      ]
     }
   ]
 }

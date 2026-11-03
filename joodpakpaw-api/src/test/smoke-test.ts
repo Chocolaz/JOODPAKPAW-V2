@@ -191,8 +191,15 @@ function installPrismaAuthMock() {
     const id = args?.where?.id
     const record = users.get(id)
     if (!record) throw new Error(`Mock user ${id} not found`)
-    const data = args?.data || {}
-    Object.assign(record, data)
+    const { userRoles, ...restData } = args?.data || {}
+    Object.assign(record, restData)
+    if (userRoles?.connectOrCreate) {
+      const roleId = userRoles.connectOrCreate.create?.roleId || 2
+      const roleName = roleId === 3 ? 'admin' : roleId === 2 ? 'host' : 'guest'
+      if (!record.userRoles.some((ur) => ur.role.id === roleId)) {
+        record.userRoles.push({ role: { id: roleId, name: roleName } })
+      }
+    }
     return { ...record }
   }
 
@@ -327,34 +334,178 @@ function installPrismaAuthMock() {
     return []
   }
 
-  ;(prisma.property as any).findMany = async () => {
-    // Only return active, non-banned property 101 (simulating Prisma WHERE filter on isActive: true, isBannedByAdmin: false)
-    return [makeMockProperty({ id: 101, isActive: true, isBannedByAdmin: false })]
+  const propertiesMap = new Map<number, any>()
+  const roomsMap = new Map<number, any>()
+  let nextPropId = 104
+  let nextRoomId = 502
+  let mockActiveBookingCount = 0
+  let mockActiveOrderCount = 0
+
+  const initDefaultMockProperties = () => {
+    const p101 = makeMockProperty({ id: 101, isActive: true, isBannedByAdmin: false, hostId: 2, reports: [] })
+    const p102 = makeMockProperty({ id: 102, isActive: false, isBannedByAdmin: false, hostId: 2, reports: [] })
+    const p103 = makeMockProperty({ id: 103, isActive: false, isBannedByAdmin: true, hostId: 2, reports: [] })
+    propertiesMap.set(101, p101)
+    propertiesMap.set(102, p102)
+    propertiesMap.set(103, p103)
+    roomsMap.set(501, p101.roomCategories[0])
+  }
+  initDefaultMockProperties()
+
+  ;(prisma.propertyType as any).findUnique = async () => ({ id: 1, name: 'Pet Hotel' })
+  ;(prisma.propertyType as any).findFirst = async () => ({ id: 1, name: 'Pet Hotel' })
+  ;(prisma.petSizeCategory as any).findUnique = async (args: any) =>
+    mockPetSizes.find((s) => s.id === args?.where?.id) || mockPetSizes[0]
+  ;(prisma.petSizeCategory as any).findFirst = async () => mockPetSizes[0]
+
+  ;(prisma.property as any).findMany = async (args: any) => {
+    const hostId = args?.where?.hostId
+    if (typeof hostId === 'number') {
+      return Array.from(propertiesMap.values()).filter(
+        (p) => p.hostId === hostId && p.deletedAt === null
+      )
+    }
+    // Public discovery: only return active, non-banned property 101
+    return [propertiesMap.get(101)!]
   }
 
   ;(prisma.property as any).findUnique = async (args: any) => {
     const id = args?.where?.id
-    if (id === 101) return makeMockProperty({ id: 101, isActive: true, isBannedByAdmin: false })
-    if (id === 102) return makeMockProperty({ id: 102, isActive: false, isBannedByAdmin: false })
-    if (id === 103) return makeMockProperty({ id: 103, isActive: true, isBannedByAdmin: true })
+    if (typeof id === 'number' && propertiesMap.has(id)) {
+      const p = propertiesMap.get(id)!
+      const hostUser = users.get(p.hostId) || p.host
+      return { ...p, host: hostUser }
+    }
     return null
   }
+
+  ;(prisma.property as any).create = async (args: any) => {
+    const data = args?.data || {}
+    const id = nextPropId++
+    const createdProp = makeMockProperty({
+      id,
+      title: data.title,
+      description: data.description || '',
+      address: data.address || '',
+      province: data.province || 'Bangkok',
+      district: data.district || '',
+      subdistrict: data.subdistrict || '',
+      country: data.country || 'Thailand',
+      latitude: data.latitude ?? 13.7563,
+      longitude: data.longitude ?? 100.5018,
+      zipcode: data.zipcode || '',
+      isActive: Boolean(data.isActive),
+      isBannedByAdmin: false,
+      hostId: data.hostId,
+      roomCategories: [],
+      bookings: [],
+      reports: [],
+    })
+    propertiesMap.set(id, createdProp)
+    return createdProp
+  }
+
+  ;(prisma.property as any).update = async (args: any) => {
+    const id = args?.where?.id
+    const prop = propertiesMap.get(id)
+    if (!prop) throw new Error(`Mock property ${id} not found`)
+    Object.assign(prop, args?.data || {})
+    return prop
+  }
+
+  ;(prisma.propertyFacility as any).deleteMany = async () => ({ count: 0 })
+  ;(prisma.propertyFacility as any).createMany = async () => ({ count: 1 })
+  ;(prisma.propertyImage as any).updateMany = async () => ({ count: 0 })
+  ;(prisma.propertyImage as any).createMany = async () => ({ count: 1 })
 
   ;(prisma.booking as any).findMany = async () => {
     return makeMockProperty({ id: 101 }).bookings
   }
-  ;(prisma.booking as any).count = async () => 1
+  ;(prisma.booking as any).count = async (args: any) => {
+    if (args?.where?.propertyId !== undefined) {
+      return mockActiveBookingCount
+    }
+    return 1
+  }
+  ;(prisma.bookingOrder as any).count = async () => mockActiveOrderCount
   ;(prisma.chatRoom as any).findFirst = async () => ({ id: 42 })
+
   ;(prisma.roomCategory as any).findMany = async (args: any) => {
     const propId = args?.where?.propertyId
-    if (propId === 101) {
-      return makeMockProperty({ id: 101 }).roomCategories
+    return Array.from(roomsMap.values()).filter(
+      (r) => r.propertyId === propId && !r.deletedAt
+    )
+  }
+  ;(prisma.roomCategory as any).findFirst = async (args: any) => {
+    const id = args?.where?.id
+    const propId = args?.where?.propertyId
+    const r = roomsMap.get(id)
+    if (r && (!propId || r.propertyId === propId) && !r.deletedAt) return r
+    return null
+  }
+  ;(prisma.roomCategory as any).findUnique = async (args: any) => {
+    const id = args?.where?.id
+    return roomsMap.get(id) || null
+  }
+  ;(prisma.roomCategory as any).create = async (args: any) => {
+    const data = args?.data || {}
+    const id = nextRoomId++
+    const room = {
+      id,
+      name: data.name,
+      totalRoom: data.totalRoom,
+      numberOfPets: data.numberOfPets,
+      basePrice: data.basePrice,
+      roomSizeWidth: data.roomSizeWidth ?? null,
+      roomSizeLength: data.roomSizeLength ?? null,
+      roomSizeHeight: data.roomSizeHeight ?? null,
+      propertyId: data.propertyId,
+      petSizeCategoryId: data.petSizeCategoryId ?? 1,
+      petSizeCategory: mockPetSizes[0],
+      pets: [{ pet: mockPets[0] }],
+      facilities: [{ facility: mockFacilities[0] }],
+      images: [],
+      calendars: [],
+      deletedAt: null,
     }
-    return []
+    roomsMap.set(id, room)
+    const prop = propertiesMap.get(data.propertyId)
+    if (prop) {
+      prop.roomCategories.push(room)
+    }
+    return room
+  }
+  ;(prisma.roomCategory as any).update = async (args: any) => {
+    const id = args?.where?.id
+    const r = roomsMap.get(id)
+    if (!r) throw new Error(`Mock roomCategory ${id} not found`)
+    Object.assign(r, args?.data || {})
+    return r
+  }
+  ;(prisma.roomCategory as any).updateMany = async () => ({ count: 1 })
+  ;(prisma.roomCategoryPet as any).deleteMany = async () => ({ count: 0 })
+  ;(prisma.roomCategoryPet as any).createMany = async () => ({ count: 1 })
+  ;(prisma.roomCategoryFacility as any).deleteMany = async () => ({ count: 0 })
+  ;(prisma.roomCategoryFacility as any).createMany = async () => ({ count: 1 })
+  ;(prisma.roomCategoryImage as any).updateMany = async () => ({ count: 0 })
+  ;(prisma.roomCategoryImage as any).createMany = async () => ({ count: 1 })
+  ;(prisma as any).$transaction = async (ops: any) => {
+    if (Array.isArray(ops)) {
+      return Promise.all(ops)
+    }
+    return ops(prisma)
   }
 
   return {
     users,
+    propertiesMap,
+    roomsMap,
+    setActiveBookingCount(n: number) {
+      mockActiveBookingCount = n
+    },
+    setActiveOrderCount(n: number) {
+      mockActiveOrderCount = n
+    },
     restore() {
       prisma.user.findFirst = originals.userFindFirst
       prisma.user.findUnique = originals.userFindUnique
@@ -1053,6 +1204,247 @@ async function main() {
         rc.isAvailable !== true
       ) {
         throw new Error(`Unexpected availability calculation: ${JSON.stringify(rc?.availability)}`)
+      }
+    })
+
+    // =========================================================================
+    // PBI-07 QA Audit Tests: Host Property & Room Category CRUD API
+    // =========================================================================
+    let createdPropId = 0
+    let createdRoomId = 0
+
+    // Test 25: POST /api/v1/hosts/properties, GET /all, GET /:propertyId, PUT /:propertyId
+    await runTest('Host Property CRUD (POST /api/v1/hosts/properties, GET /all, GET /:propertyId, PUT /:propertyId) matches frontend contract', async () => {
+      const createRes = await makeRequest(
+        pipePath,
+        '/api/v1/hosts/properties',
+        'POST',
+        {
+          title: 'Alicia Cat Villa',
+          description: 'Cozy villa for cats',
+          propertyTypeId: 1,
+          latitude: '13.7563',
+          longitude: '100.5018',
+          country: 'Thailand',
+          province: 'Bangkok',
+          district: 'Pathum Wan',
+          address: '99 Rama 1 Rd',
+          zipcode: '10330',
+          facilities: JSON.stringify([1, 2]),
+        },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (createRes.statusCode !== 201 || typeof createRes.body?.data?.id !== 'number') {
+        throw new Error(`Expected 201 with data.id on createHostProperty, got ${createRes.statusCode}: ${JSON.stringify(createRes.body)}`)
+      }
+      createdPropId = createRes.body.data.id
+
+      const listRes = await makeRequest(
+        pipePath,
+        '/api/v1/hosts/properties/all',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (listRes.statusCode !== 200 || !Array.isArray(listRes.body?.properties) || listRes.body.properties.length === 0) {
+        throw new Error(`Expected HostPropertiesResponse with properties array, got ${JSON.stringify(listRes.body)}`)
+      }
+
+      const getRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/properties/${createdPropId}`,
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (getRes.statusCode !== 200 || getRes.body?.property?.id !== createdPropId) {
+        throw new Error(`Expected 200 with property.id=${createdPropId}, got ${getRes.statusCode}`)
+      }
+
+      const updateRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/properties/${createdPropId}`,
+        'PUT',
+        {
+          title: 'Alicia Luxury Cat Villa Updated',
+          facilities: JSON.stringify([1]),
+        },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (updateRes.statusCode !== 200 || updateRes.body?.property?.title !== 'Alicia Luxury Cat Villa Updated') {
+        throw new Error(`Expected 200 with updated title, got ${updateRes.statusCode}: ${JSON.stringify(updateRes.body)}`)
+      }
+    })
+
+    // Test 26: PATCH /api/v1/hosts/properties/:propertyId/is-active & Admin-Ban Guard (403 A-3002)
+    await runTest('PATCH /api/v1/hosts/properties/:propertyId/is-active toggles status and blocks activating admin-banned property (403 A-3002)', async () => {
+      const activateRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/properties/${createdPropId}/is-active`,
+        'PATCH',
+        { isActive: true },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (activateRes.statusCode !== 200 || activateRes.body?.isActive !== true) {
+        throw new Error(`Expected 200 with isActive=true, got ${activateRes.statusCode}`)
+      }
+
+      // Ban the property and verify activating is blocked with 403 A-3002
+      const propRecord = mockDb.propertiesMap.get(createdPropId)!
+      propRecord.isActive = false
+      propRecord.isBannedByAdmin = true
+
+      const bannedActivateRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/properties/${createdPropId}/is-active`,
+        'PATCH',
+        { isActive: true },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (bannedActivateRes.statusCode !== 403 || bannedActivateRes.body?.code !== 'A-3002') {
+        throw new Error(`Expected 403 A-3002 when activating banned property, got ${bannedActivateRes.statusCode} ${bannedActivateRes.body?.code}`)
+      }
+      propRecord.isBannedByAdmin = false
+    })
+
+    // Test 27: Room Category CRUD (POST, GET /all, PUT /:roomId)
+    await runTest('Host Room Category CRUD (POST, GET /all, PUT /:roomId) works and matches RoomCategoriesResponse contract', async () => {
+      const createRoomRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/properties/${createdPropId}/room-categories`,
+        'POST',
+        {
+          name: 'Deluxe Cat Condo',
+          totalRoom: 4,
+          numberOfPets: 2,
+          basePrice: 650,
+          pets: JSON.stringify([2]),
+          facilities: JSON.stringify([1]),
+          petSizeCategoryId: 1,
+        },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (createRoomRes.statusCode !== 201 || typeof createRoomRes.body?.id !== 'number') {
+        throw new Error(`Expected 201 on createHostRoomCategory, got ${createRoomRes.statusCode}: ${JSON.stringify(createRoomRes.body)}`)
+      }
+      createdRoomId = createRoomRes.body.id
+
+      const listRoomsRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/properties/${createdPropId}/room-categories/all`,
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (listRoomsRes.statusCode !== 200 || !Array.isArray(listRoomsRes.body?.roomCategories) || listRoomsRes.body.roomCategories.length !== 1) {
+        throw new Error(`Expected RoomCategoriesResponse with 1 room category, got ${JSON.stringify(listRoomsRes.body)}`)
+      }
+
+      const updateRoomRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/properties/${createdPropId}/room-categories/${createdRoomId}`,
+        'PUT',
+        {
+          name: 'Super Deluxe Cat Condo',
+          totalRoom: 5,
+          numberOfPets: 3,
+          basePrice: 750,
+          pets: JSON.stringify([2]),
+          facilities: JSON.stringify([1, 2]),
+          petSizeCategories: '1',
+          deleteImageIds: JSON.stringify([]),
+        },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (updateRoomRes.statusCode !== 200 || updateRoomRes.body?.roomCategory?.name !== 'Super Deluxe Cat Condo') {
+        throw new Error(`Expected 200 with updated roomCategory name, got ${updateRoomRes.statusCode}`)
+      }
+    })
+
+    // Test 28: Security & IDOR Protection on Host Property & Room Category routes (403 A-3007)
+    await runTest('IDOR Protection: User A cannot view, update, toggle, or delete User B property (101) or its room categories (403 A-3007)', async () => {
+      const idorGetProp = await makeRequest(
+        pipePath,
+        '/api/v1/hosts/properties/101',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (idorGetProp.statusCode !== 403 || idorGetProp.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on IDOR GET host property 101, got ${idorGetProp.statusCode}`)
+      }
+
+      const idorUpdateProp = await makeRequest(
+        pipePath,
+        '/api/v1/hosts/properties/101',
+        'PUT',
+        { title: 'Hacked Title' },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (idorUpdateProp.statusCode !== 403 || idorUpdateProp.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on IDOR PUT host property 101, got ${idorUpdateProp.statusCode}`)
+      }
+
+      const idorDeleteRoom = await makeRequest(
+        pipePath,
+        '/api/v1/hosts/properties/101/room-categories/501',
+        'DELETE',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (idorDeleteRoom.statusCode !== 403 || idorDeleteRoom.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on IDOR DELETE room category 501, got ${idorDeleteRoom.statusCode}`)
+      }
+    })
+
+    // Test 29: Active Booking Deletion Guard (409 B-4001) on Room Category & Property DELETE
+    await runTest('Active Booking Deletion Guard blocks DELETE room category and DELETE property with 409 B-4001 when active bookings exist', async () => {
+      mockDb.setActiveOrderCount(1)
+      const blockedRoomDel = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/properties/${createdPropId}/room-categories/${createdRoomId}`,
+        'DELETE',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (blockedRoomDel.statusCode !== 409 || blockedRoomDel.body?.code !== 'B-4001') {
+        throw new Error(`Expected 409 B-4001 when deleting room category with active booking, got ${blockedRoomDel.statusCode} ${blockedRoomDel.body?.code}`)
+      }
+
+      mockDb.setActiveOrderCount(0)
+      const okRoomDel = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/properties/${createdPropId}/room-categories/${createdRoomId}`,
+        'DELETE',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (okRoomDel.statusCode !== 200) {
+        throw new Error(`Expected 200 when deleting room category without active bookings, got ${okRoomDel.statusCode}`)
+      }
+
+      mockDb.setActiveBookingCount(2)
+      const blockedPropDel = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/properties/${createdPropId}`,
+        'DELETE',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (blockedPropDel.statusCode !== 409 || blockedPropDel.body?.code !== 'B-4001') {
+        throw new Error(`Expected 409 B-4001 when deleting property with active booking, got ${blockedPropDel.statusCode} ${blockedPropDel.body?.code}`)
+      }
+
+      mockDb.setActiveBookingCount(0)
+      const okPropDel = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/properties/${createdPropId}`,
+        'DELETE',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (okPropDel.statusCode !== 200) {
+        throw new Error(`Expected 200 when deleting property without active bookings, got ${okPropDel.statusCode}`)
       }
     })
   } finally {
