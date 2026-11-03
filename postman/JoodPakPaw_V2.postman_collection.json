@@ -1,0 +1,411 @@
+{
+  "info": {
+    "_postman_id": "7fca6682-eae7-4b19-94fa-0b405c0d2492",
+    "name": "JoodPakPaw V2 Core API",
+    "description": "Comprehensive Postman Collection for JoodPakPaw V2 API Server (Sprint 0 - Sprint 4).\nBase URL defaults to `{{baseUrl}}` (e.g., http://localhost:8000).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 - Health & Discovery",
+      "description": "Core system status and discovery endpoints (Sprint 0)",
+      "item": [
+        {
+          "name": "Root Service Info",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Service is running\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.name).to.eql(\"joodpakpaw-api\");",
+                  "    pm.expect(json.status).to.eql(\"running\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": ["{{baseUrl}}"],
+              "path": [""]
+            },
+            "description": "Check root service identification."
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check (System & Database)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Overall status is UP\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql(\"UP\");",
+                  "    pm.expect(json.subsystems).to.be.an(\"object\");",
+                  "    pm.expect(json.subsystems.database.status).to.be.oneOf([\"UP\", \"STANDBY\"]);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Probe system uptime and database connectivity (Supabase PostgreSQL)."
+          },
+          "response": []
+        },
+        {
+          "name": "API v1 Subsystems Discovery",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Returns available subsystems\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.version).to.eql(\"v1\");",
+                  "    pm.expect(json.subsystems).to.have.property(\"auth\");",
+                  "    pm.expect(json.subsystems).to.have.property(\"properties\");",
+                  "    pm.expect(json.subsystems).to.have.property(\"bookings\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1"]
+            },
+            "description": "List all active API v1 subsystem endpoints."
+          },
+          "response": []
+        },
+        {
+          "name": "404 Not Found Standard Format",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 404\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "pm.test(\"Standard error format\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql(\"error\");",
+                  "    pm.expect(json.code).to.eql(\"NOT_FOUND\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/_non_existent_endpoint_",
+              "host": ["{{baseUrl}}"],
+              "path": ["_non_existent_endpoint_"]
+            },
+            "description": "Verify 404 error handler adheres to JoodPakPaw standard API contract."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "01 - Auth & Users (Sprint 1)",
+      "description": "Authentication, Guest OTP Registration, Login, and Profile Management (PBI-04)",
+      "item": [
+        {
+          "name": "Send OTP for Registration",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"0891234567\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/otp/send",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "otp", "send"]
+            },
+            "description": "Request SMS OTP for registration (TC-001)."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify OTP & Complete Registration",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"0891234567\",\n  \"otp\": \"123456\",\n  \"email\": \"test.guest@example.com\",\n  \"password\": \"Password@123456\",\n  \"firstName\": \"สมหวัง\",\n  \"lastName\": \"ใจดี\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/otp/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "otp", "verify"]
+            },
+            "description": "Verify OTP and register new Guest account (TC-002, TC-003)."
+          },
+          "response": []
+        },
+        {
+          "name": "Login (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    var token = json.data ? json.data.accessToken || json.data.token : null;",
+                  "    if (token) {",
+                  "        pm.environment.set(\"jwt_token\", token);",
+                  "        console.log(\"Saved jwt_token:\", token);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Login as Admin with pre-seeded credentials. Automatically saves `jwt_token` to environment."
+          },
+          "response": []
+        },
+        {
+          "name": "Login (Host)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    var token = json.data ? json.data.accessToken || json.data.token : null;",
+                  "    if (token) {",
+                  "        pm.environment.set(\"jwt_token\", token);",
+                  "        console.log(\"Saved host jwt_token:\", token);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{host_email}}\",\n  \"password\": \"{{user_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Login as verified Host with demo seed account."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current User Profile (Me)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "me"]
+            },
+            "description": "Fetch authenticated user details, roles, and permissions using Bearer token."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 - Properties & Calendars (Sprint 1)",
+      "description": "Browse properties, view room categories and daily availability calendars (PBI-06)",
+      "item": [
+        {
+          "name": "List / Search Properties",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/properties?page=1&limit=10&province=กรุงเทพมหานคร",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "properties"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "province",
+                  "value": "กรุงเทพมหานคร"
+                }
+              ]
+            },
+            "description": "Public property search with pagination, filters, and pet compatibility."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Property Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/properties/{{sample_property_id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "properties", "{{sample_property_id}}"]
+            },
+            "description": "Get complete property details, room categories, facilities, and host info."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Room Availability Calendar",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/properties/{{sample_property_id}}/calendars?startDate=2026-11-01&endDate=2026-11-30",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "properties", "{{sample_property_id}}", "calendars"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-11-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-11-30"
+                }
+              ]
+            },
+            "description": "Get daily room availability and price adjustments across date range."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 - Pet Profiles & Catalogs (Sprint 1)",
+      "description": "Pet types, breeds, size categories, and Guest pet management (PBI-07)",
+      "item": [
+        {
+          "name": "List Pet Types & Breeds",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pets",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "pets"]
+            },
+            "description": "List pet types (Dog, Cat) and their associated breeds."
+          },
+          "response": []
+        },
+        {
+          "name": "List Pet Size Categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pets/sizes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "pets", "sizes"]
+            },
+            "description": "List pet weight size categories (Small, Medium, Large, Giant)."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

@@ -33,6 +33,10 @@
    - เมื่อ Builder ทำงานเสร็จ ต้องให้ **`qa-auditor`** ตรวจสอบ `git status` / `git diff` (ป้องกันไฟล์ขยะหรือ `.env` หลุด) และรันเทสต์จนได้ผลลัพธ์ `STATUS: PASS`
    - เฉพาะ **Lead Orchestrator** เท่านั้นที่เป็นผู้รัน `git commit` (แบบ Conventional Commits) ลงกิ่ง `feat/phase-X-...` และ Merge เข้า `develop` เมื่อผ่าน QA แล้ว
    - **ห้ามรัน `git push` อัตโนมัติ** จนกว่าผู้ใช้จะสั่งหรือระบุ Remote URL
+4. **กฎ Human Approval Gate ก่อนเข้า Main (User-Gated Main Release):**
+   - เมื่อจบแต่ละ Sprint: Lead Orchestrator จะรวบรวมงานเข้า `develop`, อัปเดตและซิงค์ Postman ขึ้น Cloud และส่งมอบ **Sprint Handover Report** ให้ผู้ใช้ตรวจสอบ
+   - **ห้าม Merge เข้า `main` เด็ดขาดจนกว่าผู้ใช้จะตรวจงานและพิมพ์ "อนุมัติ"**
+   - เมื่อผู้ใช้อนุมัติ: Lead Orchestrator จะเป็นผู้ทำการ `git merge develop` เข้าสู่ `main` พร้อมติด Tag เวอร์ชัน Milestone ให้ทันที จากนั้นผู้ใช้สามารถสั่ง `git push` ได้อย่างมั่นใจ
 
 ---
 
@@ -51,7 +55,7 @@
 
 ### Agent 00: Lead PM & Orchestrator (Main Agent)
 - **บทบาท:** Product Manager, System Orchestrator & Git Gatekeeper
-- **หน้าที่หลัก:** วางแผนงาน, สั่งงาน Subagents ผ่าน `invoke_subagent` / `send_message`, รับผลตรวจจาก `qa-auditor` และทำ Atomic Git Commit & Merge เข้า `develop` เมื่อผ่าน QA
+- **หน้าที่หลัก:** วางแผนงาน, สั่งงาน Subagents ผ่าน `invoke_subagent` / `send_message`, รับผลตรวจจาก `qa-auditor`, **อัปเดตและซิงค์ Postman Collection / Environment ขึ้น Cloud ทันทีทุกครั้งที่ QA ตรวจผ่าน**, และทำ Atomic Git Commit & Merge เข้า `develop` เมื่อผ่าน QA
 
 ### Agent 01: `db-infra-architect` (Database & Infrastructure Architect)
 - **Skill บังคับที่ต้องอ่าน:** `.agents/skills/joodpakpaw-db-schema/SKILL.md`

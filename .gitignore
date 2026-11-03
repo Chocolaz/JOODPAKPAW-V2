@@ -50,3 +50,7 @@ pnpm-debug.log*
 Thumbs.db
 *.pem
 *.tsbuildinfo
+
+# Nested temp repos
+JOODPAKPAW-V2/
+
