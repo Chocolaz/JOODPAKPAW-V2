@@ -3,6 +3,7 @@ import { createApp } from '../app'
 import { prisma, checkDatabaseHealth } from '../database/prisma'
 import { optionalAuthenticateToken, requireRoles } from '../middlewares/auth.middleware'
 import { v1Router } from '../routes/v1.routes'
+import { convertBufferToWebp, uploadImageAsWebp } from '../services/storage.service'
 
 interface TestResult {
   name: string
@@ -119,6 +120,7 @@ function installPrismaAuthMock() {
     const where = args?.where || {}
     for (const u of users.values()) {
       if (where.deletedAt === null && u.deletedAt !== null) continue
+      if (where.id?.not !== undefined && u.id === where.id.not) continue
       if (where.email?.equals) {
         if (u.email.toLowerCase() !== String(where.email.equals).toLowerCase()) continue
       } else if (typeof where.email === 'string') {
@@ -612,6 +614,126 @@ async function main() {
       })
       if (bannedSignIn.statusCode !== 403 || bannedSignIn.body?.code !== 'A-3002') {
         throw new Error(`Expected 403 A-3002 for banned user on sign-in, got ${bannedSignIn.statusCode}`)
+      }
+
+      // Restore User A unbanned state for subsequent PBI-05 tests
+      userRecord.bannedAt = null
+    })
+
+    // =========================================================================
+    // PBI-05 QA Audit Tests: S3 WebP Storage Adapter & PUT /api/v1/users/:userId
+    // =========================================================================
+
+    // Test 17: S3 WebP Storage Adapter (convertBufferToWebp & uploadImageAsWebp)
+    await runTest('convertBufferToWebp and uploadImageAsWebp produce valid WebP buffer and .webp public URL', async () => {
+      const sampleBuffer = Buffer.from('synthetic-image-payload')
+      const webpBuffer = await convertBufferToWebp(sampleBuffer)
+      if (!Buffer.isBuffer(webpBuffer) || webpBuffer.length < 12) {
+        throw new Error('Expected non-empty WebP buffer from convertBufferToWebp')
+      }
+      // Verify RIFF....WEBP header signature
+      const riffHeader = webpBuffer.subarray(0, 4).toString('ascii')
+      const webpHeader = webpBuffer.subarray(8, 12).toString('ascii')
+      if (riffHeader !== 'RIFF' || webpHeader !== 'WEBP') {
+        throw new Error(`Expected RIFF/WEBP magic bytes, got ${riffHeader}/${webpHeader}`)
+      }
+
+      const uploadedUrl = await uploadImageAsWebp(sampleBuffer, 'avatars', 'My Cat Photo.png')
+      if (!uploadedUrl.endsWith('.webp') || !uploadedUrl.includes('/avatars/my-cat-photo-')) {
+        throw new Error(`Expected .webp URL under /avatars/, got ${uploadedUrl}`)
+      }
+    })
+
+    // Test 18: PUT /api/v1/users/:userId (multipart/form-data avatar WebP upload & profile update)
+    await runTest('PUT /api/v1/users/:userId updates profile fields and converts multipart avatar to .webp URL', async () => {
+      const boundary = '----JoodPakPawMultipartBoundary'
+      const parts = [
+        `--${boundary}\r\nContent-Disposition: form-data; name="firstName"\r\n\r\nAlicia\r\n`,
+        `--${boundary}\r\nContent-Disposition: form-data; name="lastName"\r\n\r\nWonderland\r\n`,
+        `--${boundary}\r\nContent-Disposition: form-data; name="phone"\r\n\r\n0812345678\r\n`,
+        `--${boundary}\r\nContent-Disposition: form-data; name="avatar"; filename="profile_pic.jpg"\r\nContent-Type: image/jpeg\r\n\r\nfake-jpeg-binary-content\r\n`,
+        `--${boundary}--\r\n`,
+      ]
+      const multipartBody = Buffer.from(parts.join(''), 'utf-8')
+
+      const res = await new Promise<{ statusCode: number; body: any }>((resolve, reject) => {
+        const req = http.request(
+          {
+            socketPath: pipePath,
+            path: `/api/v1/users/${userAId}`,
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${userAAccessToken}`,
+              'Content-Type': `multipart/form-data; boundary=${boundary}`,
+              'Content-Length': String(multipartBody.length),
+            },
+          },
+          (resp) => {
+            let raw = ''
+            resp.on('data', (c) => (raw += c))
+            resp.on('end', () => {
+              resolve({ statusCode: resp.statusCode || 0, body: JSON.parse(raw) })
+            })
+          }
+        )
+        req.on('error', reject)
+        req.write(multipartBody)
+        req.end()
+      })
+
+      if (res.statusCode !== 200) {
+        throw new Error(`Expected 200 on multipart PUT /api/v1/users/${userAId}, got ${res.statusCode}: ${JSON.stringify(res.body)}`)
+      }
+      const data = res.body?.data
+      if (!data || data.firstName !== 'Alicia' || data.lastName !== 'Wonderland' || data.phone !== '0812345678') {
+        throw new Error(`Expected updated firstName/lastName/phone, got ${JSON.stringify(data)}`)
+      }
+      if (typeof data.avatar !== 'string' || !data.avatar.endsWith('.webp')) {
+        throw new Error(`Expected avatar URL ending with .webp, got ${data.avatar}`)
+      }
+    })
+
+    // Test 19: PUT /api/v1/users/:userId error codes (A-3004 duplicate phone, T-2007 invalid phone) & 403 IDOR
+    await runTest('PUT /api/v1/users/:userId enforces 403 IDOR, 409 A-3004 duplicate phone, and 400 T-2007 invalid phone', async () => {
+      // IDOR: User A tries to update User B
+      const idorRes = await makeRequest(
+        pipePath,
+        `/api/v1/users/${userBId}`,
+        'PUT',
+        { firstName: 'Hacked' },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (idorRes.statusCode !== 403 || idorRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on IDOR PUT /api/v1/users/${userBId}, got ${idorRes.statusCode}`)
+      }
+
+      // Duplicate phone (User B owns 0899998888) -> 409 A-3004
+      const dupPhoneRes = await makeRequest(
+        pipePath,
+        `/api/v1/users/${userAId}`,
+        'PUT',
+        { firstName: 'Alicia', lastName: 'Wonderland', phone: '0899998888' },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (dupPhoneRes.statusCode !== 409 || dupPhoneRes.body?.code !== 'A-3004') {
+        throw new Error(`Expected 409 A-3004 on duplicate phone, got ${dupPhoneRes.statusCode} ${dupPhoneRes.body?.code}`)
+      }
+
+      // Invalid phone format -> 400 T-2007 with tag: 'phone'
+      const badPhoneRes = await makeRequest(
+        pipePath,
+        `/api/v1/users/${userAId}`,
+        'PUT',
+        { firstName: 'Alicia', lastName: 'Wonderland', phone: 'invalid-phone' },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (badPhoneRes.statusCode !== 400 || badPhoneRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on invalid phone, got ${badPhoneRes.statusCode}`)
+      }
+      const hasPhoneTag = Array.isArray(badPhoneRes.body?.errors) &&
+        badPhoneRes.body.errors.some((e: any) => e.field === 'phone' && e.tag === 'phone')
+      if (!hasPhoneTag) {
+        throw new Error(`Expected field: 'phone', tag: 'phone' in errors array`)
       }
     })
   } finally {

@@ -6,6 +6,7 @@ import { prisma } from '../database/prisma';
 import { config } from '../config/env';
 import { AppError, FieldValidationError } from '../middlewares/errorHandler';
 import { UserRoleInfo } from '../middlewares/auth.middleware';
+import { uploadImageAsWebp } from '../services/storage.service';
 
 // In-memory store for OTP reference codes & active refresh tokens (cloud free-tier compatible)
 const otpRefCodeStore = new Map<string, { refCode: string; expiresAt: number }>();
@@ -1030,6 +1031,255 @@ export async function changePassword(
     res.status(200).json({
       code: 'S-0000',
       message: 'Password changed successfully.',
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Helper to extract an uploaded image file from req.file or req.files
+ */
+function extractUploadedAvatarFile(req: Request): Express.Multer.File | undefined {
+  if (req.file) {
+    return req.file;
+  }
+  if (Array.isArray(req.files) && req.files.length > 0) {
+    const preferred = req.files.find((f) =>
+      ['avatar', 'image', 'profileImage', 'file'].includes(f.fieldname)
+    );
+    return preferred || req.files[0];
+  }
+  if (req.files && typeof req.files === 'object') {
+    const filesMap = req.files as Record<string, Express.Multer.File[]>;
+    for (const key of ['avatar', 'image', 'profileImage', 'file']) {
+      if (Array.isArray(filesMap[key]) && filesMap[key].length > 0) {
+        return filesMap[key][0];
+      }
+    }
+    const firstKey = Object.keys(filesMap)[0];
+    if (firstKey && Array.isArray(filesMap[firstKey]) && filesMap[firstKey].length > 0) {
+      return filesMap[firstKey][0];
+    }
+  }
+  return undefined;
+}
+
+/**
+ * PUT /api/v1/users/:userId
+ */
+export async function updateUserProfile(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AppError('Authentication required.', 401, 'A-3005');
+    }
+
+    const targetUserId = parseInt(req.params.userId, 10);
+    if (isNaN(targetUserId)) {
+      throw new AppError('Invalid user ID.', 400, 'T-2007');
+    }
+
+    const isAdmin = req.user.roles.some(
+      (r) => r.name.toLowerCase() === 'admin'
+    );
+    if (req.user.id !== targetUserId && !isAdmin) {
+      throw new AppError(
+        'Access forbidden. Cannot update another user profile.',
+        403,
+        'A-3007'
+      );
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      include: {
+        userRoles: {
+          include: {
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (!existingUser || existingUser.deletedAt !== null) {
+      throw new AppError('User not found.', 404, 'DB-1002');
+    }
+
+    const body = req.body || {};
+    const rawFirstName =
+      body.firstName !== undefined ? body.firstName : body.firstname;
+    const rawLastName =
+      body.lastName !== undefined ? body.lastName : body.lastname;
+    const rawPhone = body.phone;
+
+    const validationErrors: FieldValidationError[] = [];
+
+    let updatedFirstName = existingUser.firstName;
+    if (rawFirstName !== undefined) {
+      const trimmed = String(rawFirstName).trim();
+      if (!trimmed) {
+        validationErrors.push({
+          field: 'firstName',
+          tag: 'required',
+          value: String(rawFirstName),
+        });
+      } else {
+        updatedFirstName = trimmed;
+      }
+    }
+
+    let updatedLastName = existingUser.lastName;
+    if (rawLastName !== undefined) {
+      const trimmed = String(rawLastName).trim();
+      if (!trimmed) {
+        validationErrors.push({
+          field: 'lastName',
+          tag: 'required',
+          value: String(rawLastName),
+        });
+      } else {
+        updatedLastName = trimmed;
+      }
+    }
+
+    let updatedPhone = existingUser.phone;
+    if (rawPhone !== undefined && rawPhone !== null) {
+      const normalizedPhone = String(rawPhone).trim().replace(/[-\s]/g, '');
+      if (!normalizedPhone || !PHONE_REGEX.test(normalizedPhone)) {
+        validationErrors.push({
+          field: 'phone',
+          tag: 'phone',
+          value: String(rawPhone),
+        });
+      } else {
+        updatedPhone = normalizedPhone;
+      }
+    }
+
+    if (validationErrors.length > 0) {
+      throw new AppError(
+        'Validation failed.',
+        400,
+        'T-2007',
+        validationErrors,
+        validationErrors
+      );
+    }
+
+    // Check duplicate phone if phone is being changed/provided
+    if (
+      updatedPhone &&
+      updatedPhone !== existingUser.phone
+    ) {
+      const duplicatePhoneUser = await prisma.user.findFirst({
+        where: {
+          phone: updatedPhone,
+          id: { not: targetUserId },
+        },
+      });
+      if (duplicatePhoneUser) {
+        throw new AppError('Phone number already exists.', 409, 'A-3004');
+      }
+    } else if (rawPhone !== undefined && updatedPhone) {
+      // Even if same phone, double check no other user holds it
+      const duplicatePhoneUser = await prisma.user.findFirst({
+        where: {
+          phone: updatedPhone,
+          id: { not: targetUserId },
+        },
+      });
+      if (duplicatePhoneUser) {
+        throw new AppError('Phone number already exists.', 409, 'A-3004');
+      }
+    }
+
+    // Handle optional avatar image upload via Sharp WebP + S3/MinIO adapter
+    let updatedAvatar = existingUser.avatar;
+    const uploadedFile = extractUploadedAvatarFile(req);
+    if (uploadedFile && uploadedFile.buffer) {
+      updatedAvatar = await uploadImageAsWebp(
+        uploadedFile.buffer,
+        'avatars',
+        uploadedFile.originalname
+      );
+    } else if (
+      typeof body.avatar === 'string' &&
+      body.avatar.trim().length > 0
+    ) {
+      updatedAvatar = body.avatar.trim();
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: targetUserId },
+      data: {
+        firstName: updatedFirstName,
+        lastName: updatedLastName,
+        phone: updatedPhone,
+        avatar: updatedAvatar,
+        updatedAt: new Date(),
+      },
+      include: {
+        userRoles: {
+          include: {
+            role: true,
+          },
+        },
+      },
+    });
+
+    // Calculate unbanAllPropertiesRequestCount and hasPendingUnbanAllPropertiesRequest
+    const unbanAllReports = await prisma.report.findMany({
+      where: {
+        reporterId: updatedUser.id,
+        propertyId: null,
+        deletedAt: null,
+        reportCategory: {
+          type: 'unban_property',
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    const unbanAllPropertiesRequestCount = unbanAllReports.length;
+    const hasPendingUnbanAllPropertiesRequest = unbanAllReports.some(
+      (r) => r.status === 'pending'
+    );
+
+    const roles = formatUserRoles(
+      updatedUser.userRoles,
+      updatedUser.isBecomeToHost
+    );
+
+    const updatedUserProfile = {
+      id: updatedUser.id,
+      email: updatedUser.email,
+      firstName: updatedUser.firstName || '',
+      lastName: updatedUser.lastName || '',
+      avatar: updatedUser.avatar || '',
+      phone: updatedUser.phone || '',
+      isVerified: updatedUser.isVerified,
+      isBecomeToHost: updatedUser.isBecomeToHost,
+      isVerifiedHost: updatedUser.isVerifiedHost,
+      isBannedReview: updatedUser.isBannedReview,
+      isBannedAllProperties: updatedUser.isBannedAllProperties,
+      unbanAllPropertiesRequestCount,
+      hasPendingUnbanAllPropertiesRequest,
+      role: roles,
+    };
+
+    res.status(200).json({
+      code: 'S-0000',
+      message: 'Profile updated successfully',
+      data: updatedUserProfile,
+      profile: updatedUserProfile,
+      user: updatedUserProfile,
     });
   } catch (error) {
     next(error);

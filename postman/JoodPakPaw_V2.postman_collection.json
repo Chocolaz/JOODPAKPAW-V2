@@ -140,8 +140,8 @@
       ]
     },
     {
-      "name": "01 - Auth & Password Policy (PBI-04 - PASS)",
-      "description": "JWT Authentication, OTP Registration, Password Reset, Profile, and Change Password APIs matching joodpakpaw-frontend/lib/api.ts & lib/authApi.ts (16/16 QA Tests Passed)",
+      "name": "01 - Auth & User Profile (PBI-04 & PBI-05 - PASS)",
+      "description": "JWT Authentication, OTP Registration, Password Reset, Profile, S3 WebP Avatar Upload, and Change Password APIs (19/19 QA Tests Passed)",
       "item": [
         {
           "name": "Sign Up (Register & Generate OTP)",
@@ -539,6 +539,74 @@
               "path": ["api", "v1", "users", "{{user_id}}", "change-password"]
             },
             "description": "Change password for authenticated user. Returns A-3011 on wrong oldPassword, A-3012 if newPassword equals oldPassword, and 403 A-3007 on IDOR attempt."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Profile & WebP Avatar (PBI-05)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Returns updated UserProfile\", function () {",
+                  "    pm.expect(json.data).to.be.an(\"object\");",
+                  "    pm.expect(json.data.firstName).to.be.a(\"string\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "firstName",
+                  "value": "สมชาย",
+                  "type": "text"
+                },
+                {
+                  "key": "lastName",
+                  "value": "ใจดีมาก",
+                  "type": "text"
+                },
+                {
+                  "key": "phone",
+                  "value": "0812345678",
+                  "type": "text"
+                },
+                {
+                  "key": "avatar",
+                  "type": "file",
+                  "src": [],
+                  "description": "Optional profile image (automatically resized and converted to .webp on S3/MinIO)"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{user_id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "{{user_id}}"]
+            },
+            "description": "Update user profile fields and upload avatar image (auto-converted to .webp via sharp + @aws-sdk/client-s3). Returns A-3004 (409) on duplicate phone, T-2007 (400) on invalid phone, and A-3007 (403) on IDOR attempt."
           },
           "response": []
         }
