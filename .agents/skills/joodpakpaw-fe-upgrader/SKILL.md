@@ -14,8 +14,12 @@ Use this skill whenever modifying or upgrading the existing Next.js 16 Frontend 
 2. **Preserve Existing Route Structure & Design System**:
    - Do not break existing routes (`app/(browse)`, `app/detail/[propertyId]`, `app/[propertyId]`, `app/booking`, `app/profile/*`, `app/admin/*`, `app/authen/*`).
    - Follow the established Tailwind CSS v4 + Radix UI (`shadcn/ui`) + Lucide Icons aesthetic.
-3. **Strict TypeScript Hygiene**:
-   - All changes in `joodpakpaw-frontend/` must pass `npm run build` / `tsc --noEmit` without introducing implicit `any` or breaking existing prop contracts in `joodpakpaw-frontend/types/*.ts`.
+3. **Strict TypeScript Hygiene & Proactive Legacy Refactoring**:
+   - You are explicitly authorized and encouraged to refactor legacy flaws in `joodpakpaw-frontend` (`lib/api.ts`, `lib/authApi.ts`, `lib/authenUtils.ts`, `types/*.ts`, and UI components) to align with Enterprise V2 Best Practices:
+     - Unify all API responses to read from the standard `res.data` (and `res.pagination`) envelope.
+     - Standardize DTO field names to strict `camelCase` (`firstName`, `lastName`, `petProfileIds`, `petSizeCategoryId`).
+     - Use context-aware endpoints (`/api/v1/users/me/change-password`, `/api/v1/auth/sign-out`) and full refresh token rotation.
+   - All changes in `joodpakpaw-frontend/` must pass `tsc --noEmit` without introducing implicit `any`.
 
 ---
 

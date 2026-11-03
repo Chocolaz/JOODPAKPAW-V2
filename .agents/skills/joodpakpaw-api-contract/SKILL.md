@@ -17,15 +17,47 @@ Use this skill whenever building, modifying, or debugging Backend endpoints (`jo
   - **Object Storage**: Uses `@aws-sdk/client-s3` to support Local `joodpakpaw-minio`, **Cloudflare R2 (Free 10GB)**, or **Supabase S3 Storage (Free 1GB)** via `.env`.
   - **Cache & Queue**: Uses `joodpakpaw-redis` / **Upstash Redis** when `REDIS_URL` is configured, and automatically falls back to **In-Memory Cache + `node-cron`** when `REDIS_URL` is omitted.
   - **Health & Cold-Start Fallback**: Exposes `GET /health` for Render/Koyeb healthchecks, and includes an in-process Hybrid Recommendation fallback if `joodpakpaw-ml` is waking up from free-tier sleep.
-- **Standard Response Envelope**:
-  ```json
-  {
-    "code": "S-0000",
-    "message": "Success",
-    "data": { ... }
-  }
-  ```
-  (Note: Ensure exact compatibility with `joodpakpaw/lib/api.ts` where some endpoints read `response.data.data` and others read `response.data` directly—support top-level fields or `data` wrapper exactly as inspected in `joodpakpaw/lib/api.ts`.)
+- **Standard Response Envelope (Enterprise V2 Standard — Single `data` Wrapper)**:
+  - **Do NOT duplicate payload fields at the top level.** Always wrap payload inside `data` (and `pagination` for paginated lists), and update `joodpakpaw-frontend` callers to read from `res.data` cleanly:
+  - Single / Object resource:
+    ```json
+    {
+      "code": "S-0000",
+      "message": "Success",
+      "data": { ... }
+    }
+    ```
+  - Paginated list resource:
+    ```json
+    {
+      "code": "S-0000",
+      "message": "Success",
+      "data": [ ... ],
+      "pagination": {
+        "page": 1,
+        "limit": 10,
+        "totalRows": 42,
+        "totalPages": 5
+      }
+    }
+    ```
+  - Error response (always redact sensitive fields like passwords as `"[REDACTED]"`):
+    ```json
+    {
+      "code": "T-2007",
+      "message": "Validation failed",
+      "errors": [{ "field": "password", "tag": "min", "value": "[REDACTED]" }]
+    }
+    ```
+- **Proactive Enterprise & Business Rules**:
+  - **Strict `camelCase` DTOs**: Use `firstName`, `lastName`, `petProfileIds`, `petSizeCategoryId` consistently across Backend & Frontend.
+  - **OTP & Password Security Hygiene**:
+    - Block `resend-otp` if `user.isVerified === true` (`400 A-3008`).
+    - Block `sign-in` if `user.isVerified === false` (`403 A-3006`).
+    - Block setting a new password identical to the current password in both `change-password` and `reset-password` (`400 A-3012`).
+    - Prefer context-aware `/api/v1/users/me/change-password` (reading `req.user.id` from JWT) and invalidate all active refresh tokens upon password change or `POST /api/v1/auth/sign-out`.
+  - **Rate Limiting & S3 Garbage Collection**: Protect auth/OTP routes against brute-force/spam and clean up replaced/deleted `.webp` objects from S3 storage.
+  - **Host Marketplace Governance**: Require at least 1 active Room Category (`roomCategories.length > 0`) and non-banned status before allowing a property to be published (`isActive: true`).
 
 ---
 

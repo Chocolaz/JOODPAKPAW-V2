@@ -15,11 +15,11 @@ Use this skill when acting as the independent **Auditor & Reviewer (`qa-auditor`
 
 ## 2. The 5-Gate Verification Checklist
 
-### Gate 1: Frontend-Backend DTO & Error Code Parity
-- Compare every Backend response payload against `d:\Project\joodpakpaw\joodpakpaw\types\*.ts` and `d:\Project\joodpakpaw\joodpakpaw\lib\api.ts`.
-- Verify field casing (`camelCase` vs `snake_case`) matches what `lib/api.ts` reads.
-- Verify custom error codes in `joodpakpaw/lib/errorHandling.ts`:
-  - `T-2007` (with `errors: [{ field, tag, value }]`), `A-3001`, `A-3003`, `A-3004`, `A-3010`, `A-3011`, `A-3012`, `DB-1002`, `FF-4101`.
+### Gate 1: Enterprise V2 DTO, Single `data` Envelope & Error Code Parity
+- Verify that every Backend response uses the clean Single Standard Envelope (`{ code: 'S-0000', message, data, pagination? }`) without redundant top-level field duplication, and matches `d:\Project\joodpakpaw\joodpakpaw-frontend\types\*.ts` and `d:\Project\joodpakpaw\joodpakpaw-frontend\lib\api.ts`.
+- Verify strict `camelCase` field naming (`firstName`, `lastName`, `petProfileIds`, `petSizeCategoryId`).
+- Verify custom error codes in `joodpakpaw-frontend/lib/errorHandling.ts`:
+  - `T-2007` (with `errors: [{ field, tag, value }]` and passwords redacted as `"[REDACTED]"`), `A-3001`, `A-3003`, `A-3004`, `A-3006` (unverified email on sign-in), `A-3008` (already verified on resend-otp), `A-3010`, `A-3011`, `A-3012` (new password same as current password on both change & reset), `DB-1002`, `FF-4101`.
 
 ### Gate 2: Concurrency & Booking Integrity (Critical Capstone Test Cases)
 - **TC-051 / TC-API-085 (Last-Room Race Condition)**:
