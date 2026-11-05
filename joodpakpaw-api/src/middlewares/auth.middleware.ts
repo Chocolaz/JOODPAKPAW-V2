@@ -1,7 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/env';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../database/prisma';
+
+type UserWithRoles = Prisma.UserGetPayload<{
+  include: { userRoles: { include: { role: true } } };
+}>;
 
 export interface UserRoleInfo {
   id: number;
@@ -116,16 +121,28 @@ export async function authenticateToken(
       return;
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      include: {
-        userRoles: {
+    let user: UserWithRoles | null = null;
+
+    let attempts = 0;
+    while (attempts < 2) {
+      try {
+        user = await prisma.user.findUnique({
+          where: { id: decoded.userId },
           include: {
-            role: true,
+            userRoles: {
+              include: {
+                role: true,
+              },
+            },
           },
-        },
-      },
-    });
+        });
+        break;
+      } catch (err) {
+        attempts++;
+        if (attempts >= 2) throw err;
+        await new Promise((resolve) => setTimeout(resolve, 800));
+      }
+    }
 
     if (!user || user.deletedAt !== null) {
       res.status(401).json({
@@ -207,16 +224,31 @@ export async function optionalAuthenticateToken(
       return;
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      include: {
-        userRoles: {
+    let user: UserWithRoles | null = null;
+
+    let attempts = 0;
+    while (attempts < 2) {
+      try {
+        user = await prisma.user.findUnique({
+          where: { id: decoded.userId },
           include: {
-            role: true,
+            userRoles: {
+              include: {
+                role: true,
+              },
+            },
           },
-        },
-      },
-    });
+        });
+        break;
+      } catch (_err) {
+        attempts++;
+        if (attempts >= 2) {
+          next();
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 800));
+      }
+    }
 
     if (!user || user.deletedAt !== null || user.bannedAt !== null) {
       next();
