@@ -56,8 +56,20 @@ Use this skill whenever building, modifying, or debugging Backend endpoints (`jo
     - Block `sign-in` if `user.isVerified === false` (`403 A-3006`).
     - Block setting a new password identical to the current password in both `change-password` and `reset-password` (`400 A-3012`).
     - Prefer context-aware `/api/v1/users/me/change-password` (reading `req.user.id` from JWT) and invalidate all active refresh tokens upon password change or `POST /api/v1/auth/sign-out`.
-  - **Rate Limiting & S3 Garbage Collection**: Protect auth/OTP routes against brute-force/spam and clean up replaced/deleted `.webp` objects from S3 storage.
-  - **Host Marketplace Governance**: Require at least 1 active Room Category (`roomCategories.length > 0`) and non-banned status before allowing a property to be published (`isActive: true`).
+  - **Rate Limiting & S3 Garbage Collection**: Protect auth/OTP routes against brute-force/spam and clean up replaced/deleted `.webp` objects from S3 storage across all modules (avatars, properties, rooms, pets, chat, reviews, KYC, reports).
+  - **Host Marketplace Governance (`P-5001`)**: Require at least 1 active Room Category (`roomCategories.length > 0`) and non-banned status before allowing a property to be published (`isActive: true`).
+  - **Booking & Calendar Marketplace Rules (Sprint 2)**:
+    - **Self-Booking Prevention (`B-4002`)**: A Host cannot book their own property (`property.hostId !== req.user.id`).
+    - **Date & Stay Hygiene (`B-4003`)**: `checkInDate` must not be in the past, `checkOutDate > checkInDate` (at least 1 night), max 90 nights per booking.
+    - **Pet Eligibility & Ownership (`B-4004`)**: Every `petProfileId` must belong to `req.user.id`, match the room category's accepted `petTypeId` and `petSizeCategoryId` weight range, not exceed `numberOfPets * roomAmount`, and not overlap with another active booking.
+    - **Host Calendar Guard**: Hosts cannot set `unavailableRooms > totalRooms - bookedRooms` on dates that already have active guest bookings (`409 Conflict`).
+    - **Verified-Stay Single Review Rule**: Only the guest of a `completed` (`success`) booking can submit a review (`POST /bookings/:id/review`), limited to 1 review per booking (`409 Conflict`), atomically updating `property.avgRating`.
+  - **Real-Time Chat, KYC & Admin Governance (Sprint 3)**:
+    - **Chat Integrity**: Block self-chat (`participantId === req.user.id`), deduplicate existing 1-on-1 rooms between the same pair of users, and enforce participant-only IDOR checks (`403 A-3007`).
+    - **KYC State Machine**: Block duplicate KYC submissions when status is already `pending` or `approved` (`409 Conflict`); lock admin approve/reject to single execution (`TC-API-172`).
+    - **Report & Appeal Hygiene**: Block duplicate pending reports by the same user on the same target; restrict unban appeals (`unban-property`) to the banned property's owner.
+  - **Recommendation Hygiene (Sprint 4)**:
+    - Exclude inactive, banned, soft-deleted, or self-owned properties from recommendation candidates, and maintain the 1.5s in-process Pet-Aware + Bayesian fallback when `joodpakpaw-ml` is cold-starting.
 
 ---
 
@@ -66,15 +78,25 @@ The Frontend checks specific `code` strings in HTTP 4xx responses. Returning gen
 
 | Error Code | HTTP Status | When to Return | Frontend Behavior |
 | :--- | :--- | :--- | :--- |
-| `T-2007` | `400` | Field validation error | Parses `errors: [{ field: string, tag: string, value: string }]`. Supported tags include `'email'`, `'min'`, `'phone'`, `'required'`. |
+| `T-2007` | `400` | Field validation error | Parses `errors: [{ field: string, tag: string, value: string }]` (passwords redacted as `"[REDACTED]"`). |
 | `A-3001` | `401` | Invalid email or password on sign-in | Displays invalid credentials alert in `LoginForm.tsx`. |
+| `A-3002` | `403` | Account or property is banned by Admin | Blocks login / mutation and shows suspended notice. |
 | `A-3003` | `409` | Email already exists on sign-up | Maps to `email` field error ("อีเมลนี้ถูกใช้งานแล้ว"). |
 | `A-3004` | `409` | Phone number already exists on sign-up/profile update | Maps to `phone` field error ("เบอร์โทรศัพท์นี้ถูกใช้งานแล้ว"). |
+| `A-3006` | `403` | Email not verified yet on sign-in | Prompts user to complete OTP verification. |
+| `A-3007` | `403` | Forbidden / IDOR / RBAC violation | Rejects unauthorized cross-user or non-admin access. |
+| `A-3008` | `400` | User is already verified on resend-otp | Prevents redundant OTP generation. |
 | `A-3010` | `400` / `401` | Reset password token already used or expired | Triggers `onTokenExpired()` modal in `ResetPasswordForm.tsx`. |
 | `A-3011` | `400` | Wrong `oldPassword` on change-password | Maps directly to `oldPassword` field error. |
-| `A-3012` | `400` | `newPassword` is identical to `oldPassword` | Maps directly to `newPassword` field error. |
-| `DB-1002` | `404` | Email is not registered (e.g., forgot-password) | Displays "ไม่พบอีเมลนี้ในระบบ". |
-| `FF-4101` | `409` | Property already saved in a favorite folder | Caught in `PropertyCard.tsx` (`errorCode === 'FF-4101'`) to open the `FavoriteDrawer` for moving/removing folders. |
+| `A-3012` | `400` | `newPassword` is identical to `oldPassword` | Maps directly to `newPassword` field error (both change & reset). |
+| `DB-1002` | `404` | Resource or email not found | Displays "ไม่พบข้อมูลในระบบ". |
+| `FF-4101` | `409` | Property already saved in a favorite folder | Caught in `PropertyCard.tsx` to open the `FavoriteDrawer` for moving/removing folders. |
+| `P-5001` | `400` | Cannot activate property with 0 room categories | Blocks `isActive: true` until at least 1 room category exists. |
+| `B-4001` | `409` | Active booking exists (deletion guard) | Blocks deleting a pet profile, room category, or property with active/upcoming bookings. |
+| `B-4002` | `400` | Self-booking attempt (`hostId === userId`) | Blocks a Host from booking their own property. |
+| `B-4003` | `400` | Invalid booking date range or expired payment window | Rejects past dates, `checkOut <= checkIn`, or expired payment slip upload. |
+| `B-4004` | `400` / `409` | Pet eligibility mismatch or pet double-booking | Rejects unowned pets, unsupported pet type/size, capacity overflow, or overlapping pet stays. |
+| `RATE_LIMIT_EXCEEDED` | `429` | Too many requests on auth/OTP endpoints | Protects against brute-force login and OTP flooding. |
 
 ---
 

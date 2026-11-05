@@ -21,24 +21,31 @@ Use this skill when acting as the independent **Auditor & Reviewer (`qa-auditor`
 - Verify custom error codes in `joodpakpaw-frontend/lib/errorHandling.ts`:
   - `T-2007` (with `errors: [{ field, tag, value }]` and passwords redacted as `"[REDACTED]"`), `A-3001`, `A-3003`, `A-3004`, `A-3006` (unverified email on sign-in), `A-3008` (already verified on resend-otp), `A-3010`, `A-3011`, `A-3012` (new password same as current password on both change & reset), `DB-1002`, `FF-4101`.
 
-### Gate 2: Concurrency & Booking Integrity (Critical Capstone Test Cases)
+### Gate 2: Concurrency, Booking Integrity & Marketplace Business Rules (Sprint 2)
 - **TC-051 / TC-API-085 (Last-Room Race Condition)**:
   - Simulate 2 concurrent `POST /api/v1/bookings` requests for the last remaining room on overlapping dates.
   - Expected: Exactly 1 request succeeds (`201`/`200`) and 1 fails (`409`/`400`), and `room_category_calendars.booked_rooms` never exceeds `total_rooms - unavailable_rooms`.
-- **TC-API-086 (Double-Booking Same Pet)**:
-  - Attempt to book the same `pet_profile_id` in two overlapping bookings.
-  - Expected: Rejected with validation/conflict error.
-- **TC-API-095 / TC-063 (Active Booking Deletion Guard)**:
-  - Attempt to `DELETE` a `pet_profile`, `room_category`, or `property` that has an active/upcoming booking.
-  - Expected: Blocked with a clear 400/409 error.
+- **Self-Booking Prevention (`B-4002`) & Date Hygiene (`B-4003`)**:
+  - Attempt to book a property owned by the same user (`property.hostId === req.user.id`) -> Rejected with `B-4002`.
+  - Attempt to book past dates or `checkOutDate <= checkInDate` -> Rejected with `B-4003`.
+- **TC-API-086 & `B-4004` (Pet Eligibility, Ownership & Double-Booking Guard)**:
+  - Attempt to book with another user's `petProfileId`, an unsupported pet type/size weight, exceeding `numberOfPets * roomAmount`, or overlapping dates for the same pet -> Rejected with `B-4004` / `403 A-3007`.
+- **Host Calendar Guard**:
+  - Attempt to set `unavailableRooms > totalRooms - bookedRooms` on dates with active bookings -> Rejected with `409 Conflict`.
+- **Verified-Stay Single Review Rule**:
+  - Attempt to review a non-completed booking or submit a second review on the same booking -> Rejected with `400` / `409`.
+- **TC-API-095 / TC-063 (Active Booking Deletion Guard — `B-4001`)**:
+  - Attempt to `DELETE` a `pet_profile`, `room_category`, or `property` that has an active/upcoming booking -> Blocked with `409 B-4001`.
 
-### Gate 3: Security, RBAC & IDOR Protection
+### Gate 3: Security, RBAC, IDOR, Rate Limiting & S3 Garbage Collection
 - **TC-API-032 / TC-API-075 (IDOR Prevention)**:
-  - Authenticate as User A and attempt to `PUT`/`DELETE` User B's pet profile, property, room category, or booking.
-  - Expected: `403 Forbidden` or `404 Not Found`.
+  - Authenticate as User A and attempt to view/modify/delete User B's pet profile, property, room category, booking, or private chat room -> `403 A-3007` or `404`.
+- **Chat Self-Chat & Deduplication (Sprint 3)**:
+  - Attempt to create a chat room with oneself -> `400 Bad Request`. Creating a room with an existing participant returns the existing room without duplication.
+- **S3 Garbage Collection**:
+  - Verify that replacing or deleting avatars, property/room images, pet images, or chat images triggers `deleteObjectFromS3`.
 - **TC-API-140+ (Admin RBAC)**:
-  - Authenticate as a regular `user` or `host` and call `/api/v1/admin/*`.
-  - Expected: `403 Forbidden`.
+  - Authenticate as a regular `user` or `host` and call `/api/v1/admin/*` -> `403 A-3007`.
 
 ### Gate 4: Admin Ban & Appeal State Machine (TC-151 to TC-155, TC-API-168, TC-API-172)
 - Verify the 3-step cascade:
