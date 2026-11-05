@@ -8,6 +8,7 @@ import { prisma, checkDatabaseHealth } from '../database/prisma'
 import { optionalAuthenticateToken, requireRoles } from '../middlewares/auth.middleware'
 import { v1Router } from '../routes/v1.routes'
 import { convertBufferToWebp, uploadImageAsWebp } from '../services/storage.service'
+import { cacheService } from '../services/cache.service'
 
 interface TestResult {
   name: string
@@ -1626,6 +1627,228 @@ async function main() {
         if (!feApiSrc.includes(fnCheck)) {
           throw new Error(`joodpakpaw-frontend/lib/api.ts missing ${fnCheck}`)
         }
+      }
+    })
+
+    // =========================================================================
+    // Phase 1 Performance Optimization Tests: CacheService & Featured Sections
+    // =========================================================================
+
+    // Test 31: CacheService standalone unit test
+    await runTest('CacheService supports get, set, del, delByPrefix, flush, and TTL expiration', async () => {
+      await cacheService.flush()
+      if ((await cacheService.get('test_key')) !== null) {
+        throw new Error('Expected test_key to be null after flush')
+      }
+
+      await cacheService.set('test_key', { foo: 'bar' }, 10)
+      const val = await cacheService.get<{ foo: string }>('test_key')
+      if (!val || val.foo !== 'bar') {
+        throw new Error(`Expected { foo: 'bar' }, got ${JSON.stringify(val)}`)
+      }
+
+      await cacheService.del('test_key')
+      if ((await cacheService.get('test_key')) !== null) {
+        throw new Error('Expected test_key to be null after del')
+      }
+
+      await cacheService.set('prefix:1', 1)
+      await cacheService.set('prefix:2', 2)
+      await cacheService.set('other:1', 3)
+      const deletedCount = await cacheService.delByPrefix('prefix:')
+      if (deletedCount !== 2) {
+        throw new Error(`Expected 2 keys deleted by prefix, got ${deletedCount}`)
+      }
+      if ((await cacheService.get('prefix:1')) !== null || (await cacheService.get('other:1')) !== 3) {
+        throw new Error('delByPrefix did not correctly isolate keys')
+      }
+
+      // TTL test: 0.1s TTL
+      await cacheService.set('short_lived', 'fast', 0.05)
+      await new Promise((r) => setTimeout(r, 60))
+      if ((await cacheService.get('short_lived')) !== null) {
+        throw new Error('Expected short_lived to expire after TTL')
+      }
+      await cacheService.flush()
+    })
+
+    // Test 32: GET /api/v1/properties/featured-sections (anonymous vs authenticated, 7 sections contract, cache hit)
+    await runTest('GET /api/v1/properties/featured-sections returns all 7 sections, caches base data, and personalizes favorites', async () => {
+      await cacheService.flush()
+
+      // 1st request (cache miss)
+      const t0 = Date.now()
+      const firstRes = await makeRequest(pipePath, '/api/v1/properties/featured-sections', 'GET')
+      const firstDuration = Date.now() - t0
+
+      if (firstRes.statusCode !== 200) {
+        throw new Error(`Expected 200, got ${firstRes.statusCode}: ${JSON.stringify(firstRes.body)}`)
+      }
+      if (firstRes.body?.code !== 'SUCCESS') {
+        throw new Error(`Expected code SUCCESS, got ${firstRes.body?.code}`)
+      }
+      if (firstRes.body?.message !== 'Featured sections retrieved successfully') {
+        throw new Error(`Expected message 'Featured sections retrieved successfully', got ${firstRes.body?.message}`)
+      }
+
+      const data = firstRes.body?.data
+      if (!data) throw new Error('Missing data in featured-sections response')
+
+      // Verify all 7 sections & total fields
+      const requiredSections = [
+        'allProperties',
+        'topRated',
+        'bestValue',
+        'newListings',
+        'trending',
+        'dogFriendly',
+        'catFriendly',
+      ]
+      for (const section of requiredSections) {
+        if (!Array.isArray(data[section])) {
+          throw new Error(`Expected array for section ${section}`)
+        }
+        if (typeof data[`${section}Total`] !== 'number') {
+          throw new Error(`Expected number for ${section}Total`)
+        }
+      }
+      if (typeof data.allPropertiesTotalPages !== 'number') {
+        throw new Error('Expected number for allPropertiesTotalPages')
+      }
+
+      // Anonymous items must have isFavorite: false
+      if (data.allProperties.length > 0 && data.allProperties[0].isFavorite !== false) {
+        throw new Error('Expected isFavorite=false for anonymous featured-sections')
+      }
+
+      // 2nd request (cache hit)
+      const t1 = Date.now()
+      const secondRes = await makeRequest(pipePath, '/api/v1/properties/featured-sections', 'GET')
+      const secondDuration = Date.now() - t1
+
+      if (secondRes.statusCode !== 200 || secondRes.body?.code !== 'SUCCESS') {
+        throw new Error('Second request failed on cached response')
+      }
+
+      console.log(`     (Featured sections 1st req miss: ${firstDuration}ms, 2nd req cache hit: ${secondDuration}ms)`)
+
+      // Verify base cache was populated
+      const cachedBase = await cacheService.get<any>('properties:featured_sections:base')
+      if (!cachedBase) {
+        throw new Error('Expected properties:featured_sections:base to be stored in cacheService')
+      }
+
+      // Authenticated request: User A has property 101 favorited
+      const authRes = await makeRequest(
+        pipePath,
+        '/api/v1/properties/featured-sections',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (authRes.statusCode !== 200 || authRes.body?.code !== 'SUCCESS') {
+        throw new Error(`Expected 200 SUCCESS on authenticated featured-sections, got ${authRes.statusCode}`)
+      }
+      const authData = authRes.body?.data
+      const authProp101 = authData?.allProperties?.find((p: any) => p.id === 101)
+      if (!authProp101 || authProp101.isFavorite !== true || authProp101.favoriteFolderId !== 77) {
+        throw new Error(`Expected authenticated User A to have isFavorite=true and folderId=77 on property 101, got ${JSON.stringify(authProp101)}`)
+      }
+
+      // Verify cached base data was NOT polluted with User A's favorite state
+      const recheckedBase = await cacheService.get<any>('properties:featured_sections:base')
+      const baseProp101 = recheckedBase?.allProperties?.find((p: any) => p.id === 101)
+      if (baseProp101?.isFavorite !== false) {
+        throw new Error('Cache pollution detected: base cache has isFavorite=true')
+      }
+    })
+
+    // Test 33: GET /api/v1/properties list cache
+    await runTest('GET /api/v1/properties caches responses for anonymous users and personalizes on hit', async () => {
+      await cacheService.flush()
+      const query = '?page=1&limit=5'
+
+      const missRes = await makeRequest(pipePath, `/api/v1/properties${query}`, 'GET')
+      if (missRes.statusCode !== 200) throw new Error('Expected 200 on property list miss')
+
+      const cachedList = await cacheService.get<any>(`properties:list:${JSON.stringify({ page: '1', limit: '5' })}`)
+      if (!cachedList) {
+        throw new Error('Expected properties:list:... to be cached')
+      }
+
+      const hitRes = await makeRequest(pipePath, `/api/v1/properties${query}`, 'GET')
+      if (hitRes.statusCode !== 200 || hitRes.body?.data?.[0]?.id !== missRes.body?.data?.[0]?.id) {
+        throw new Error('Cache hit returned inconsistent property list data')
+      }
+
+      // Authenticated call on cached data
+      const authHit = await makeRequest(
+        pipePath,
+        `/api/v1/properties${query}`,
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (authHit.statusCode !== 200 || authHit.body?.data?.[0]?.isFavorite !== true) {
+        throw new Error('Authenticated user on cached property list did not have isFavorite=true')
+      }
+    })
+
+    // Test 34: Invalidate Property Caches on Mutation
+    await runTest('Host property mutations invalidate properties: cache prefix', async () => {
+      // Set test keys
+      await cacheService.set('properties:featured_sections:base', { some: 'data' }, 60)
+      await cacheService.set('properties:list:test', { some: 'list' }, 60)
+
+      // Trigger mutation: create a property
+      const createRes = await makeRequest(
+        pipePath,
+        '/api/v1/hosts/properties',
+        'POST',
+        {
+          title: 'Alicia Cache Invalidation Property',
+          description: 'Testing cache invalidation',
+          propertyTypeId: 1,
+          latitude: '13.7563',
+          longitude: '100.5018',
+          country: 'Thailand',
+          province: 'Bangkok',
+          district: 'Pathum Wan',
+          address: '100 Rama 1 Rd',
+          zipcode: '10330',
+        },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (createRes.statusCode !== 201) {
+        throw new Error(`Expected 201 on host property create, got ${createRes.statusCode}`)
+      }
+      const newPropId = createRes.body?.data?.id
+
+      // Verify caches with prefix properties: were deleted by create
+      if ((await cacheService.get('properties:featured_sections:base')) !== null) {
+        throw new Error('Expected properties:featured_sections:base to be invalidated on create')
+      }
+
+      // Re-populate test cache to verify update mutation invalidates too
+      await cacheService.set('properties:featured_sections:base', { some: 'data' }, 60)
+      await cacheService.set('properties:list:test', { some: 'list' }, 60)
+
+      const updateRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/properties/${newPropId}`,
+        'PUT',
+        { title: 'Alicia Cache Invalidation Test Updated' },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (updateRes.statusCode !== 200) {
+        throw new Error(`Expected 200 on host property update, got ${updateRes.statusCode}`)
+      }
+
+      // Verify caches with prefix properties: were deleted by update
+      const checkBase = await cacheService.get('properties:featured_sections:base')
+      const checkList = await cacheService.get('properties:list:test')
+      if (checkBase !== null || checkList !== null) {
+        throw new Error('Expected properties:* cache keys to be invalidated after property update')
       }
     })
   } finally {

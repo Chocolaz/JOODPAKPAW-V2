@@ -5,6 +5,7 @@ import { AppError, FieldValidationError } from '../middlewares/errorHandler';
 import { uploadMultipleImagesAsWebp, deleteObjectFromS3 } from '../services/storage.service';
 import { formatPropertyDto } from './property.controller';
 import { normalizePetName } from './lookup.controller';
+import { cacheService } from '../services/cache.service';
 
 function isAdminUser(req: Request): boolean {
   return Boolean(
@@ -593,6 +594,8 @@ export async function createHostProperty(
       ? formatHostPropertyWithUnbanStats(fullProp)
       : { id: created.id, title: created.title };
 
+    await cacheService.delByPrefix('properties:');
+
     res.status(201).json({
       code: 'S-0000',
       message: 'Property created successfully',
@@ -780,6 +783,8 @@ export async function updateHostProperty(
       ? formatHostPropertyWithUnbanStats(fullProp)
       : { id: propertyId };
 
+    await cacheService.delByPrefix('properties:');
+
     res.status(200).json({
       code: 'S-0000',
       message: 'Property updated successfully',
@@ -872,6 +877,8 @@ export async function deleteHostProperty(
         data: { deletedAt: now },
       }),
     ]);
+
+    await cacheService.delByPrefix('properties:');
 
     res.status(200).json({
       code: 'S-0000',
@@ -977,6 +984,8 @@ export async function updateHostPropertyIsActive(
     const propertyDto = fullProp
       ? formatHostPropertyWithUnbanStats(fullProp)
       : { id: propertyId, isActive: updated.isActive };
+
+    await cacheService.delByPrefix('properties:');
 
     res.status(200).json({
       code: 'S-0000',
@@ -1319,6 +1328,8 @@ export async function createHostRoomCategory(
       address: prop.address || '',
     });
 
+    await cacheService.delByPrefix('properties:');
+
     res.status(201).json({
       code: 'S-0000',
       message: 'Room category created successfully',
@@ -1586,6 +1597,8 @@ export async function updateHostRoomCategory(
         })
       : { id: roomId };
 
+    await cacheService.delByPrefix('properties:');
+
     res.status(200).json({
       code: 'S-0000',
       message: 'Room category updated successfully',
@@ -1696,6 +1709,8 @@ export async function deleteHostRoomCategory(
         deletedAt: new Date(),
       },
     });
+
+    await cacheService.delByPrefix('properties:');
 
     res.status(200).json({
       code: 'S-0000',

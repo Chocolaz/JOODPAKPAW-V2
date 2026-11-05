@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../database/prisma';
 import { AppError } from '../middlewares/errorHandler';
 import { normalizePetName } from './lookup.controller';
+import { cacheService } from '../services/cache.service';
 /**
  * Safely converts any Date object, ISO string, or timestamp into an ISO string.
  * Falls back to current date or custom fallback if input is null or undefined.
@@ -252,12 +253,37 @@ export function formatPropertyDto(
 /**
  * GET /api/v1/properties
  */
+export async function invalidatePropertyCaches(): Promise<number> {
+  return cacheService.delByPrefix('properties:');
+}
+
 export async function getProperties(
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
   try {
+    const cacheKey = `properties:list:${JSON.stringify(req.query)}`;
+    const cached = await cacheService.get<any>(cacheKey);
+
+    if (cached) {
+      if (!req.user?.id) {
+        res.status(200).json(cached);
+        return;
+      }
+      const favMap = await getUserFavoriteMap(req.user.id);
+      const personalizedData = cached.data.map((p: any) => ({
+        ...p,
+        isFavorite: favMap.has(p.id),
+        favoriteFolderId: favMap.get(p.id) ?? null,
+      }));
+      res.status(200).json({
+        ...cached,
+        data: personalizedData,
+      });
+      return;
+    }
+
     const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
     const limit = Math.min(
       100,
@@ -369,7 +395,7 @@ export async function getProperties(
       });
     }
 
-    const favMap = await getUserFavoriteMap(req.user?.id);
+    const anonymousFavMap = new Map<number, number>();
 
     const dbProperties = await prisma.property.findMany({
       where: { AND: andConditions },
@@ -421,7 +447,9 @@ export async function getProperties(
       orderBy: { createdAt: 'desc' },
     });
 
-    let formattedList = dbProperties.map((p) => formatPropertyDto(p, favMap));
+    let formattedList = dbProperties.map((p) =>
+      formatPropertyDto(p, anonymousFavMap)
+    );
 
     // Filter by minRating if requested
     if (!isNaN(minRating) && minRating > 0) {
@@ -471,7 +499,7 @@ export async function getProperties(
       .slice(startIdx, startIdx + limit)
       .map(({ _bookingCount, ...rest }) => rest);
 
-    res.status(200).json({
+    const baseResponse = {
       code: 'S-0000',
       message: 'Success',
       data: paginatedData,
@@ -481,6 +509,245 @@ export async function getProperties(
         totalRows,
         totalPages,
       },
+    };
+
+    // Cache the anonymous result for 60 seconds
+    await cacheService.set(cacheKey, baseResponse, 60);
+
+    if (req.user?.id) {
+      const favMap = await getUserFavoriteMap(req.user.id);
+      const personalizedData = paginatedData.map((p: any) => ({
+        ...p,
+        isFavorite: favMap.has(p.id),
+        favoriteFolderId: favMap.get(p.id) ?? null,
+      }));
+      res.status(200).json({
+        ...baseResponse,
+        data: personalizedData,
+      });
+      return;
+    }
+
+    res.status(200).json(baseResponse);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * GET /api/v1/properties/featured-sections
+ * Returns the 7 curated featured sections for the homepage with caching and personalization.
+ */
+export async function getFeaturedSections(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const cacheKey = 'properties:featured_sections:base';
+    let baseData = await cacheService.get<any>(cacheKey);
+
+    if (!baseData) {
+      const dbProperties = await prisma.property.findMany({
+        where: {
+          isActive: true,
+          deletedAt: null,
+          isBannedByAdmin: false,
+          host: {
+            deletedAt: null,
+            bannedAt: null,
+            isBannedAllProperties: false,
+          },
+        },
+        include: {
+          images: {
+            where: { deletedAt: null },
+            orderBy: { id: 'asc' },
+          },
+          propertyType: true,
+          facilities: {
+            include: {
+              facility: {
+                include: {
+                  category: true,
+                },
+              },
+            },
+          },
+          roomCategories: {
+            where: { deletedAt: null },
+            include: {
+              images: {
+                where: { deletedAt: null },
+                orderBy: { id: 'asc' },
+              },
+              petSizeCategory: true,
+              pets: {
+                include: {
+                  pet: true,
+                },
+              },
+              facilities: {
+                include: {
+                  facility: true,
+                },
+              },
+            },
+            orderBy: { basePrice: 'asc' },
+          },
+          host: true,
+          bookings: {
+            where: { deletedAt: null },
+            select: {
+              id: true,
+              rating: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const anonymousFavMap = new Map<number, number>();
+      const formattedList = dbProperties.map((p) =>
+        formatPropertyDto(p, anonymousFavMap)
+      );
+
+      const stripInternalFields = ({ _bookingCount, ...rest }: any) => rest;
+
+      // 1. allProperties: first 12 properties
+      const allPropertiesTotal = formattedList.length;
+      const allPropertiesTotalPages =
+        allPropertiesTotal > 0 ? Math.ceil(allPropertiesTotal / 12) : 0;
+      const allProperties = formattedList
+        .slice(0, 12)
+        .map(stripInternalFields);
+
+      // 2. topRated: filter avgRating >= 4.0, sort by avgRating desc, reviewCount desc, slice 8
+      const topRatedFiltered = formattedList
+        .filter((p) => typeof p.avgRating === 'number' && p.avgRating >= 4.0)
+        .sort((a, b) => b.avgRating - a.avgRating || b.reviewCount - a.reviewCount);
+      const topRatedTotal = topRatedFiltered.length;
+      const topRated = topRatedFiltered.slice(0, 8).map(stripInternalFields);
+
+      // 3. bestValue: filter lowestPrice > 0, sort by lowestPrice asc, slice 8
+      const bestValueFiltered = formattedList
+        .filter((p) => typeof p.lowestPrice === 'number' && p.lowestPrice > 0)
+        .sort((a, b) => a.lowestPrice - b.lowestPrice);
+      const bestValueTotal = bestValueFiltered.length;
+      const bestValue = bestValueFiltered.slice(0, 8).map(stripInternalFields);
+
+      // 4. newListings: filter createdAt within last 30 days, sort by createdAt desc, slice 8
+      const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      const newListingsFiltered = formattedList
+        .filter((p) => new Date(p.createdAt).getTime() >= thirtyDaysAgo)
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      const newListingsTotal = newListingsFiltered.length;
+      const newListings = newListingsFiltered
+        .slice(0, 8)
+        .map(stripInternalFields);
+
+      // 5. trending: sort by _bookingCount desc, reviewCount desc, avgRating desc, slice 8
+      const trendingSorted = [...formattedList].sort(
+        (a, b) =>
+          b._bookingCount - a._bookingCount ||
+          b.reviewCount - a.reviewCount ||
+          b.avgRating - a.avgRating
+      );
+      const trendingTotal = trendingSorted.length;
+      const trending = trendingSorted.slice(0, 8).map(stripInternalFields);
+
+      // 6. dogFriendly: filter pets having name containing 'dog' or 'สุนัข', slice 8
+      const dogFriendlyFiltered = formattedList.filter(
+        (p) =>
+          Array.isArray(p.pets) &&
+          p.pets.some((pet: any) => {
+            const name = String(pet.name || '').toLowerCase();
+            return name.includes('dog') || name.includes('สุนัข');
+          })
+      );
+      const dogFriendlyTotal = dogFriendlyFiltered.length;
+      const dogFriendly = dogFriendlyFiltered
+        .slice(0, 8)
+        .map(stripInternalFields);
+
+      // 7. catFriendly: filter pets having name containing 'cat' or 'แมว', slice 8
+      const catFriendlyFiltered = formattedList.filter(
+        (p) =>
+          Array.isArray(p.pets) &&
+          p.pets.some((pet: any) => {
+            const name = String(pet.name || '').toLowerCase();
+            return name.includes('cat') || name.includes('แมว');
+          })
+      );
+      const catFriendlyTotal = catFriendlyFiltered.length;
+      const catFriendly = catFriendlyFiltered
+        .slice(0, 8)
+        .map(stripInternalFields);
+
+      baseData = {
+        allProperties,
+        allPropertiesTotal,
+        allPropertiesTotalPages,
+        topRated,
+        topRatedTotal,
+        bestValue,
+        bestValueTotal,
+        newListings,
+        newListingsTotal,
+        trending,
+        trendingTotal,
+        dogFriendly,
+        dogFriendlyTotal,
+        catFriendly,
+        catFriendlyTotal,
+      };
+
+      await cacheService.set(cacheKey, baseData, 60);
+    }
+
+    // If user is authenticated, map isFavorite & favoriteFolderId dynamically in <0.1ms
+    if (req.user?.id) {
+      const favMap = await getUserFavoriteMap(req.user.id);
+      const mapFavorites = (items: any[]) =>
+        items.map((p) => ({
+          ...p,
+          isFavorite: favMap.has(p.id),
+          favoriteFolderId: favMap.get(p.id) ?? null,
+        }));
+
+      const personalizedData = {
+        allProperties: mapFavorites(baseData.allProperties),
+        allPropertiesTotal: baseData.allPropertiesTotal,
+        allPropertiesTotalPages: baseData.allPropertiesTotalPages,
+        topRated: mapFavorites(baseData.topRated),
+        topRatedTotal: baseData.topRatedTotal,
+        bestValue: mapFavorites(baseData.bestValue),
+        bestValueTotal: baseData.bestValueTotal,
+        newListings: mapFavorites(baseData.newListings),
+        newListingsTotal: baseData.newListingsTotal,
+        trending: mapFavorites(baseData.trending),
+        trendingTotal: baseData.trendingTotal,
+        dogFriendly: mapFavorites(baseData.dogFriendly),
+        dogFriendlyTotal: baseData.dogFriendlyTotal,
+        catFriendly: mapFavorites(baseData.catFriendly),
+        catFriendlyTotal: baseData.catFriendlyTotal,
+      };
+
+      res.status(200).json({
+        code: 'SUCCESS',
+        message: 'Featured sections retrieved successfully',
+        data: personalizedData,
+      });
+      return;
+    }
+
+    res.status(200).json({
+      code: 'SUCCESS',
+      message: 'Featured sections retrieved successfully',
+      data: baseData,
     });
   } catch (error) {
     next(error);

@@ -273,6 +273,34 @@ export const getProperties = async (
   }
 }
 
+export interface FeaturedSectionsData {
+  topRated: Property[]
+  topRatedTotal: number
+  bestValue: Property[]
+  bestValueTotal: number
+  newListings: Property[]
+  newListingsTotal: number
+  trending: Property[]
+  trendingTotal: number
+  dogFriendly: Property[]
+  dogFriendlyTotal: number
+  catFriendly: Property[]
+  catFriendlyTotal: number
+  allProperties: Property[]
+  allPropertiesTotal: number
+  allPropertiesTotalPages: number
+}
+
+export const getFeaturedSections = async (): Promise<FeaturedSectionsData> => {
+  const res = (await request<FeaturedSectionsData>({
+    endpoint: 'api/v1/properties/featured-sections',
+    method: 'GET',
+    errorContext: 'Get Featured Sections',
+    sendAuthIfAvailable: true,
+  })) as unknown as { data: FeaturedSectionsData }
+  return res.data
+}
+
 export const getPropertyById = async (
   propertyId: string
 ): Promise<{ property: Property; data?: { property: Property } }> => {

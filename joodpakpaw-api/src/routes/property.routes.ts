@@ -5,6 +5,7 @@ import {
   getHostProfile,
   getHostReviews,
   searchPropertyRoomCategories,
+  getFeaturedSections,
 } from '../controllers/property.controller';
 import { optionalAuthenticateToken } from '../middlewares/auth.middleware';
 
@@ -12,6 +13,13 @@ export const propertyRouter = Router();
 
 // Public property discovery & search
 propertyRouter.get('/', optionalAuthenticateToken, getProperties);
+
+// Featured sections for home page (MUST precede /:propertyId)
+propertyRouter.get(
+  '/featured-sections',
+  optionalAuthenticateToken,
+  getFeaturedSections
+);
 
 // Specific host sub-routes MUST precede /:propertyId
 propertyRouter.get(

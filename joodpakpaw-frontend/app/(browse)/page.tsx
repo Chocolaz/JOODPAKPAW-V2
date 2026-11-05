@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { PageHeader } from '@/app/_components/PageHeader'
 import { PropertyList } from '@/app/_components/PropertyList'
-import { getProperties, getRecommendedProperties, getPropertyById } from '@/lib/api'
+import { getProperties, getRecommendedProperties, getPropertyById, getFeaturedSections } from '@/lib/api'
 import { Property } from '@/types'
 import { useAuth } from '@/app/_components/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -96,59 +96,31 @@ export default function Home() {
   const filterKeyRef = useRef(0)
 
   const fetchProperties = useCallback(
-    async (pageNum: number, reset: boolean) => {
+    async (pageNum: number, reset = false) => {
       const key = ++fetchKeyRef.current
       if (reset) setIsLoading(true)
       else setLoadingMore(true)
       try {
         if (reset) {
-          const [
-            propertiesRes,
-            topRatedRes,
-            bestValueRes,
-            newListingsRes,
-            trendingRes,
-            dogRes,
-            catRes,
-          ] = await Promise.all([
-            getProperties(pageNum, PAGE_SIZE),
-            getProperties(1, SECTION_FETCH_LIMIT, { minRating: 4.0 }).catch(
-              () => EMPTY_SECTION
-            ),
-            getProperties(1, SECTION_FETCH_LIMIT, { sortBy: 'price' }).catch(
-              () => EMPTY_SECTION
-            ),
-            getProperties(1, SECTION_FETCH_LIMIT, { days: 30 }).catch(
-              () => EMPTY_SECTION
-            ),
-            getProperties(1, SECTION_FETCH_LIMIT, { sortBy: 'trending' }).catch(
-              () => EMPTY_SECTION
-            ),
-            getProperties(1, SECTION_FETCH_LIMIT, { petTypes: 'dog' }).catch(
-              () => EMPTY_SECTION
-            ),
-            getProperties(1, SECTION_FETCH_LIMIT, { petTypes: 'cat' }).catch(
-              () => EMPTY_SECTION
-            ),
-          ])
+          const featured = await getFeaturedSections()
           if (key !== fetchKeyRef.current) return
-          setProperties(propertiesRes.data)
+          setProperties(featured.allProperties || [])
           setPage(pageNum)
-          setTotalPages(propertiesRes.totalPages)
-          setTotalRows(propertiesRes.totalRows)
+          setTotalPages(featured.allPropertiesTotalPages || 1)
+          setTotalRows(featured.allPropertiesTotal || 0)
           setSectionData({
-            topRated: topRatedRes.data,
-            topRatedTotal: topRatedRes.totalRows,
-            bestValue: bestValueRes.data,
-            bestValueTotal: bestValueRes.totalRows,
-            newListings: newListingsRes.data,
-            newListingsTotal: newListingsRes.totalRows,
-            trending: trendingRes.data,
-            trendingTotal: trendingRes.totalRows,
-            dogFriendly: dogRes.data,
-            dogFriendlyTotal: dogRes.totalRows,
-            catFriendly: catRes.data,
-            catFriendlyTotal: catRes.totalRows,
+            topRated: featured.topRated || [],
+            topRatedTotal: featured.topRatedTotal || 0,
+            bestValue: featured.bestValue || [],
+            bestValueTotal: featured.bestValueTotal || 0,
+            newListings: featured.newListings || [],
+            newListingsTotal: featured.newListingsTotal || 0,
+            trending: featured.trending || [],
+            trendingTotal: featured.trendingTotal || 0,
+            dogFriendly: featured.dogFriendly || [],
+            dogFriendlyTotal: featured.dogFriendlyTotal || 0,
+            catFriendly: featured.catFriendly || [],
+            catFriendlyTotal: featured.catFriendlyTotal || 0,
           })
         } else {
           const response = await getProperties(pageNum, PAGE_SIZE)
