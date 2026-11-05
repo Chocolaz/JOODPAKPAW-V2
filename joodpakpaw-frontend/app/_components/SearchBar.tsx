@@ -1,5 +1,7 @@
+'use client'
+
 import { Input } from '@/components/ui/input'
-import { Search, SlidersHorizontal } from 'lucide-react'
+import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
 interface SearchBarProps {
@@ -16,22 +18,64 @@ export function SearchBar({ onSearch, value, onFilterClick, activeFilterCount = 
     setInternalSearchValue(value)
   }, [value])
 
+  const handleSearch = (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    onSearch(internalSearchValue.trim())
+  }
+
+  const handleClear = () => {
+    setInternalSearchValue('')
+    onSearch('')
+  }
+
   return (
     <div className="sticky top-4 z-40 lg:static lg:top-auto lg:z-auto w-full lg:py-2">
-      <div className="flex items-center gap-2 lg:max-w-xl">
-        {/* Search input */}
-        <div className="flex-1 bg-white/95 lg:bg-white rounded-full backdrop-blur shadow-sm lg:shadow-md lg:border lg:border-gray-100">
+      <form onSubmit={handleSearch} className="flex items-center gap-2 lg:max-w-xl">
+        {/* Search input container */}
+        <div className="flex-1 bg-white/95 lg:bg-white rounded-full backdrop-blur shadow-sm lg:shadow-md lg:border lg:border-gray-100 pr-1.5 focus-within:ring-2 focus-within:ring-deep-teal/20 transition-all">
           <div className="relative flex w-full h-12 md:h-14 items-center">
-            <Search className="absolute left-4 h-5 w-5 text-muted-foreground" />
+            {/* Search Icon button on left */}
+            <button
+              type="submit"
+              aria-label="Submit search"
+              className="absolute left-3.5 p-1 text-muted-foreground hover:text-deep-teal transition-colors"
+            >
+              <Search className="h-5 w-5" />
+            </button>
+
             <Input
-              placeholder="Search properties…"
-              className="pl-11 pr-4 h-full rounded-full border-0 bg-transparent focus-visible:ring-0 text-sm md:text-base"
+              placeholder="Search properties… (Press Enter or click to search)"
+              className="pl-11 pr-20 h-full rounded-full border-0 bg-transparent focus-visible:ring-0 text-sm md:text-base"
               value={internalSearchValue}
-              onChange={(e) => {
-                setInternalSearchValue(e.target.value)
-                onSearch(e.target.value)
+              onChange={(e) => setInternalSearchValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  handleSearch()
+                }
               }}
             />
+
+            {/* Clear button if text exists */}
+            {internalSearchValue && (
+              <button
+                type="button"
+                onClick={handleClear}
+                aria-label="Clear search"
+                className="absolute right-12 p-1.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+
+            {/* Clickable Search Action Button on the right */}
+            <button
+              type="submit"
+              aria-label="Search"
+              className="absolute right-1.5 flex items-center justify-center h-9 w-9 md:h-10 md:w-10 rounded-full bg-deep-teal text-white hover:bg-deep-teal/90 transition-all shadow-sm hover:scale-105 active:scale-95"
+            >
+              <Search className="h-4 w-4" />
+            </button>
           </div>
         </div>
 
@@ -50,7 +94,7 @@ export function SearchBar({ onSearch, value, onFilterClick, activeFilterCount = 
             )}
           </button>
         )}
-      </div>
+      </form>
     </div>
   )
 }
