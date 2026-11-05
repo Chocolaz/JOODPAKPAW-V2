@@ -32,6 +32,13 @@ Use this skill whenever modifying or upgrading the existing Next.js 16 Frontend 
      - Avoid `w-screen` that introduces horizontal overflow scrollbars; prefer `w-full`.
    - **Responsive Grids (`PropertyList`, Card Feeds)**:
      - Adapt gracefully from compact devices: `grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4` (never force multi-columns on screens <380px that crush card content).
+5. **shadcn-First Component Strategy**:
+   - Whenever building, refactoring, or creating any new UI component (inputs, buttons, dialogs, drawers, selects, tabs, popovers, tooltips, accordions, calendars, dropdowns, forms, etc.), **ALWAYS check and use official `shadcn/ui` components from `@/components/ui/` first**.
+   - If a required component is not yet in the project, install it via the official shadcn registry:
+     ```bash
+     npx shadcn@latest add <component-name>
+     ```
+   - Never build custom ad-hoc primitive components when a clean, accessible, theme-consistent `shadcn/ui` (Radix UI + Tailwind) component exists. Preserve full design system consistency across the monorepo.
 
 ---
 
