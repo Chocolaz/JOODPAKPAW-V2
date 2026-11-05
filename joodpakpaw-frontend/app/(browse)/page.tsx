@@ -435,7 +435,7 @@ export default function Home() {
                           animate={{ opacity: 1 }}
                           exit={{ opacity: 0 }}
                           transition={{ duration: 0.15 }}
-                          className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 lg:gap-6"
+                          className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 lg:gap-6"
                         >
                           {Array.from({ length: 14 }).map((_, i) => (
                             <div key={i} className="animate-pulse">
@@ -462,7 +462,7 @@ export default function Home() {
                         >
                           <PropertyList
                             properties={filterResults}
-                            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 lg:gap-6"
+                            className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 lg:gap-6"
                             showPetPolicyChip={true}
                             showHeartIcon={isAuthenticated}
                           />

@@ -40,24 +40,22 @@ export default async function AuthenPage({ searchParams }: AuthenPageProps) {
         </div>
 
         {/* Mobile title */}
-        <h1 className="text-accent-orange lg:hidden">
-          Welcome to <br /> JOODPAKPAW
-        </h1>
-        <div className="text-[16px] mb-10 lg:hidden">
+        <h1 className="text-2xl sm:text-3xl font-bold text-accent-orange lg:hidden mb-2">Welcome to JOODPAKPAW</h1>
+        <div className="text-sm sm:text-base text-neutral-gray mb-8 lg:hidden">
           <p>Find trusted stays, loving hosts, and happy tails.</p>
           <p>Your pet&apos;s comfort starts here.</p>
         </div>
 
-        <div className="flex h-[60px]">
+        <div className="flex flex-col sm:flex-row gap-3 sm:h-[56px]">
           <Link href={loginHref} passHref className="flex-1">
-            <Button className="w-full py-4 rounded-lg bg-accent-orange text-white hover:bg-accent-orange/80 mr-2 h-full text-[20px] font-semibold">
+            <Button className="w-full py-3.5 sm:py-4 rounded-lg bg-accent-orange text-white hover:bg-accent-orange/80 h-full text-base sm:text-lg font-semibold">
               Sign In
             </Button>
           </Link>
           <Link href={registerHref} passHref className="flex-1">
             <Button
               variant="outline"
-              className="w-full py-4 rounded-lg border-deep-teal text-deep-teal hover:bg-deep-teal hover:text-white ml-2 h-full text-[20px] font-semibold"
+              className="w-full py-3.5 sm:py-4 rounded-lg border-deep-teal text-deep-teal hover:bg-deep-teal hover:text-white h-full text-base sm:text-lg font-semibold"
             >
               Sign Up
             </Button>
@@ -67,7 +65,7 @@ export default async function AuthenPage({ searchParams }: AuthenPageProps) {
           <Link href="/" passHref>
             <Button
               variant="ghost"
-              className="w-full text-deep-teal text-[18px] font-semibold"
+              className="w-full text-deep-teal text-sm sm:text-base font-semibold"
             >
               Continue without signing in
             </Button>

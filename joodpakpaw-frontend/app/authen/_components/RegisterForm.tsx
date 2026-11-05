@@ -114,8 +114,8 @@ export default function RegisterForm() {
   }
 
   return (
-    <div className="px-5 w-full max-w-sm lg:max-w-md text-center mx-auto">
-      <form onSubmit={handleSignUp} className="space-y-[30px] mt-10">
+    <div className="px-4 sm:px-5 w-full max-w-sm lg:max-w-md text-center mx-auto">
+      <form onSubmit={handleSignUp} className="space-y-4 sm:space-y-6 mt-6 sm:mt-10">
         <div>
           <Input
             type="text"
@@ -213,7 +213,7 @@ export default function RegisterForm() {
         <Button
           type="submit"
           disabled={isButtonDisabled || isSubmitting}
-          className="w-full py-4 rounded-lg bg-accent-orange text-white hover:bg-accent-orange/80 h-auto text-[20px] font-semibold"
+          className="w-full py-4 rounded-lg bg-accent-orange text-white hover:bg-accent-orange/80 h-auto text-base sm:text-lg font-semibold"
         >
           {isSubmitting ? 'Signing up...' : 'Sign up'}
         </Button>

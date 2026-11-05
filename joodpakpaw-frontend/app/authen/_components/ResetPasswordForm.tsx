@@ -119,7 +119,7 @@ function ResetPasswordFormComponent({
 
   if (!token || !email) {
     return (
-      <div className="px-5 w-full max-w-sm text-center mx-auto mt-[30px]">
+      <div className="px-4 sm:px-5 w-full max-w-sm text-center mx-auto mt-4 sm:mt-[30px]">
         {formGeneralError && (
           <p className="text-red-500 text-center mb-4">{formGeneralError}</p>
         )}
@@ -134,8 +134,8 @@ function ResetPasswordFormComponent({
   }
 
   return (
-    <div className="px-5 w-full max-w-sm text-center mx-auto mt-[30px] ">
-      <form onSubmit={handleResetPassword} className="space-y-[30px] mt-[70px]">
+    <div className="px-4 sm:px-5 w-full max-w-sm text-center mx-auto mt-4 sm:mt-[30px]">
+      <form onSubmit={handleResetPassword} className="space-y-4 sm:space-y-6 mt-8 sm:mt-[50px]">
         <div>
           <Input
             type="password"
@@ -185,7 +185,7 @@ function ResetPasswordFormComponent({
         <Button
           type="submit"
           disabled={!password || !confirmPassword || !isPasswordValid(password) || isSubmitting}
-          className="w-full py-4 rounded-lg bg-accent-orange text-white hover:bg-accent-orange/80 h-auto text-[20px] font-semibold"
+          className="w-full py-4 rounded-lg bg-accent-orange text-white hover:bg-accent-orange/80 h-auto text-base sm:text-lg font-semibold"
         >
           {isSubmitting ? 'Resetting...' : 'Reset Password'}
         </Button>

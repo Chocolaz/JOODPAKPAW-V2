@@ -15,7 +15,7 @@ interface PropertyListProps {
 
 export function PropertyList({
   properties,
-  className = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5 px-5',
+  className = 'grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5 px-4 sm:px-5',
   buildHref,
   showRoomCount,
   showStatusIcon,

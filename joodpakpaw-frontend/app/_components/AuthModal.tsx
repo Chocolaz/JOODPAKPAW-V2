@@ -76,15 +76,17 @@ function LoginStep({
   return (
     <div className="space-y-5">
       <div className="flex flex-col items-center gap-1">
-        <Image
-          src={assetPath('/graphics/welcome.svg')}
-          alt="Welcome"
-          width={140}
-          height={104}
-          priority
-        />
-        <h2 className="text-2xl font-bold text-accent-orange">Login Here</h2>
-        <p className="text-sm text-neutral-gray text-center">
+        <div className="relative w-[110px] sm:w-[140px] h-[80px] sm:h-[104px]">
+          <Image
+            src={assetPath('/graphics/welcome.svg')}
+            alt="Welcome"
+            fill
+            className="object-contain"
+            priority
+          />
+        </div>
+        <h2 className="text-xl sm:text-2xl font-bold text-accent-orange">Login Here</h2>
+        <p className="text-xs sm:text-sm text-neutral-gray text-center max-w-xs sm:max-w-none">
           Glad to see you again! Let&apos;s find the perfect stay for your furry friend.
         </p>
       </div>
@@ -223,7 +225,7 @@ function RegisterStep({
         <p className="text-sm text-neutral-gray mt-1">Join JoodPakPaw today</p>
       </div>
       <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Input
             placeholder="First Name"
             value={firstname}
@@ -373,7 +375,7 @@ function VerifyOtpStep({
         <Input
           type="text"
           placeholder="000000"
-          className="text-center tracking-[1rem]"
+          className="text-center tracking-[0.5rem] sm:tracking-[1rem] text-lg sm:text-xl font-mono"
           value={otp}
           onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, ''))}
           maxLength={6}
@@ -533,9 +535,9 @@ export function AuthModal({ isOpen, step, options, onClose, onStepChange }: Auth
             transition={{ duration: 0.2 }}
             onClick={onClose}
           />
-          <div className="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
+          <div className="absolute inset-0 flex items-center justify-center p-3 sm:p-4 pointer-events-none">
             <motion.div
-              className="relative bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto overflow-hidden"
+              className="relative bg-white rounded-2xl shadow-xl w-full max-w-md pointer-events-auto overflow-hidden flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)]"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
@@ -550,7 +552,7 @@ export function AuthModal({ isOpen, step, options, onClose, onStepChange }: Auth
               />
 
               {/* Header */}
-              <div className="relative flex items-center justify-between px-5 pt-4">
+              <div className="relative flex items-center justify-between px-4 sm:px-5 pt-4 shrink-0">
                 {backStep ? (
                   <button
                     onClick={() => onStepChange(backStep)}
@@ -570,7 +572,7 @@ export function AuthModal({ isOpen, step, options, onClose, onStepChange }: Auth
               </div>
 
               {/* Step content */}
-              <div className="relative px-6 pb-6 pt-2">
+              <div className="relative px-4 sm:px-6 pb-6 pt-2 overflow-y-auto overscroll-contain flex-1">
                 <AnimatePresence>
                   <motion.div
                     key={step}

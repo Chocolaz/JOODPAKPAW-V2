@@ -70,7 +70,7 @@ export const ChangePasswordForm = ({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="pb-4 px-14">
+    <form onSubmit={handleSubmit} className="pb-4 px-4 sm:px-8 md:px-14">
       <div className="space-y-4">
         <div className="space-y-1">
           <label htmlFor="oldPassword" className="text-sm text-deep-teal">

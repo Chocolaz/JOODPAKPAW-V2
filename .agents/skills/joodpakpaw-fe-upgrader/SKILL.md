@@ -20,6 +20,18 @@ Use this skill whenever modifying or upgrading the existing Next.js 16 Frontend 
      - Standardize DTO field names to strict `camelCase` (`firstName`, `lastName`, `petProfileIds`, `petSizeCategoryId`).
      - Use context-aware endpoints (`/api/v1/users/me/change-password`, `/api/v1/auth/sign-out`) and full refresh token rotation.
    - All changes in `joodpakpaw-frontend/` must pass `tsc --noEmit` without introducing implicit `any`.
+4. **Mobile-First Responsive Design (320px to 4K)**:
+   - **Mandatory Mobile-First Principle**: Every screen, modal, drawer, form, card, and layout must render cleanly without clipping, horizontal scrolling (`overflow-x-hidden`), or unclickable buttons on viewports from 320px up to 4K displays.
+   - **Dialogs & Modals (`AuthModal`, `DialogContent`, `DrawerContent`)**:
+     - Must include scrollable constraints: `max-h-[calc(100dvh-2rem)]` or `max-h-[90vh]` with `overflow-y-auto overscroll-contain` so users on small screens or with virtual keyboards can scroll to submit buttons.
+     - Sticky or fixed-height headers/footers with scrollable body content.
+   - **Responsive Forms & Typography**:
+     - Form layouts must use responsive padding (`px-4 sm:px-6 md:px-8`) instead of rigid fixed desktop padding (e.g. avoid `px-14` on mobile).
+     - Split fields (such as First Name / Last Name) must adapt from single-column on compact mobile (`grid-cols-1 sm:grid-cols-2`).
+     - Touch targets must be at least 44px (`min-h-[44px]`), and button typography should scale smoothly (`text-base sm:text-lg`).
+     - Avoid `w-screen` that introduces horizontal overflow scrollbars; prefer `w-full`.
+   - **Responsive Grids (`PropertyList`, Card Feeds)**:
+     - Adapt gracefully from compact devices: `grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4` (never force multi-columns on screens <380px that crush card content).
 
 ---
 

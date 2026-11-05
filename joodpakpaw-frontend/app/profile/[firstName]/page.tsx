@@ -194,7 +194,7 @@ export default function UserProfilePage() {
               onPasswordChangeClick={() => setIsPasswordDrawerOpen(true)}
             />
           </div>
-          <DrawerContent aria-describedby={undefined}>
+          <DrawerContent aria-describedby={undefined} className="max-h-[90vh] overflow-y-auto">
             <DrawerHeader>
               <div className="flex items-center">
                 <DrawerClose asChild>
@@ -218,7 +218,7 @@ export default function UserProfilePage() {
           open={isPasswordDrawerOpen}
           onOpenChange={setIsPasswordDrawerOpen}
         >
-          <DrawerContent aria-describedby={undefined}>
+          <DrawerContent aria-describedby={undefined} className="max-h-[90vh] overflow-y-auto">
             <DrawerHeader>
               <div className="flex items-center">
                 <DrawerClose asChild>
@@ -488,7 +488,7 @@ export default function UserProfilePage() {
 
       {/* Desktop change password dialog */}
       <Dialog open={isPasswordOpen} onOpenChange={setIsPasswordOpen}>
-        <DialogContent className="max-w-md" aria-describedby={undefined}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Change Password</DialogTitle>
           </DialogHeader>
