@@ -9,7 +9,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { config } from '../config/env';
 
-// Configure S3Client for MinIO, Cloudflare R2, or Supabase S3 Storage
+// Configure S3Client for MinIO, Cloudflare R2, or AWS S3 Storage
 export const s3Client = new S3Client({
   endpoint: config.s3.endpoint,
   region: config.s3.region || 'us-east-1',
@@ -17,7 +17,7 @@ export const s3Client = new S3Client({
     accessKeyId: config.s3.accessKey,
     secretAccessKey: config.s3.secretKey,
   },
-  forcePathStyle: config.s3.forcePathStyle !== false, // default true for MinIO/Supabase compatibility
+  forcePathStyle: config.s3.forcePathStyle !== false, // default true for MinIO compatibility
   maxAttempts: 1,
 });
 
@@ -47,15 +47,22 @@ function buildWebpObjectKey(folder: string, originalName?: string): string {
 }
 
 /**
- * Builds the public URL for a given S3 object key
+ * Builds the public URL for a given S3/Cloud Storage object key
  */
 export function getPublicFileUrl(objectKey: string): string {
+  const cleanKey = objectKey.replace(/^\/+/, '');
+  if (config.s3.publicUrl) {
+    const baseUrl = config.s3.publicUrl.replace(/\/+$/, '');
+    return `${baseUrl}/${cleanKey}`;
+  }
+  if (config.supabase.url) {
+    const cleanUrl = config.supabase.url.replace(/\/+$/, '');
+    return `${cleanUrl}/storage/v1/object/public/${config.s3.bucket}/${cleanKey}`;
+  }
   const baseUrl = (
-    config.s3.publicUrl ||
     `${config.s3.endpoint}/${config.s3.bucket}` ||
     'http://localhost:9000/joodpakpaw-media'
   ).replace(/\/+$/, '');
-  const cleanKey = objectKey.replace(/^\/+/, '');
   return `${baseUrl}/${cleanKey}`;
 }
 
@@ -90,8 +97,8 @@ export async function convertBufferToWebp(fileBuffer: Buffer): Promise<Buffer> {
 }
 
 /**
- * Converts an image buffer to WebP and uploads it to S3/MinIO.
- * Gracefully falls back to returning a deterministic public URL if S3/MinIO is unreachable in local/test dev.
+ * Converts an image buffer to WebP and uploads it to Cloud Storage (Supabase Storage or S3/MinIO).
+ * Gracefully falls back to returning a deterministic public URL if storage is unreachable in local offline test dev.
  */
 export async function uploadImageAsWebp(
   fileBuffer: Buffer,
@@ -102,6 +109,41 @@ export async function uploadImageAsWebp(
   const webpBuffer = await convertBufferToWebp(fileBuffer);
   const publicUrl = getPublicFileUrl(objectKey);
 
+  // 1. Primary: Cloud Object Storage via Supabase Storage REST API (if configured)
+  if (config.supabase.url && config.supabase.anonKey) {
+    try {
+      const uploadUrl = `${config.supabase.url.replace(/\/+$/, '')}/storage/v1/object/${config.s3.bucket}/${objectKey}`;
+      const res = await Promise.race([
+        fetch(uploadUrl, {
+          method: 'POST',
+          headers: {
+            apikey: config.supabase.anonKey,
+            Authorization: `Bearer ${config.supabase.anonKey}`,
+            'Content-Type': 'image/webp',
+          },
+          body: webpBuffer,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Supabase storage upload timeout')), 5000)
+        ),
+      ]);
+
+      if (res.ok) {
+        return publicUrl;
+      }
+      const errText = await res.text();
+      console.warn(`[StorageService] Supabase upload failed with status ${res.status}: ${errText}`);
+    } catch (err) {
+      if (config.env === 'development') {
+        console.warn(
+          `[StorageService] Supabase Storage request failed, falling back to S3:`,
+          err instanceof Error ? err.message : err
+        );
+      }
+    }
+  }
+
+  // 2. Secondary / Local fallback: Standard S3 Client (MinIO / AWS S3 / Cloudflare R2)
   try {
     const putCommand = new PutObjectCommand({
       Bucket: config.s3.bucket,
@@ -146,8 +188,8 @@ export async function uploadMultipleImagesAsWebp(
 }
 
 /**
- * Deletes an object from S3/MinIO by its public URL or object key.
- * Gracefully ignores errors if S3 is offline.
+ * Deletes an object from Cloud Storage (Supabase Storage or S3/MinIO) by its public URL or object key.
+ * Gracefully ignores errors if storage is offline.
  */
 export async function deleteObjectFromS3(fileUrlOrKey: string): Promise<void> {
   if (!fileUrlOrKey || typeof fileUrlOrKey !== 'string') return;
@@ -157,7 +199,10 @@ export async function deleteObjectFromS3(fileUrlOrKey: string): Promise<void> {
       try {
         const parsed = new URL(key);
         const parts = parsed.pathname.split('/').filter(Boolean);
-        if (parts.length > 0 && parts[0] === config.s3.bucket) {
+        const pubIndex = parts.indexOf('public');
+        if (pubIndex !== -1 && parts[pubIndex + 1] === config.s3.bucket) {
+          key = parts.slice(pubIndex + 2).join('/');
+        } else if (parts.length > 0 && parts[0] === config.s3.bucket) {
           key = parts.slice(1).join('/');
         } else {
           key = parts.join('/');
@@ -176,6 +221,29 @@ export async function deleteObjectFromS3(fileUrlOrKey: string): Promise<void> {
 
     if (!key) return;
 
+    // 1. Supabase Storage delete if configured
+    if (config.supabase.url && config.supabase.anonKey) {
+      try {
+        const deleteUrl = `${config.supabase.url.replace(/\/+$/, '')}/storage/v1/object/${config.s3.bucket}/${key}`;
+        await Promise.race([
+          fetch(deleteUrl, {
+            method: 'DELETE',
+            headers: {
+              apikey: config.supabase.anonKey,
+              Authorization: `Bearer ${config.supabase.anonKey}`,
+            },
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Supabase storage delete timeout')), 3000)
+          ),
+        ]);
+        return;
+      } catch {
+        // Fallback to S3 delete
+      }
+    }
+
+    // 2. Standard S3 Client delete
     await Promise.race([
       s3Client.send(
         new DeleteObjectCommand({

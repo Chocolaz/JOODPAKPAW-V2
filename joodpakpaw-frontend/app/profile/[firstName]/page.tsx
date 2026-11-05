@@ -71,7 +71,6 @@ export default function UserProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
-  const guestAvatarSrc = `${basePath}/graphics/guest.jpg`
 
   // Sync edit state when profile loads
   useEffect(() => {
@@ -170,7 +169,7 @@ export default function UserProfilePage() {
 
   if (error) return <ErrorState message={error} />
 
-  const displayAvatar = avatarPreview || guestAvatarSrc
+  const displayAvatar = avatarPreview || undefined
   const roleLabel =
     profile?.role?.map((r) => r.name).join(', ') ||
     (profile?.isBecomeToHost ? 'Host' : 'Guest')

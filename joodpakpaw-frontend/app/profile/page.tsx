@@ -109,7 +109,6 @@ function ProfilePageSkeleton() {
 export default function ProfilePage() {
   const { user, isAuthenticated, loading: authLoading, requireAuth } = useAuth()
   const router = useRouter()
-  const guestAvatarSrc = assetPath('/graphics/guest.jpg')
 
   const checkAuthAndRedirect = (authenticatedPath: string) => {
     if (authLoading) return
@@ -199,7 +198,7 @@ export default function ProfilePage() {
         <div className="flex justify-between items-start">
           <Avatar className="w-18 h-18 md:w-28 md:h-28 lg:w-32 lg:h-32 ring-4 ring-white shadow-lg -mt-10 md:-mt-14 lg:-mt-16">
             <AvatarImage
-              src={isAuthenticated && user?.avatar ? user.avatar : guestAvatarSrc}
+              src={isAuthenticated && user?.avatar ? user.avatar : undefined}
               alt={
                 isAuthenticated && user
                   ? `${user.firstName} ${user.lastName}`

@@ -21,7 +21,6 @@ export const EditProfileForm = ({
   onRefreshProfile: () => void
   onCloseDrawer: () => void
 }) => {
-  const guestAvatarSrc = assetPath('/graphics/guest.jpg')
   const { refreshAuth } = useAuth()
   const [firstName, setFirstName] = useState(profile.firstName)
   const [lastName, setLastName] = useState(profile.lastName)
@@ -90,7 +89,7 @@ export const EditProfileForm = ({
         <div className="flex justify-center">
           <div className="relative">
             <Avatar className="w-24 h-24 ring-4 ring-gray-100">
-              <AvatarImage src={avatarPreview || guestAvatarSrc} alt="Avatar preview" />
+              <AvatarImage src={avatarPreview || undefined} alt="Avatar preview" />
               <AvatarFallback className="text-2xl bg-gray-100 text-neutral-gray">
                 {profile.firstName?.charAt(0)}{profile.lastName?.charAt(0)}
               </AvatarFallback>

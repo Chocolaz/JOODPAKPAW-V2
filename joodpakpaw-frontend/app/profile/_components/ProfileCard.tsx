@@ -13,7 +13,6 @@ export const ProfileCard = ({
   onPasswordChangeClick: () => void
 }) => {
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
-  const guestAvatarSrc = `${basePath}/graphics/guest.jpg`
   const roleLabel = profile.role?.map(r => r.name).join(', ') || (profile.isBecomeToHost ? 'Host' : 'Guest')
   const isHost = profile.role?.some(r => r.name === 'host') || profile.isBecomeToHost
 
@@ -30,7 +29,7 @@ export const ProfileCard = ({
         <CardContent className="px-5 pb-5 pt-0 relative">
           {/* Avatar overlapping banner */}
           <Avatar className="w-18 h-18 ring-4 ring-white shadow-lg -mt-10">
-            <AvatarImage src={profile.avatar || guestAvatarSrc} alt={`${profile.firstName} ${profile.lastName}`} />
+            <AvatarImage src={profile.avatar || undefined} alt={`${profile.firstName} ${profile.lastName}`} />
             <AvatarFallback className="text-2xl bg-gray-100 text-deep-teal font-semibold">
               {profile.firstName?.charAt(0)}{profile.lastName?.charAt(0)}
             </AvatarFallback>
