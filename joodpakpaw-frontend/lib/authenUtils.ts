@@ -31,9 +31,18 @@ export const refreshAccessToken = async (): Promise<string | null> => {
   }
 
   try {
-    const newAccessToken = await callRefreshTokenApi(currentRefreshToken)
-    saveTokens(newAccessToken, currentRefreshToken) // Keep old refresh token
-    return newAccessToken
+    const res = await callRefreshTokenApi(currentRefreshToken)
+    const newAccessToken = typeof res === 'string' ? res : res.accessToken
+    const newRefreshToken =
+      (typeof res === 'object' && res?.refreshToken) || currentRefreshToken
+
+    if (newAccessToken) {
+      saveTokens(newAccessToken, newRefreshToken)
+      return newAccessToken
+    }
+
+    clearTokens()
+    return null
   } catch (error) {
     console.error('Failed to refresh access token:', error)
     clearTokens()

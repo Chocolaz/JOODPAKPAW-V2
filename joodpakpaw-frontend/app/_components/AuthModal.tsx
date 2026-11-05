@@ -188,7 +188,16 @@ function RegisterStep({
     }
     setIsSubmitting(true)
     try {
-      await signUp({ email, password, confirmPassword, firstname, lastname, phone })
+      await signUp({
+        email,
+        password,
+        confirmPassword,
+        firstName: firstname,
+        lastName: lastname,
+        firstname,
+        lastname,
+        phone,
+      })
       onStepChange('verify-otp', { email, returnUrl: options.returnUrl })
     } catch (error) {
       const apiErrors = getApiErrorMessages(error)

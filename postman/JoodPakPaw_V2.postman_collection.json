@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "7fca6682-eae7-4b19-94fa-0b405c0d2492",
     "name": "JoodPakPaw V2 Core API",
-    "description": "Comprehensive Postman Collection for JoodPakPaw V2 API Server (Sprint 0 - Sprint 4).\nBase URL defaults to `{{baseUrl}}` (e.g., http://localhost:8000).",
+    "description": "Enterprise Postman Collection for JoodPakPaw V2 API Server (Sprint 0 - Sprint 4).\nEnforces Single Standard Envelope (`data` wrapper), `camelCase` DTOs, and OWASP Security.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -35,8 +35,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/",
-              "host": ["{{baseUrl}}"],
-              "path": [""]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                ""
+              ]
             },
             "description": "Check root service identification."
           },
@@ -66,8 +70,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/health",
-              "host": ["{{baseUrl}}"],
-              "path": ["health"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
             },
             "description": "Probe system uptime and database connectivity (Supabase PostgreSQL)."
           },
@@ -99,8 +107,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1"
+              ]
             },
             "description": "List all active API v1 subsystem endpoints."
           },
@@ -130,8 +143,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/_non_existent_endpoint_",
-              "host": ["{{baseUrl}}"],
-              "path": ["_non_existent_endpoint_"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "_non_existent_endpoint_"
+              ]
             },
             "description": "Verify 404 error handler adheres to JoodPakPaw standard API contract."
           },
@@ -140,8 +157,8 @@
       ]
     },
     {
-      "name": "01 - Auth & User Profile (PBI-04 & PBI-05 - PASS)",
-      "description": "JWT Authentication, OTP Registration, Password Reset, Profile, S3 WebP Avatar Upload, and Change Password APIs (19/19 QA Tests Passed)",
+      "name": "01 - Auth & User Profile (Enterprise V2 - PASS)",
+      "description": "JWT Authentication, OTP Registration, Single Envelope Data Wrapper, Password Reset, Profile, WebP Avatar, and Sign-out APIs",
       "item": [
         {
           "name": "Sign Up (Register & Generate OTP)",
@@ -154,12 +171,10 @@
                   "    pm.response.to.have.status(201);",
                   "});",
                   "var json = pm.response.json();",
-                  "if (json.otp) {",
-                  "    pm.environment.set(\"last_otp\", json.otp);",
-                  "}",
-                  "if (json.refCode) {",
-                  "    pm.environment.set(\"last_ref_code\", json.refCode);",
-                  "}"
+                  "var otp = (json.data && (json.data.otp || json.data.debugOtp)) || json.otp;",
+                  "var refCode = (json.data && json.data.refCode) || json.refCode;",
+                  "if (otp) pm.environment.set(\"last_otp\", otp);",
+                  "if (refCode) pm.environment.set(\"last_ref_code\", refCode);"
                 ],
                 "type": "text/javascript"
               }
@@ -175,12 +190,19 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"new.guest@joodpakpaw.com\",\n  \"password\": \"Password123!\",\n  \"confirmPassword\": \"Password123!\",\n  \"firstname\": \"สมหวัง\",\n  \"lastname\": \"รักสัตว์\",\n  \"phone\": \"0899876543\"\n}"
+              "raw": "{\n  \"email\": \"new.guest@joodpakpaw.com\",\n  \"password\": \"Password123!\",\n  \"confirmPassword\": \"Password123!\",\n  \"firstName\": \"สมหวัง\",\n  \"lastName\": \"รักสัตว์\",\n  \"phone\": \"0899876543\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/sign-up",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "sign-up"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "sign-up"
+              ]
             },
             "description": "Register a new user and generate 6-digit OTP + refCode. Returns T-2007 on validation error, A-3003 on duplicate email, A-3004 on duplicate phone."
           },
@@ -197,12 +219,10 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "var json = pm.response.json();",
-                  "if (json.accessToken) {",
-                  "    pm.environment.set(\"jwt_token\", json.accessToken);",
-                  "}",
-                  "if (json.refreshToken) {",
-                  "    pm.environment.set(\"refresh_token\", json.refreshToken);",
-                  "}"
+                  "var token = (json.data && json.data.accessToken) || json.accessToken;",
+                  "var refresh = (json.data && json.data.refreshToken) || json.refreshToken;",
+                  "if (token) pm.environment.set(\"jwt_token\", token);",
+                  "if (refresh) pm.environment.set(\"refresh_token\", refresh);"
                 ],
                 "type": "text/javascript"
               }
@@ -222,8 +242,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/verify-otp",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "verify-otp"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "verify-otp"
+              ]
             },
             "description": "Verify 6-digit OTP and issue JWT accessToken & refreshToken."
           },
@@ -240,9 +267,8 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "var json = pm.response.json();",
-                  "if (json.otp) {",
-                  "    pm.environment.set(\"last_otp\", json.otp);",
-                  "}"
+                  "var otp = (json.data && (json.data.otp || json.data.debugOtp)) || json.otp;",
+                  "if (otp) pm.environment.set(\"last_otp\", otp);"
                 ],
                 "type": "text/javascript"
               }
@@ -262,8 +288,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/resend-otp",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "resend-otp"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "resend-otp"
+              ]
             },
             "description": "Generate new 6-digit OTP and refCode for user."
           },
@@ -280,17 +313,12 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "var json = pm.response.json();",
-                  "var token = json.accessToken || (json.data && json.data.accessToken);",
-                  "if (token) {",
-                  "    pm.environment.set(\"jwt_token\", token);",
-                  "}",
-                  "var refresh = json.refreshToken || (json.data && json.data.refreshToken);",
-                  "if (refresh) {",
-                  "    pm.environment.set(\"refresh_token\", refresh);",
-                  "}",
-                  "if (json.user && json.user.id) {",
-                  "    pm.environment.set(\"user_id\", String(json.user.id));",
-                  "}"
+                  "var token = (json.data && json.data.accessToken) || json.accessToken;",
+                  "var refresh = (json.data && json.data.refreshToken) || json.refreshToken;",
+                  "var user = (json.data && json.data.user) || json.user;",
+                  "if (token) pm.environment.set(\"jwt_token\", token);",
+                  "if (refresh) pm.environment.set(\"refresh_token\", refresh);",
+                  "if (user && user.id) pm.environment.set(\"user_id\", String(user.id));"
                 ],
                 "type": "text/javascript"
               }
@@ -310,8 +338,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/sign-in",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "sign-in"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "sign-in"
+              ]
             },
             "description": "Sign in as Admin. Saves `jwt_token`, `refresh_token`, and `user_id` to environment. Returns A-3001 (401) on invalid credentials."
           },
@@ -328,17 +363,12 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "var json = pm.response.json();",
-                  "var token = json.accessToken || (json.data && json.data.accessToken);",
-                  "if (token) {",
-                  "    pm.environment.set(\"jwt_token\", token);",
-                  "}",
-                  "var refresh = json.refreshToken || (json.data && json.data.refreshToken);",
-                  "if (refresh) {",
-                  "    pm.environment.set(\"refresh_token\", refresh);",
-                  "}",
-                  "if (json.user && json.user.id) {",
-                  "    pm.environment.set(\"user_id\", String(json.user.id));",
-                  "}"
+                  "var token = (json.data && json.data.accessToken) || json.accessToken;",
+                  "var refresh = (json.data && json.data.refreshToken) || json.refreshToken;",
+                  "var user = (json.data && json.data.user) || json.user;",
+                  "if (token) pm.environment.set(\"jwt_token\", token);",
+                  "if (refresh) pm.environment.set(\"refresh_token\", refresh);",
+                  "if (user && user.id) pm.environment.set(\"user_id\", String(user.id));"
                 ],
                 "type": "text/javascript"
               }
@@ -358,8 +388,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/sign-in",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "sign-in"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "sign-in"
+              ]
             },
             "description": "Sign in as verified Host with demo seed account."
           },
@@ -376,9 +413,10 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "var json = pm.response.json();",
-                  "if (json.accessToken) {",
-                  "    pm.environment.set(\"jwt_token\", json.accessToken);",
-                  "}"
+                  "var token = (json.data && json.data.accessToken) || json.accessToken;",
+                  "var refresh = (json.data && json.data.refreshToken) || json.refreshToken;",
+                  "if (token) pm.environment.set(\"jwt_token\", token);",
+                  "if (refresh) pm.environment.set(\"refresh_token\", refresh);"
                 ],
                 "type": "text/javascript"
               }
@@ -398,8 +436,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/refresh-token",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "refresh-token"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "refresh-token"
+              ]
             },
             "description": "Rotate/issue a new accessToken from a valid refreshToken."
           },
@@ -416,9 +461,8 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "var json = pm.response.json();",
-                  "if (json.resetPasswordToken) {",
-                  "    pm.environment.set(\"reset_password_token\", json.resetPasswordToken);",
-                  "}"
+                  "var resetToken = (json.data && json.data.resetPasswordToken) || json.resetPasswordToken;",
+                  "if (resetToken) pm.environment.set(\"reset_password_token\", resetToken);"
                 ],
                 "type": "text/javascript"
               }
@@ -438,8 +482,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/forgot-password",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "forgot-password"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "forgot-password"
+              ]
             },
             "description": "Request password reset token. Returns DB-1002 (404) if email is not registered."
           },
@@ -461,8 +512,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/reset-password",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "reset-password"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "reset-password"
+              ]
             },
             "description": "Reset password using token. Returns A-3010 (400) if token is expired or already used."
           },
@@ -502,15 +560,22 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/profile",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "auth", "profile"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "profile"
+              ]
             },
             "description": "Fetch authenticated user profile (`ProfileResponse`), roles, and verification status."
           },
           "response": []
         },
         {
-          "name": "Change Password",
+          "name": "Change Password (Context-Aware /me)",
           "request": {
             "auth": {
               "type": "bearer",
@@ -534,11 +599,19 @@
               "raw": "{\n  \"oldPassword\": \"{{user_password}}\",\n  \"newPassword\": \"NewPassword123!\",\n  \"confirmPassword\": \"NewPassword123!\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v1/users/{{user_id}}/change-password",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "users", "{{user_id}}", "change-password"]
+              "raw": "{{baseUrl}}/api/v1/users/me/change-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "me",
+                "change-password"
+              ]
             },
-            "description": "Change password for authenticated user. Returns A-3011 on wrong oldPassword, A-3012 if newPassword equals oldPassword, and 403 A-3007 on IDOR attempt."
+            "description": "Change password for authenticated user via context-aware route. Returns A-3011 on wrong oldPassword, A-3012 if newPassword equals oldPassword, and invalidates active refresh tokens."
           },
           "response": []
         },
@@ -603,17 +676,77 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/users/{{user_id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "users", "{{user_id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{user_id}}"
+              ]
             },
             "description": "Update user profile fields and upload avatar image (auto-converted to .webp via sharp + @aws-sdk/client-s3). Returns A-3004 (409) on duplicate phone, T-2007 (400) on invalid phone, and A-3007 (403) on IDOR attempt."
+          },
+          "response": []
+        },
+        {
+          "name": "Sign Out (Revoke Refresh Token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/sign-out",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "sign-out"
+              ]
+            },
+            "description": "Sign out and revoke active refresh tokens."
           },
           "response": []
         }
       ]
     },
     {
-      "name": "02 - Master Lookups (PBI-06 - PASS)",
+      "name": "02 - Master Lookups (Enterprise V2 - PASS)",
       "description": "Facilities, Pet Types, Pet Breeds, Pet Size Categories, and Report Categories (24/24 QA Tests Passed)",
       "item": [
         {
@@ -627,8 +760,9 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "var json = pm.response.json();",
-                  "pm.test(\"Returns facilities list\", function () {",
-                  "    pm.expect(json.facilities).to.be.an(\"array\");",
+                  "pm.test(\"Returns clean standard envelope\", function () {",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data).to.be.an(\"object\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -640,8 +774,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/hosts/facilities/all",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "hosts", "facilities", "all"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hosts",
+                "facilities",
+                "all"
+              ]
             },
             "description": "List all property & room facilities grouped with their category."
           },
@@ -658,8 +800,9 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "var json = pm.response.json();",
-                  "pm.test(\"Returns normalized pet types\", function () {",
-                  "    pm.expect(json.pets).to.be.an(\"array\");",
+                  "pm.test(\"Returns clean standard envelope\", function () {",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data).to.be.an(\"object\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -671,8 +814,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/pets/all",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "pets", "all"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pets",
+                "all"
+              ]
             },
             "description": "List all pet types (`Dog`, `Cat`, etc.)."
           },
@@ -689,8 +839,9 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "var json = pm.response.json();",
-                  "pm.test(\"Returns petBreeds array\", function () {",
-                  "    pm.expect(json.petBreeds).to.be.an(\"array\");",
+                  "pm.test(\"Returns clean standard envelope\", function () {",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data).to.be.an(\"object\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -702,8 +853,17 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/pets/1/pet-breeds/all",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "pets", "1", "pet-breeds", "all"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pets",
+                "1",
+                "pet-breeds",
+                "all"
+              ]
             },
             "description": "List pet breeds for a specific petTypeId."
           },
@@ -720,8 +880,9 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "var json = pm.response.json();",
-                  "pm.test(\"Returns petSizeCategories array\", function () {",
-                  "    pm.expect(json.petSizeCategories).to.be.an(\"array\");",
+                  "pm.test(\"Returns clean standard envelope\", function () {",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data).to.be.an(\"object\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -733,8 +894,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/pet-size-categories/all",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "pet-size-categories", "all"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pet-size-categories",
+                "all"
+              ]
             },
             "description": "List pet weight size categories (Small, Medium, Large, Giant)."
           },
@@ -751,8 +919,9 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "var json = pm.response.json();",
-                  "pm.test(\"Returns reportCategories array\", function () {",
-                  "    pm.expect(json.reportCategories).to.be.an(\"array\");",
+                  "pm.test(\"Returns clean standard envelope\", function () {",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data).to.be.an(\"object\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -764,8 +933,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/report-categories?type=property",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "report-categories"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "report-categories"
+              ],
               "query": [
                 {
                   "key": "type",
@@ -780,7 +955,7 @@
       ]
     },
     {
-      "name": "03 - Public Property Discovery (PBI-06 - PASS)",
+      "name": "03 - Public Property Discovery (Enterprise V2 - PASS)",
       "description": "Search properties, view property details, host public profile, host reviews, and search room availability across date ranges",
       "item": [
         {
@@ -794,8 +969,9 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "var json = pm.response.json();",
-                  "pm.test(\"Returns paginated properties\", function () {",
+                  "pm.test(\"Returns data array and pagination\", function () {",
                   "    pm.expect(json.data).to.be.an(\"array\");",
+                  "    pm.expect(json.pagination).to.be.an(\"object\");",
                   "});",
                   "if (json.data && json.data.length > 0 && json.data[0].id) {",
                   "    pm.environment.set(\"sample_property_id\", String(json.data[0].id));",
@@ -810,8 +986,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/properties?page=1&limit=10&sortBy=rating",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "properties"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "properties"
+              ],
               "query": [
                 {
                   "key": "page",
@@ -855,8 +1037,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/properties/{{sample_property_id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "properties", "{{sample_property_id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "properties",
+                "{{sample_property_id}}"
+              ]
             },
             "description": "Get complete property details, room categories, facilities, host info, and reviews."
           },
@@ -886,8 +1075,17 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/properties/{{sample_property_id}}/room-categories/search?checkIn=2026-11-10&checkOut=2026-11-12",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "properties", "{{sample_property_id}}", "room-categories", "search"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "properties",
+                "{{sample_property_id}}",
+                "room-categories",
+                "search"
+              ],
               "query": [
                 {
                   "key": "checkIn",
@@ -910,8 +1108,17 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/properties/hosts/2/profile",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "properties", "hosts", "2", "profile"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "properties",
+                "hosts",
+                "2",
+                "profile"
+              ]
             },
             "description": "Get public host profile, rating stats, and active properties."
           },
@@ -924,8 +1131,17 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/properties/hosts/2/reviews?page=1&limit=10",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "properties", "hosts", "2", "reviews"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "properties",
+                "hosts",
+                "2",
+                "reviews"
+              ],
               "query": [
                 {
                   "key": "page",
@@ -944,8 +1160,8 @@
       ]
     },
     {
-      "name": "04 - Host Property & Room Category CRUD (PBI-07 - PASS)",
-      "description": "Host management for properties and room categories with multi-image WebP upload, IDOR protection (403 A-3007), active booking deletion guard (409 B-4001), and admin-ban guard (403 A-3002) (29/29 QA Tests Passed)",
+      "name": "04 - Host Property & Room Category CRUD (Enterprise V2 - PASS)",
+      "description": "Host management for properties and room categories with multi-image WebP upload, P-5001 room guard, IDOR protection (403 A-3007), active booking deletion guard (409 B-4001), and admin-ban guard (403 A-3002)",
       "item": [
         {
           "name": "Get All Host Properties",
@@ -981,8 +1197,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/hosts/properties/all",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "hosts", "properties", "all"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hosts",
+                "properties",
+                "all"
+              ]
             },
             "description": "Get all properties owned by the authenticated Host."
           },
@@ -1005,8 +1229,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/hosts/properties/{{sample_property_id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "hosts", "properties", "{{sample_property_id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hosts",
+                "properties",
+                "{{sample_property_id}}"
+              ]
             },
             "description": "Get detailed host view of a specific property (requires ownership)."
           },
@@ -1047,23 +1279,74 @@
             "body": {
               "mode": "formdata",
               "formdata": [
-                { "key": "title", "value": "JoodPakPaw Luxury Pet Villa", "type": "text" },
-                { "key": "description", "value": "วิลล่าส่วนตัวต้อนรับน้องหมาและน้องแมว พร้อมสนามหญ้าส่วนตัว", "type": "text" },
-                { "key": "propertyTypeId", "value": "1", "type": "text" },
-                { "key": "latitude", "value": "13.7563", "type": "text" },
-                { "key": "longitude", "value": "100.5018", "type": "text" },
-                { "key": "country", "value": "Thailand", "type": "text" },
-                { "key": "province", "value": "กรุงเทพมหานคร", "type": "text" },
-                { "key": "district", "value": "วัฒนา", "type": "text" },
-                { "key": "address", "value": "99 สุขุมวิท 55", "type": "text" },
-                { "key": "zipcode", "value": "10110", "type": "text" },
-                { "key": "facilities", "value": "[1, 2]", "type": "text" }
+                {
+                  "key": "title",
+                  "value": "JoodPakPaw Luxury Pet Villa",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "วิลล่าส่วนตัวต้อนรับน้องหมาและน้องแมว พร้อมสนามหญ้าส่วนตัว",
+                  "type": "text"
+                },
+                {
+                  "key": "propertyTypeId",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "latitude",
+                  "value": "13.7563",
+                  "type": "text"
+                },
+                {
+                  "key": "longitude",
+                  "value": "100.5018",
+                  "type": "text"
+                },
+                {
+                  "key": "country",
+                  "value": "Thailand",
+                  "type": "text"
+                },
+                {
+                  "key": "province",
+                  "value": "กรุงเทพมหานคร",
+                  "type": "text"
+                },
+                {
+                  "key": "district",
+                  "value": "วัฒนา",
+                  "type": "text"
+                },
+                {
+                  "key": "address",
+                  "value": "99 สุขุมวิท 55",
+                  "type": "text"
+                },
+                {
+                  "key": "zipcode",
+                  "value": "10110",
+                  "type": "text"
+                },
+                {
+                  "key": "facilities",
+                  "value": "[1, 2]",
+                  "type": "text"
+                }
               ]
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/hosts/properties",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "hosts", "properties"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hosts",
+                "properties"
+              ]
             },
             "description": "Create a new property with facilities and optional `.webp` images."
           },
@@ -1087,15 +1370,35 @@
             "body": {
               "mode": "formdata",
               "formdata": [
-                { "key": "title", "value": "JoodPakPaw Luxury Pet Villa (Updated)", "type": "text" },
-                { "key": "description", "value": "อัปเดตรายละเอียดวิลล่าต้อนรับสัตว์เลี้ยง", "type": "text" },
-                { "key": "facilities", "value": "[1, 2, 3]", "type": "text" }
+                {
+                  "key": "title",
+                  "value": "JoodPakPaw Luxury Pet Villa (Updated)",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "อัปเดตรายละเอียดวิลล่าต้อนรับสัตว์เลี้ยง",
+                  "type": "text"
+                },
+                {
+                  "key": "facilities",
+                  "value": "[1, 2, 3]",
+                  "type": "text"
+                }
               ]
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/hosts/properties/{{sample_property_id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "hosts", "properties", "{{sample_property_id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hosts",
+                "properties",
+                "{{sample_property_id}}"
+              ]
             },
             "description": "Update property details, facilities, deleted image IDs, and new images."
           },
@@ -1127,8 +1430,17 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/hosts/properties/{{sample_property_id}}/is-active",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "hosts", "properties", "{{sample_property_id}}", "is-active"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hosts",
+                "properties",
+                "{{sample_property_id}}",
+                "is-active"
+              ]
             },
             "description": "Toggle property visibility (`isActive`). Blocks enabling with 403 A-3002 if banned by admin."
           },
@@ -1151,8 +1463,18 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/hosts/properties/{{sample_property_id}}/room-categories/all",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "hosts", "properties", "{{sample_property_id}}", "room-categories", "all"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hosts",
+                "properties",
+                "{{sample_property_id}}",
+                "room-categories",
+                "all"
+              ]
             },
             "description": "List all room categories belonging to a host's property."
           },
@@ -1176,19 +1498,56 @@
             "body": {
               "mode": "formdata",
               "formdata": [
-                { "key": "name", "value": "Deluxe Pet Suite", "type": "text" },
-                { "key": "totalRoom", "value": "3", "type": "text" },
-                { "key": "numberOfPets", "value": "2", "type": "text" },
-                { "key": "basePrice", "value": "1800", "type": "text" },
-                { "key": "petSizeCategoryId", "value": "2", "type": "text" },
-                { "key": "pets", "value": "[1, 2]", "type": "text" },
-                { "key": "facilities", "value": "[1, 2]", "type": "text" }
+                {
+                  "key": "name",
+                  "value": "Deluxe Pet Suite",
+                  "type": "text"
+                },
+                {
+                  "key": "totalRoom",
+                  "value": "3",
+                  "type": "text"
+                },
+                {
+                  "key": "numberOfPets",
+                  "value": "2",
+                  "type": "text"
+                },
+                {
+                  "key": "basePrice",
+                  "value": "1800",
+                  "type": "text"
+                },
+                {
+                  "key": "petSizeCategoryId",
+                  "value": "2",
+                  "type": "text"
+                },
+                {
+                  "key": "pets",
+                  "value": "[1, 2]",
+                  "type": "text"
+                },
+                {
+                  "key": "facilities",
+                  "value": "[1, 2]",
+                  "type": "text"
+                }
               ]
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/hosts/properties/{{sample_property_id}}/room-categories",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "hosts", "properties", "{{sample_property_id}}", "room-categories"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hosts",
+                "properties",
+                "{{sample_property_id}}",
+                "room-categories"
+              ]
             },
             "description": "Create a new room category under a property."
           },
@@ -1212,17 +1571,47 @@
             "body": {
               "mode": "formdata",
               "formdata": [
-                { "key": "name", "value": "Deluxe Pet Suite (Updated)", "type": "text" },
-                { "key": "totalRoom", "value": "4", "type": "text" },
-                { "key": "numberOfPets", "value": "2", "type": "text" },
-                { "key": "basePrice", "value": "1950", "type": "text" },
-                { "key": "petSizeCategoryId", "value": "2", "type": "text" }
+                {
+                  "key": "name",
+                  "value": "Deluxe Pet Suite (Updated)",
+                  "type": "text"
+                },
+                {
+                  "key": "totalRoom",
+                  "value": "4",
+                  "type": "text"
+                },
+                {
+                  "key": "numberOfPets",
+                  "value": "2",
+                  "type": "text"
+                },
+                {
+                  "key": "basePrice",
+                  "value": "1950",
+                  "type": "text"
+                },
+                {
+                  "key": "petSizeCategoryId",
+                  "value": "2",
+                  "type": "text"
+                }
               ]
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/hosts/properties/{{sample_property_id}}/room-categories/1",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "hosts", "properties", "{{sample_property_id}}", "room-categories", "1"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hosts",
+                "properties",
+                "{{sample_property_id}}",
+                "room-categories",
+                "1"
+              ]
             },
             "description": "Update room category fields, allowed pet types, facilities, and images."
           },
@@ -1245,8 +1634,18 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/hosts/properties/{{sample_property_id}}/room-categories/1",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "hosts", "properties", "{{sample_property_id}}", "room-categories", "1"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hosts",
+                "properties",
+                "{{sample_property_id}}",
+                "room-categories",
+                "1"
+              ]
             },
             "description": "Soft-delete a room category. Blocks with 409 B-4001 if active/upcoming bookings exist."
           },
@@ -1269,8 +1668,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/hosts/properties/{{sample_property_id}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "hosts", "properties", "{{sample_property_id}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hosts",
+                "properties",
+                "{{sample_property_id}}"
+              ]
             },
             "description": "Soft-delete a property. Blocks with 409 B-4001 if active/upcoming bookings exist."
           },

@@ -43,24 +43,62 @@ async function post<T>(
   }
 }
 
-export const refreshToken = async (token: string): Promise<string> => {
-  const response = await post<{ accessToken: string }>(
+export interface RefreshTokenResult {
+  accessToken: string
+  refreshToken?: string
+}
+
+export const refreshToken = async (token: string): Promise<RefreshTokenResult> => {
+  const response = await post<any>(
     'api/v1/auth/refresh-token',
     { refreshToken: token },
     'Refresh Token'
   )
-  return response.accessToken
+  const accessToken =
+    response?.data?.accessToken || response?.accessToken || ''
+  const newRefreshToken =
+    response?.data?.refreshToken || response?.refreshToken || token
+  return {
+    accessToken,
+    refreshToken: newRefreshToken,
+  }
 }
 
-export const resetPassword = async (
-  userId: string,
+export const changePassword = async (
   credentials: ChangePasswordCredentials
 ): Promise<void> => {
   await request<void>({
-    endpoint: `api/v1/users/${userId}/change-password`,
+    endpoint: 'api/v1/users/me/change-password',
     method: 'PATCH',
     body: credentials,
     errorContext: 'Change Password',
     requiresAuth: true,
   })
+}
+
+export const resetPassword = async (
+  _userId: string,
+  credentials: ChangePasswordCredentials
+): Promise<void> => {
+  await request<void>({
+    endpoint: 'api/v1/users/me/change-password',
+    method: 'PATCH',
+    body: credentials,
+    errorContext: 'Change Password',
+    requiresAuth: true,
+  })
+}
+
+export const signOut = async (refreshToken?: string): Promise<void> => {
+  try {
+    await request<void>({
+      endpoint: 'api/v1/auth/sign-out',
+      method: 'POST',
+      body: refreshToken ? { refreshToken } : {},
+      errorContext: 'Sign Out',
+      requiresAuth: true,
+    })
+  } catch (error) {
+    console.error('Sign out error:', error)
+  }
 }

@@ -1,3 +1,4 @@
+process.env.NODE_ENV = 'test';
 import http from 'http'
 import fs from 'fs'
 import path from 'path'
@@ -433,6 +434,15 @@ function installPrismaAuthMock() {
   ;(prisma.bookingOrder as any).count = async () => mockActiveOrderCount
   ;(prisma.chatRoom as any).findFirst = async () => ({ id: 42 })
 
+  ;(prisma.roomCategory as any).count = async (args: any) => {
+    const propId = args?.where?.propertyId
+    return Array.from(roomsMap.values()).filter(
+      (r) => (propId === undefined || r.propertyId === propId) && !r.deletedAt
+    ).length
+  }
+  ;(prisma.propertyImage as any).findMany = async () => []
+  ;(prisma.roomCategoryImage as any).findMany = async () => []
+
   ;(prisma.roomCategory as any).findMany = async (args: any) => {
     const propId = args?.where?.propertyId
     return Array.from(roomsMap.values()).filter(
@@ -580,8 +590,9 @@ async function main() {
     await runTest('GET /non-existent-route should return standardized 404 format', async () => {
       const res = await makeRequest(pipePath, '/non-existent-route')
       if (res.statusCode !== 404) throw new Error(`Expected 404, got ${res.statusCode}`)
-      if (res.body?.error?.code !== 'ROUTE_NOT_FOUND') {
-        throw new Error(`Expected error code ROUTE_NOT_FOUND, got ${res.body?.error?.code}`)
+      const errCode = res.body?.code || res.body?.error?.code
+      if (errCode !== 'ROUTE_NOT_FOUND') {
+        throw new Error(`Expected error code ROUTE_NOT_FOUND, got ${errCode}`)
       }
     })
 
@@ -662,11 +673,13 @@ async function main() {
         phone: '0812345678',
       })
       if (resA.statusCode !== 201) throw new Error(`Expected 201, got ${resA.statusCode}`)
-      if (!resA.body?.refCode || !resA.body?.otp) {
-        throw new Error(`Expected refCode and otp in non-production sign-up response`)
+      const otpA = resA.body?.data?.otp || resA.body?.data?.debugOtp || resA.body?.otp
+      const refCodeA = resA.body?.data?.refCode || resA.body?.refCode
+      if (!refCodeA || !otpA) {
+        throw new Error(`Expected refCode and otp in non-production sign-up response: ${JSON.stringify(resA.body)}`)
       }
       userAId = resA.body.data.id
-      userAFirstOtp = resA.body.otp
+      userAFirstOtp = otpA
 
       const resB = await makeRequest(pipePath, '/api/v1/auth/sign-up', 'POST', {
         email: 'bob@joodpakpaw.com',
@@ -719,23 +732,43 @@ async function main() {
       const resendRes = await makeRequest(pipePath, '/api/v1/auth/resend-otp', 'POST', {
         email: 'alice@joodpakpaw.com',
       })
-      if (resendRes.statusCode !== 200 || !resendRes.body?.otp || !resendRes.body?.refCode) {
-        throw new Error(`Expected 200 with new otp & refCode, got ${resendRes.statusCode}`)
+      const newOtp = resendRes.body?.data?.otp || resendRes.body?.data?.debugOtp || resendRes.body?.otp
+      const newRef = resendRes.body?.data?.refCode || resendRes.body?.refCode
+      if (resendRes.statusCode !== 200 || !newOtp || !newRef) {
+        throw new Error(`Expected 200 with new otp & refCode, got ${resendRes.statusCode}: ${JSON.stringify(resendRes.body)}`)
       }
-      userAFirstOtp = resendRes.body.otp
+      userAFirstOtp = newOtp
 
       const verifyRes = await makeRequest(pipePath, '/api/v1/auth/verify-otp', 'POST', {
         email: 'alice@joodpakpaw.com',
         otp: userAFirstOtp,
       })
       if (verifyRes.statusCode !== 200) throw new Error(`Expected 200 on verify-otp, got ${verifyRes.statusCode}`)
-      if (!verifyRes.body?.accessToken || !verifyRes.body?.refreshToken || !verifyRes.body?.user) {
-        throw new Error(`Missing SignInResponse fields on verify-otp: ${JSON.stringify(verifyRes.body)}`)
+      const vData = verifyRes.body?.data
+      if (!vData?.accessToken || !vData?.refreshToken || !vData?.user) {
+        throw new Error(`Missing SignInResponse fields in data on verify-otp: ${JSON.stringify(verifyRes.body)}`)
+      }
+
+      // Security check: resend-otp on already verified user -> 400 A-3008
+      const verifiedResend = await makeRequest(pipePath, '/api/v1/auth/resend-otp', 'POST', {
+        email: 'alice@joodpakpaw.com',
+      })
+      if (verifiedResend.statusCode !== 400 || verifiedResend.body?.code !== 'A-3008') {
+        throw new Error(`Expected 400 A-3008 on resend-otp for verified user, got ${verifiedResend.statusCode}`)
       }
     })
 
     // Test 11: POST /api/v1/auth/sign-in (A-3001 on wrong credentials, 200 on valid)
     await runTest('POST /api/v1/auth/sign-in returns 401 A-3001 on wrong password and 200 with tokens on valid credentials', async () => {
+      // Security check: unverified User B sign-in -> 403 A-3006
+      const unverifiedSign = await makeRequest(pipePath, '/api/v1/auth/sign-in', 'POST', {
+        email: 'bob@joodpakpaw.com',
+        password: 'Password123!',
+      })
+      if (unverifiedSign.statusCode !== 403 || unverifiedSign.body?.code !== 'A-3006' || unverifiedSign.body?.data?.email !== 'bob@joodpakpaw.com') {
+        throw new Error(`Expected 403 A-3006 with data.email on unverified sign-in, got ${unverifiedSign.statusCode}`)
+      }
+
       const badSign = await makeRequest(pipePath, '/api/v1/auth/sign-in', 'POST', {
         email: 'alice@joodpakpaw.com',
         password: 'WrongPassword999',
@@ -749,14 +782,15 @@ async function main() {
         password: 'Password123!',
       })
       if (okSign.statusCode !== 200) throw new Error(`Expected 200, got ${okSign.statusCode}`)
-      if (typeof okSign.body?.accessToken !== 'string' || typeof okSign.body?.refreshToken !== 'string') {
-        throw new Error('Expected accessToken and refreshToken strings')
+      const signData = okSign.body?.data
+      if (typeof signData?.accessToken !== 'string' || typeof signData?.refreshToken !== 'string') {
+        throw new Error(`Expected accessToken and refreshToken strings in data: ${JSON.stringify(okSign.body)}`)
       }
-      if (typeof okSign.body?.expiresIn !== 'number' || okSign.body?.tokenType !== 'Bearer') {
-        throw new Error('Expected expiresIn number and tokenType Bearer')
+      if (typeof signData?.expiresIn !== 'number' || signData?.tokenType !== 'Bearer') {
+        throw new Error('Expected expiresIn number and tokenType Bearer in data')
       }
-      userAAccessToken = okSign.body.accessToken
-      userARefreshToken = okSign.body.refreshToken
+      userAAccessToken = signData.accessToken
+      userARefreshToken = signData.refreshToken
     })
 
     // Test 12: POST /api/v1/auth/refresh-token
@@ -769,8 +803,9 @@ async function main() {
       const okRefresh = await makeRequest(pipePath, '/api/v1/auth/refresh-token', 'POST', {
         refreshToken: userARefreshToken,
       })
-      if (okRefresh.statusCode !== 200 || typeof okRefresh.body?.accessToken !== 'string') {
-        throw new Error(`Expected 200 with top-level accessToken, got ${okRefresh.statusCode}`)
+      const refData = okRefresh.body?.data
+      if (okRefresh.statusCode !== 200 || typeof refData?.accessToken !== 'string') {
+        throw new Error(`Expected 200 with data.accessToken, got ${okRefresh.statusCode}`)
       }
     })
 
@@ -849,10 +884,10 @@ async function main() {
         throw new Error(`Expected 400 A-3012 on identical newPassword, got ${samePassRes.statusCode} ${samePassRes.body?.code}`)
       }
 
-      // Valid change-password -> 200
+      // Context-aware route test: PATCH /api/v1/users/me/change-password
       const okChangeRes = await makeRequest(
         pipePath,
-        `/api/v1/users/${userAId}/change-password`,
+        '/api/v1/users/me/change-password',
         'PATCH',
         {
           oldPassword: 'Password123!',
@@ -862,7 +897,7 @@ async function main() {
         { Authorization: `Bearer ${userAAccessToken}` }
       )
       if (okChangeRes.statusCode !== 200) {
-        throw new Error(`Expected 200 on valid change-password, got ${okChangeRes.statusCode}`)
+        throw new Error(`Expected 200 on valid /me/change-password, got ${okChangeRes.statusCode}`)
       }
     })
 
@@ -878,12 +913,23 @@ async function main() {
       const forgotRes = await makeRequest(pipePath, '/api/v1/auth/forgot-password', 'POST', {
         email: 'alice@joodpakpaw.com',
       })
-      if (forgotRes.statusCode !== 200 || !forgotRes.body?.resetPasswordToken) {
+      const resetToken = forgotRes.body?.data?.resetPasswordToken || forgotRes.body?.resetPasswordToken
+      if (forgotRes.statusCode !== 200 || !resetToken) {
         throw new Error(`Expected 200 with resetPasswordToken, got ${forgotRes.statusCode}`)
       }
-      const resetToken = forgotRes.body.resetPasswordToken
 
-      // First use succeeds
+      // Security check: identical new password -> 400 A-3012
+      const sameResetRes = await makeRequest(pipePath, '/api/v1/auth/reset-password', 'POST', {
+        email: 'alice@joodpakpaw.com',
+        password: 'UpdatedPassword456!', // Alice's current password
+        confirmPassword: 'UpdatedPassword456!',
+        resetPasswordToken: resetToken,
+      })
+      if (sameResetRes.statusCode !== 400 || sameResetRes.body?.code !== 'A-3012') {
+        throw new Error(`Expected 400 A-3012 on reset-password with current password, got ${sameResetRes.statusCode}`)
+      }
+
+      // First valid use succeeds
       const resetOk = await makeRequest(pipePath, '/api/v1/auth/reset-password', 'POST', {
         email: 'alice@joodpakpaw.com',
         password: 'ResetPassword789!',
@@ -906,8 +952,31 @@ async function main() {
       }
     })
 
-    // Test 16: Security Middlewares (optionalAuthenticateToken, requireRoles 403, banned user 403 A-3002)
+    // Test 16: Security Middlewares & POST /api/v1/auth/sign-out
     await runTest('optionalAuthenticateToken, requireRoles (403 A-3007), and banned user check (403 A-3002) behave securely', async () => {
+      // Re-sign in Alice with her new password ('ResetPassword789!')
+      const reSign = await makeRequest(pipePath, '/api/v1/auth/sign-in', 'POST', {
+        email: 'alice@joodpakpaw.com',
+        password: 'ResetPassword789!',
+      })
+      userAAccessToken = reSign.body?.data?.accessToken || reSign.body?.accessToken
+      userARefreshToken = reSign.body?.data?.refreshToken || reSign.body?.refreshToken
+
+      // Test sign-out
+      const signOutRes = await makeRequest(pipePath, '/api/v1/auth/sign-out', 'POST', {
+        refreshToken: userARefreshToken,
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      if (signOutRes.statusCode !== 200 || signOutRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 on sign-out, got ${signOutRes.statusCode}`)
+      }
+
+      // Acquire fresh token for User A for subsequent tests
+      const freshSign = await makeRequest(pipePath, '/api/v1/auth/sign-in', 'POST', {
+        email: 'alice@joodpakpaw.com',
+        password: 'ResetPassword789!',
+      })
+      userAAccessToken = freshSign.body?.data?.accessToken || freshSign.body?.accessToken
+      userARefreshToken = freshSign.body?.data?.refreshToken || freshSign.body?.refreshToken
       // Guest call to optionalAuthenticateToken
       const guestOpt = await makeRequest(pipePath, '/api/v1/test-optional-auth', 'GET')
       if (guestOpt.statusCode !== 200 || guestOpt.body?.authenticated !== false) {
@@ -1077,30 +1146,35 @@ async function main() {
     // Test 20: Master Lookup Endpoints (facilities, pets, pet-breeds, pet-size-categories, report-categories)
     await runTest('Master Lookup endpoints return exact frontend DTO envelopes (facilities, pets, petBreeds, petSizeCategories, reportCategories)', async () => {
       const facRes = await makeRequest(pipePath, '/api/v1/hosts/facilities/all', 'GET')
-      if (facRes.statusCode !== 200 || !Array.isArray(facRes.body?.facilities) || facRes.body.facilities.length !== 2) {
+      const facList = facRes.body?.data?.facilities || facRes.body?.facilities
+      if (facRes.statusCode !== 200 || !Array.isArray(facList) || facList.length !== 2) {
         throw new Error(`Expected facilities array of length 2, got ${JSON.stringify(facRes.body)}`)
       }
-      if (!facRes.body.facilities[0].category?.name) {
+      if (!facList[0].category?.name) {
         throw new Error('Expected facility.category.name to be present')
       }
 
       const petsRes = await makeRequest(pipePath, '/api/v1/pets/all', 'GET')
-      if (petsRes.statusCode !== 200 || !Array.isArray(petsRes.body?.pets) || petsRes.body.pets[0]?.name !== 'Dog') {
-        throw new Error(`Expected normalized pet name 'Dog', got ${JSON.stringify(petsRes.body?.pets)}`)
+      const petList = petsRes.body?.data?.pets || petsRes.body?.pets
+      if (petsRes.statusCode !== 200 || !Array.isArray(petList) || petList[0]?.name !== 'Dog') {
+        throw new Error(`Expected normalized pet name 'Dog', got ${JSON.stringify(petsRes.body)}`)
       }
 
       const breedsRes = await makeRequest(pipePath, '/api/v1/pets/1/pet-breeds/all', 'GET')
-      if (breedsRes.statusCode !== 200 || !Array.isArray(breedsRes.body?.petBreeds) || breedsRes.body.petBreeds[0]?.breed !== 'Golden Retriever') {
+      const breedList = breedsRes.body?.data?.petBreeds || breedsRes.body?.petBreeds
+      if (breedsRes.statusCode !== 200 || !Array.isArray(breedList) || breedList[0]?.breed !== 'Golden Retriever') {
         throw new Error(`Expected petBreeds for petTypeId=1, got ${JSON.stringify(breedsRes.body)}`)
       }
 
       const sizesRes = await makeRequest(pipePath, '/api/v1/pet-size-categories/all', 'GET')
-      if (sizesRes.statusCode !== 200 || !Array.isArray(sizesRes.body?.petSizeCategories) || typeof sizesRes.body.petSizeCategories[0]?.min !== 'number') {
+      const sizeList = sizesRes.body?.data?.petSizeCategories || sizesRes.body?.petSizeCategories
+      if (sizesRes.statusCode !== 200 || !Array.isArray(sizeList) || typeof sizeList[0]?.min !== 'number') {
         throw new Error(`Expected petSizeCategories with min/max numbers, got ${JSON.stringify(sizesRes.body)}`)
       }
 
       const repCatRes = await makeRequest(pipePath, '/api/v1/report-categories?type=unban', 'GET')
-      if (repCatRes.statusCode !== 200 || !Array.isArray(repCatRes.body?.reportCategories) || repCatRes.body.reportCategories.length !== 1) {
+      const repCatList = repCatRes.body?.data?.reportCategories || repCatRes.body?.reportCategories
+      if (repCatRes.statusCode !== 200 || !Array.isArray(repCatList) || repCatList.length !== 1) {
         throw new Error(`Expected 1 unban reportCategory, got ${JSON.stringify(repCatRes.body)}`)
       }
     })
@@ -1108,7 +1182,8 @@ async function main() {
     // Test 21: GET /api/v1/properties (guest vs authenticated isFavorite, filters, pagination)
     await runTest('GET /api/v1/properties returns paginated PropertiesResponse and hydrates isFavorite for authenticated user', async () => {
       const guestList = await makeRequest(pipePath, '/api/v1/properties?page=1&limit=12&sortBy=rating', 'GET')
-      if (guestList.statusCode !== 200 || !Array.isArray(guestList.body?.data) || guestList.body.totalRows !== 1) {
+      const guestRows = guestList.body?.pagination?.totalRows ?? guestList.body?.totalRows
+      if (guestList.statusCode !== 200 || !Array.isArray(guestList.body?.data) || guestRows !== 1) {
         throw new Error(`Expected PropertiesResponse with 1 active property, got ${JSON.stringify(guestList.body)}`)
       }
       if (guestList.body.data[0].isFavorite !== false) {
@@ -1136,10 +1211,11 @@ async function main() {
         undefined,
         { Authorization: `Bearer ${userAAccessToken}` }
       )
-      if (detailRes.statusCode !== 200 || detailRes.body?.property?.id !== 101) {
-        throw new Error(`Expected 200 with property.id=101, got ${detailRes.statusCode}`)
+      const propDetail = detailRes.body?.data?.property || detailRes.body?.property
+      if (detailRes.statusCode !== 200 || propDetail?.id !== 101) {
+        throw new Error(`Expected 200 with property.id=101, got ${detailRes.statusCode}: ${JSON.stringify(detailRes.body)}`)
       }
-      if (!Array.isArray(detailRes.body.property.reviews) || detailRes.body.property.chatRoomId !== 42) {
+      if (!Array.isArray(propDetail.reviews) || propDetail.chatRoomId !== 42) {
         throw new Error(`Expected reviews array and chatRoomId=42 on property detail`)
       }
 
@@ -1165,10 +1241,11 @@ async function main() {
         undefined,
         { Authorization: `Bearer ${userAAccessToken}` }
       )
-      if (hostProfRes.statusCode !== 200 || hostProfRes.body?.host?.id !== userBId) {
+      const hostData = hostProfRes.body?.data?.host || hostProfRes.body?.host
+      if (hostProfRes.statusCode !== 200 || hostData?.id !== userBId) {
         throw new Error(`Expected 200 with host.id=${userBId}, got ${hostProfRes.statusCode}: ${JSON.stringify(hostProfRes.body)}`)
       }
-      if (!Array.isArray(hostProfRes.body.host.properties) || typeof hostProfRes.body.host.avgRating !== 'number') {
+      if (!Array.isArray(hostData.properties) || typeof hostData.avgRating !== 'number') {
         throw new Error('Expected host.properties array and host.avgRating number')
       }
 
@@ -1177,7 +1254,8 @@ async function main() {
         `/api/v1/properties/hosts/${userBId}/reviews?page=1&limit=10`,
         'GET'
       )
-      if (hostRevRes.statusCode !== 200 || !Array.isArray(hostRevRes.body?.data) || hostRevRes.body.totalRows !== 1) {
+      const revTotal = hostRevRes.body?.pagination?.totalRows ?? hostRevRes.body?.totalRows
+      if (hostRevRes.statusCode !== 200 || !Array.isArray(hostRevRes.body?.data) || revTotal !== 1) {
         throw new Error(`Expected HostReviewsResponse with 1 review, got ${JSON.stringify(hostRevRes.body)}`)
       }
       if (!hostRevRes.body.data[0]?.guestProfile?.firstName || !hostRevRes.body.data[0]?.propertyName) {
@@ -1192,10 +1270,11 @@ async function main() {
         '/api/v1/properties/101/room-categories/search?checkInDate=2026-12-01&checkOutDate=2026-12-03&numberOfPets=2',
         'GET'
       )
-      if (searchRes.statusCode !== 200 || !Array.isArray(searchRes.body?.roomCategories)) {
+      const roomList = searchRes.body?.data?.roomCategories || searchRes.body?.roomCategories;
+      if (searchRes.statusCode !== 200 || !Array.isArray(roomList)) {
         throw new Error(`Expected 200 with roomCategories array, got ${searchRes.statusCode}`)
       }
-      const rc = searchRes.body.roomCategories[0]
+      const rc = roomList[0]
       // On 2026-12-01: totalRoom(3) - booked(1) - unavailable(1) = 1 availableRoom, finalPrice = 800 + 150 = 950
       // On 2026-12-02: totalRoom(3) - 0 - 0 = 3 availableRooms, finalPrice = 800
       // Across range: minAvailableRooms = 1, roomsNeeded = ceil(2/2) = 1, totalPrice = (950 + 800) * 1 = 1750
@@ -1249,7 +1328,8 @@ async function main() {
         undefined,
         { Authorization: `Bearer ${userAAccessToken}` }
       )
-      if (listRes.statusCode !== 200 || !Array.isArray(listRes.body?.properties) || listRes.body.properties.length === 0) {
+      const hostProps = listRes.body?.data?.properties || listRes.body?.properties
+      if (listRes.statusCode !== 200 || !Array.isArray(hostProps) || hostProps.length === 0) {
         throw new Error(`Expected HostPropertiesResponse with properties array, got ${JSON.stringify(listRes.body)}`)
       }
 
@@ -1260,7 +1340,8 @@ async function main() {
         undefined,
         { Authorization: `Bearer ${userAAccessToken}` }
       )
-      if (getRes.statusCode !== 200 || getRes.body?.property?.id !== createdPropId) {
+      const hostProp = getRes.body?.data?.property || getRes.body?.property
+      if (getRes.statusCode !== 200 || hostProp?.id !== createdPropId) {
         throw new Error(`Expected 200 with property.id=${createdPropId}, got ${getRes.statusCode}`)
       }
 
@@ -1274,13 +1355,49 @@ async function main() {
         },
         { Authorization: `Bearer ${userAAccessToken}` }
       )
-      if (updateRes.statusCode !== 200 || updateRes.body?.property?.title !== 'Alicia Luxury Cat Villa Updated') {
+      const updatedProp = updateRes.body?.data?.property || updateRes.body?.property
+      if (updateRes.statusCode !== 200 || updatedProp?.title !== 'Alicia Luxury Cat Villa Updated') {
         throw new Error(`Expected 200 with updated title, got ${updateRes.statusCode}: ${JSON.stringify(updateRes.body)}`)
       }
     })
 
-    // Test 26: PATCH /api/v1/hosts/properties/:propertyId/is-active & Admin-Ban Guard (403 A-3002)
-    await runTest('PATCH /api/v1/hosts/properties/:propertyId/is-active toggles status and blocks activating admin-banned property (403 A-3002)', async () => {
+    // Test 26: PATCH /api/v1/hosts/properties/:propertyId/is-active & Governance Guard P-5001 & Admin-Ban Guard A-3002
+    await runTest('PATCH /api/v1/hosts/properties/:propertyId/is-active enforces P-5001 (0 room categories) and A-3002 (banned)', async () => {
+      // Step A: Attempt activating with 0 room categories -> 400 P-5001
+      const zeroCatRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/properties/${createdPropId}/is-active`,
+        'PATCH',
+        { isActive: true },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (zeroCatRes.statusCode !== 400 || zeroCatRes.body?.code !== 'P-5001') {
+        throw new Error(`Expected 400 P-5001 when activating property with 0 room categories, got ${zeroCatRes.statusCode}: ${JSON.stringify(zeroCatRes.body)}`)
+      }
+
+      // Step B: Create a room category first
+      const createRoomRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/properties/${createdPropId}/room-categories`,
+        'POST',
+        {
+          name: 'Deluxe Cat Condo',
+          totalRoom: 4,
+          numberOfPets: 2,
+          basePrice: 650,
+          pets: JSON.stringify([2]),
+          facilities: JSON.stringify([1]),
+          petSizeCategoryId: 1,
+        },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      const roomCreatedId = createRoomRes.body?.data?.id ?? createRoomRes.body?.id
+      if (createRoomRes.statusCode !== 201 || typeof roomCreatedId !== 'number') {
+        throw new Error(`Expected 201 on createHostRoomCategory, got ${createRoomRes.statusCode}: ${JSON.stringify(createRoomRes.body)}`)
+      }
+      createdRoomId = roomCreatedId
+
+      // Step C: Now activate succeeds
       const activateRes = await makeRequest(
         pipePath,
         `/api/v1/hosts/properties/${createdPropId}/is-active`,
@@ -1288,11 +1405,12 @@ async function main() {
         { isActive: true },
         { Authorization: `Bearer ${userAAccessToken}` }
       )
-      if (activateRes.statusCode !== 200 || activateRes.body?.isActive !== true) {
+      const isAct = activateRes.body?.data?.isActive ?? activateRes.body?.isActive
+      if (activateRes.statusCode !== 200 || isAct !== true) {
         throw new Error(`Expected 200 with isActive=true, got ${activateRes.statusCode}`)
       }
 
-      // Ban the property and verify activating is blocked with 403 A-3002
+      // Step D: Ban the property and verify activating is blocked with 403 A-3002
       const propRecord = mockDb.propertiesMap.get(createdPropId)!
       propRecord.isActive = false
       propRecord.isBannedByAdmin = true
@@ -1310,28 +1428,8 @@ async function main() {
       propRecord.isBannedByAdmin = false
     })
 
-    // Test 27: Room Category CRUD (POST, GET /all, PUT /:roomId)
-    await runTest('Host Room Category CRUD (POST, GET /all, PUT /:roomId) works and matches RoomCategoriesResponse contract', async () => {
-      const createRoomRes = await makeRequest(
-        pipePath,
-        `/api/v1/hosts/properties/${createdPropId}/room-categories`,
-        'POST',
-        {
-          name: 'Deluxe Cat Condo',
-          totalRoom: 4,
-          numberOfPets: 2,
-          basePrice: 650,
-          pets: JSON.stringify([2]),
-          facilities: JSON.stringify([1]),
-          petSizeCategoryId: 1,
-        },
-        { Authorization: `Bearer ${userAAccessToken}` }
-      )
-      if (createRoomRes.statusCode !== 201 || typeof createRoomRes.body?.id !== 'number') {
-        throw new Error(`Expected 201 on createHostRoomCategory, got ${createRoomRes.statusCode}: ${JSON.stringify(createRoomRes.body)}`)
-      }
-      createdRoomId = createRoomRes.body.id
-
+    // Test 27: Room Category CRUD (GET /all, PUT /:roomId)
+    await runTest('Host Room Category CRUD (GET /all, PUT /:roomId) works and matches RoomCategoriesResponse contract', async () => {
       const listRoomsRes = await makeRequest(
         pipePath,
         `/api/v1/hosts/properties/${createdPropId}/room-categories/all`,
@@ -1339,7 +1437,8 @@ async function main() {
         undefined,
         { Authorization: `Bearer ${userAAccessToken}` }
       )
-      if (listRoomsRes.statusCode !== 200 || !Array.isArray(listRoomsRes.body?.roomCategories) || listRoomsRes.body.roomCategories.length !== 1) {
+      const roomCatList = listRoomsRes.body?.data?.roomCategories || listRoomsRes.body?.roomCategories
+      if (listRoomsRes.statusCode !== 200 || !Array.isArray(roomCatList) || roomCatList.length !== 1) {
         throw new Error(`Expected RoomCategoriesResponse with 1 room category, got ${JSON.stringify(listRoomsRes.body)}`)
       }
 
@@ -1359,8 +1458,9 @@ async function main() {
         },
         { Authorization: `Bearer ${userAAccessToken}` }
       )
-      if (updateRoomRes.statusCode !== 200 || updateRoomRes.body?.roomCategory?.name !== 'Super Deluxe Cat Condo') {
-        throw new Error(`Expected 200 with updated roomCategory name, got ${updateRoomRes.statusCode}`)
+      const updatedCat = updateRoomRes.body?.data?.roomCategory || updateRoomRes.body?.roomCategory
+      if (updateRoomRes.statusCode !== 200 || updatedCat?.name !== 'Super Deluxe Cat Condo') {
+        throw new Error(`Expected 200 with updated roomCategory name, got ${updateRoomRes.statusCode}: ${JSON.stringify(updateRoomRes.body)}`)
       }
     })
 

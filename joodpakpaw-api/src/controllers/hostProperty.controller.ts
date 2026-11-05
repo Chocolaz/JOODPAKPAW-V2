@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { prisma } from '../database/prisma';
 import { AppError, FieldValidationError } from '../middlewares/errorHandler';
-import { uploadMultipleImagesAsWebp } from '../services/storage.service';
+import { uploadMultipleImagesAsWebp, deleteObjectFromS3 } from '../services/storage.service';
 import { formatPropertyDto } from './property.controller';
 import { normalizePetName } from './lookup.controller';
 
@@ -313,7 +313,6 @@ export async function getHostProperties(
     res.status(200).json({
       code: 'S-0000',
       message: 'Success',
-      properties,
       data: {
         properties,
       },
@@ -359,7 +358,6 @@ export async function getHostPropertyById(
     res.status(200).json({
       code: 'S-0000',
       message: 'Success',
-      property: propertyDto,
       data: {
         property: propertyDto,
       },
@@ -594,8 +592,6 @@ export async function createHostProperty(
     res.status(201).json({
       code: 'S-0000',
       message: 'Property created successfully',
-      id: created.id,
-      property: propertyDto,
       data: {
         id: created.id,
         property: propertyDto,
@@ -728,6 +724,13 @@ export async function updateHostProperty(
       body.deleteImageIds ?? body.deletedImageIds
     );
     if (deleteImageIds.length > 0) {
+      const imagesToDelete = await prisma.propertyImage.findMany({
+        where: {
+          propertyId,
+          id: { in: deleteImageIds },
+        },
+        select: { filePath: true },
+      });
       await prisma.propertyImage.updateMany({
         where: {
           propertyId,
@@ -737,6 +740,11 @@ export async function updateHostProperty(
           deletedAt: new Date(),
         },
       });
+      for (const img of imagesToDelete) {
+        if (img.filePath) {
+          await deleteObjectFromS3(img.filePath);
+        }
+      }
     }
 
     // Upload new images if any
@@ -771,7 +779,6 @@ export async function updateHostProperty(
     res.status(200).json({
       code: 'S-0000',
       message: 'Property updated successfully',
-      property: propertyDto,
       data: {
         property: propertyDto,
       },
@@ -865,6 +872,7 @@ export async function deleteHostProperty(
     res.status(200).json({
       code: 'S-0000',
       message: 'Property deleted successfully',
+      data: null,
     });
   } catch (error) {
     next(error);
@@ -920,17 +928,33 @@ export async function updateHostPropertyIsActive(
       nextIsActive = !existing.isActive;
     }
 
-    if (
-      nextIsActive &&
-      (existing.isBannedByAdmin ||
+    if (nextIsActive) {
+      if (
+        existing.isBannedByAdmin ||
         existing.host.isBannedAllProperties ||
-        existing.host.bannedAt !== null)
-    ) {
-      throw new AppError(
-        'Cannot activate a suspended property.',
-        403,
-        'A-3002'
-      );
+        existing.host.bannedAt !== null
+      ) {
+        throw new AppError(
+          'Cannot activate a suspended property.',
+          403,
+          'A-3002'
+        );
+      }
+
+      const roomCategoriesCount = await prisma.roomCategory.count({
+        where: {
+          propertyId,
+          deletedAt: null,
+        },
+      });
+
+      if (roomCategoriesCount === 0) {
+        throw new AppError(
+          'Cannot publish property without at least one room category.',
+          400,
+          'P-5001'
+        );
+      }
     }
 
     const updated = await prisma.property.update({
@@ -953,8 +977,6 @@ export async function updateHostPropertyIsActive(
     res.status(200).json({
       code: 'S-0000',
       message: 'Property active status updated successfully',
-      isActive: updated.isActive,
-      property: propertyDto,
       data: {
         isActive: updated.isActive,
         property: propertyDto,
@@ -1042,7 +1064,6 @@ export async function getHostRoomCategories(
     res.status(200).json({
       code: 'S-0000',
       message: 'Success',
-      roomCategories,
       data: {
         roomCategories,
       },
@@ -1297,8 +1318,6 @@ export async function createHostRoomCategory(
     res.status(201).json({
       code: 'S-0000',
       message: 'Room category created successfully',
-      id: createdRoom.id,
-      roomCategory: formattedRoom,
       data: {
         id: createdRoom.id,
         roomCategory: formattedRoom,
@@ -1487,6 +1506,13 @@ export async function updateHostRoomCategory(
       body.deleteImageIds ?? body.deletedImageIds
     );
     if (deleteImageIds.length > 0) {
+      const roomImagesToDelete = await prisma.roomCategoryImage.findMany({
+        where: {
+          roomCategoryId: roomId,
+          id: { in: deleteImageIds },
+        },
+        select: { filePath: true },
+      });
       await prisma.roomCategoryImage.updateMany({
         where: {
           roomCategoryId: roomId,
@@ -1496,6 +1522,11 @@ export async function updateHostRoomCategory(
           deletedAt: new Date(),
         },
       });
+      for (const img of roomImagesToDelete) {
+        if (img.filePath) {
+          await deleteObjectFromS3(img.filePath);
+        }
+      }
     }
 
     // Upload new images if provided
@@ -1554,7 +1585,6 @@ export async function updateHostRoomCategory(
     res.status(200).json({
       code: 'S-0000',
       message: 'Room category updated successfully',
-      roomCategory: formattedRoom,
       data: {
         roomCategory: formattedRoom,
       },
@@ -1666,6 +1696,7 @@ export async function deleteHostRoomCategory(
     res.status(200).json({
       code: 'S-0000',
       message: 'Room category deleted successfully',
+      data: null,
     });
   } catch (error) {
     next(error);

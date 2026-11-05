@@ -1,5 +1,6 @@
 // lib/api.ts
 import request from './apiClient'
+export { signOut } from './authApi'
 import {
   compressFormDataImages,
   compressImagesToWebP,
@@ -21,6 +22,7 @@ import {
   ResetPasswordCredentials,
   RoomCategoryFormData,
   RoomCategoriesResponse,
+  RoomCategories,
   SignInCredentials,
   SignInResponse,
   SignUpCredentials,
@@ -55,35 +57,58 @@ import type {
 import type { AdminActionLogsResponse } from '@/types/adminActionLog'
 
 // --- Auth Functions ---
-export const signIn = (
+export const signIn = async (
   credentials: SignInCredentials
 ): Promise<SignInResponse> => {
-  return request<SignInResponse>({
+  const res = await request<SignInResponse>({
     endpoint: 'api/v1/auth/sign-in',
     method: 'POST',
     body: credentials,
     errorContext: 'Sign-in',
   })
+  return {
+    ...res,
+    accessToken: res.data?.accessToken || res.accessToken,
+    refreshToken: res.data?.refreshToken || res.refreshToken,
+    expiresIn: res.data?.expiresIn || res.expiresIn,
+    tokenType: res.data?.tokenType || res.tokenType,
+    user: res.data?.user || res.user,
+  }
 }
 
 export const signUp = (credentials: SignUpCredentials) => {
+  const payload = {
+    ...credentials,
+    firstName: credentials.firstName || credentials.firstname,
+    lastName: credentials.lastName || credentials.lastname,
+    firstname: credentials.firstname || credentials.firstName,
+    lastname: credentials.lastname || credentials.lastName,
+  }
   return request({
     endpoint: 'api/v1/auth/sign-up',
     method: 'POST',
-    body: credentials,
+    body: payload,
     errorContext: 'Sign-up',
   })
 }
 
-export const verifyOtp = (
+export const verifyOtp = async (
   credentials: VerifyOtpCredentials
 ): Promise<SignInResponse> => {
-  return request<SignInResponse>({
+  const res = await request<SignInResponse>({
     endpoint: 'api/v1/auth/verify-otp',
     method: 'POST',
     body: credentials,
     errorContext: 'OTP Verification',
   })
+  return {
+    ...res,
+    accessToken: res.data?.accessToken || res.accessToken,
+    refreshToken: res.data?.refreshToken || res.refreshToken,
+    expiresIn: res.data?.expiresIn || res.expiresIn,
+    tokenType: res.data?.tokenType || res.tokenType,
+    user: res.data?.user || res.user,
+  }
 }
 
 export const resendOtp = (credentials: { email: string }) => {
@@ -114,8 +139,8 @@ export const resetPassword = (credentials: ResetPasswordCredentials) => {
 }
 
 // --- User Functions ---
-export const getProfile = (): Promise<ProfileResponse> => {
-  return request<ProfileResponse>({
+export const getProfile = async (): Promise<ProfileResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/auth/profile',
     method: 'GET',
     requiresAuth: true,
@@ -123,6 +148,11 @@ export const getProfile = (): Promise<ProfileResponse> => {
     errorContext: 'Get Profile',
     cache: 'no-store',
   })
+  return {
+    code: res?.code ?? 'S-0000',
+    message: res?.message ?? 'Success',
+    data: res?.data || res,
+  }
 }
 
 export const updateUserProfile = async (userId: string, formData: FormData) => {
@@ -186,7 +216,7 @@ export const deletePetProfile = (id: string): Promise<void> => {
 }
 
 // --- Property Functions ---
-export const getProperties = (
+export const getProperties = async (
   page: number,
   limit: number,
   options?: {
@@ -210,32 +240,71 @@ export const getProperties = (
   if (options?.petTypes) params.append('petTypes', options.petTypes)
   if (options?.maxPrice != null && options.maxPrice !== '') params.append('maxPrice', String(options.maxPrice))
 
-  return request<PropertiesResponse>({
+  const res = await request<any>({
     endpoint: `api/v1/properties?${params.toString()}`,
     method: 'GET',
     errorContext: 'Get Properties',
     sendAuthIfAvailable: true,
   })
+
+  const propertiesList: Property[] = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.data?.properties)
+    ? res.data.properties
+    : Array.isArray(res?.properties)
+    ? res.properties
+    : []
+
+  const pagination = res?.pagination || {
+    page: res?.page || page,
+    limit: res?.limit || limit,
+    totalRows: res?.totalRows ?? propertiesList.length,
+    totalPages: res?.totalPages ?? (propertiesList.length > 0 ? 1 : 0),
+  }
+
+  return {
+    ...res,
+    data: propertiesList,
+    pagination,
+    totalRows: pagination.totalRows,
+    totalPages: pagination.totalPages,
+    limit: pagination.limit,
+    page: pagination.page,
+  }
 }
 
-export const getPropertyById = (
+export const getPropertyById = async (
   propertyId: string
-): Promise<{ property: Property }> => {
-  return request<{ property: Property }>({
+): Promise<{ property: Property; data?: { property: Property } }> => {
+  const res = await request<any>({
     endpoint: `api/v1/properties/${propertyId}`,
     method: 'GET',
     sendAuthIfAvailable: true,
     errorContext: 'Get Property By Id',
   })
+  const property: Property =
+    res?.data?.property || res?.data || res?.property
+  return {
+    ...res,
+    property,
+    data: res?.data ?? { property },
+  }
 }
 
-export const getHostProfile = (hostId: string): Promise<HostProfileResponse> => {
-  return request<HostProfileResponse>({
+export const getHostProfile = async (hostId: string): Promise<HostProfileResponse> => {
+  const res = await request<any>({
     endpoint: `api/v1/properties/hosts/${hostId}/profile`,
     method: 'GET',
     sendAuthIfAvailable: true,
     errorContext: 'Get Host Profile',
   })
+  const host: import('@/types').HostProfile =
+    res?.data?.host || res?.data || res?.host
+  return {
+    ...res,
+    host,
+    data: res?.data ?? { host },
+  }
 }
 
 // --- Verification ---
@@ -267,35 +336,97 @@ export const submitVerification = async (
   })
 }
 
-export const getHostReviews = (
+export const getHostReviews = async (
   hostId: string,
   page = 1,
   limit = 10
 ): Promise<HostReviewsResponse> => {
-  return request<HostReviewsResponse>({
+  const res = await request<any>({
     endpoint: `api/v1/properties/hosts/${hostId}/reviews?page=${page}&limit=${limit}`,
     method: 'GET',
     sendAuthIfAvailable: true,
     errorContext: 'Get Host Reviews',
   })
+  const reviewsList: import('@/types').HostReview[] = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.data?.reviews)
+    ? res.data.reviews
+    : Array.isArray(res?.reviews)
+    ? res.reviews
+    : []
+
+  const pagination = res?.pagination || {
+    page,
+    limit,
+    totalRows: res?.totalRows ?? reviewsList.length,
+    totalPages: res?.totalPages ?? (reviewsList.length > 0 ? 1 : 0),
+  }
+
+  return {
+    ...res,
+    data: reviewsList,
+    reviews: reviewsList,
+    pagination,
+    totalRows: pagination.totalRows,
+    totalPages: pagination.totalPages,
+  }
 }
 
-export const getRecommendedProperties = (page = 1, limit = 20): Promise<PropertiesResponse> => {
-  return request<PropertiesResponse>({
+export const getRecommendedProperties = async (page = 1, limit = 20): Promise<PropertiesResponse> => {
+  const res = await request<any>({
     endpoint: `api/v1/properties/recommend?page=${page}&limit=${limit}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Recommended Properties',
   })
+  const propertiesList: Property[] = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.data?.properties)
+    ? res.data.properties
+    : Array.isArray(res?.properties)
+    ? res.properties
+    : []
+
+  const pagination = res?.pagination || {
+    page,
+    limit,
+    totalRows: res?.totalRows ?? propertiesList.length,
+    totalPages: res?.totalPages ?? (propertiesList.length > 0 ? 1 : 0),
+  }
+
+  return {
+    ...res,
+    data: propertiesList,
+    pagination,
+    totalRows: pagination.totalRows,
+    totalPages: pagination.totalPages,
+    limit: pagination.limit,
+    page: pagination.page,
+  }
 }
 
-export const getPropertyRecommendations = (propertyId: string | number, limit = 12): Promise<HostPropertiesResponse> => {
-  return request<HostPropertiesResponse>({
+export const getPropertyRecommendations = async (
+  propertyId: string | number,
+  limit = 12
+): Promise<HostPropertiesResponse> => {
+  const res = await request<any>({
     endpoint: `api/v1/properties/recommend/property/${propertyId}?limit=${limit}`,
     method: 'GET',
     sendAuthIfAvailable: true,
     errorContext: 'Get Property Recommendations',
   })
+  const properties: Property[] = Array.isArray(res?.data?.properties)
+    ? res.data.properties
+    : Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.properties)
+    ? res.properties
+    : []
+  return {
+    ...res,
+    properties,
+    data: res?.data ?? { properties },
+  }
 }
 
 export const trackPropertyView = (propertyId: number): Promise<void> => {
@@ -307,24 +438,43 @@ export const trackPropertyView = (propertyId: number): Promise<void> => {
   })
 }
 
-export const getHostProperties = (): Promise<HostPropertiesResponse> => {
-  return request<HostPropertiesResponse>({
+export const getHostProperties = async (): Promise<HostPropertiesResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/hosts/properties/all',
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Host Properties',
   })
+  const properties: Property[] = Array.isArray(res?.data?.properties)
+    ? res.data.properties
+    : Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.properties)
+    ? res.properties
+    : []
+  return {
+    ...res,
+    properties,
+    data: res?.data ?? { properties },
+  }
 }
 
-export const getHostPropertyById = (
+export const getHostPropertyById = async (
   propertyId: string
-): Promise<{ property: Property }> => {
-  return request<{ property: Property }>({
+): Promise<{ property: Property; data?: { property: Property } }> => {
+  const res = await request<any>({
     endpoint: `api/v1/hosts/properties/${propertyId}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Host Property By Id',
   })
+  const property: Property =
+    res?.data?.property || res?.data || res?.property
+  return {
+    ...res,
+    property,
+    data: res?.data ?? { property },
+  }
 }
 
 export const updateHostPropertyIsActive = async (
@@ -340,41 +490,70 @@ export const updateHostPropertyIsActive = async (
   })
 }
 
-export const getFacilities = (): Promise<FacilitiesResponse> => {
-  return request<FacilitiesResponse>({
+export const getFacilities = async (): Promise<FacilitiesResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/hosts/facilities/all',
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Facilities',
   })
+  const facilities = res?.data?.facilities ?? res?.facilities ?? []
+  return {
+    ...res,
+    facilities,
+    data: res?.data ?? { facilities },
+  }
 }
+export const getAllFacilities = getFacilities
 
-export const getPetTypes = (): Promise<PetsResponse> => {
-  return request<PetsResponse>({
+export const getPetTypes = async (): Promise<PetsResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/pets/all',
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Pet Types',
   })
+  const pets = res?.data?.pets ?? res?.pets ?? []
+  return {
+    ...res,
+    pets,
+    data: res?.data ?? { pets },
+  }
 }
+export const getAllPets = getPetTypes
 
-export const getPetBreeds = (petTypeId: number): Promise<PetBreedsResponse> => {
-  return request<PetBreedsResponse>({
+export const getPetBreeds = async (petTypeId: number): Promise<PetBreedsResponse> => {
+  const res = await request<any>({
     endpoint: `api/v1/pets/${petTypeId}/pet-breeds/all`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Pet Breeds',
   })
+  const petBreeds = res?.data?.petBreeds ?? res?.petBreeds ?? []
+  return {
+    ...res,
+    petBreeds,
+    data: res?.data ?? { petBreeds },
+  }
 }
+export const getPetBreedsByTypeId = getPetBreeds
 
-export const getPetSizeCategories = (): Promise<PetSizeCategoriesResponse> => {
-  return request<PetSizeCategoriesResponse>({
+export const getPetSizeCategories = async (): Promise<PetSizeCategoriesResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/pet-size-categories/all',
     method: 'GET',
     sendAuthIfAvailable: true,
     errorContext: 'Get Pet Size Categories',
   })
+  const petSizeCategories =
+    res?.data?.petSizeCategories ?? res?.petSizeCategories ?? []
+  return {
+    ...res,
+    petSizeCategories,
+    data: res?.data ?? { petSizeCategories },
+  }
 }
+export const getAllPetSizeCategories = getPetSizeCategories
 
 // --- Chat Functions ---
 export const createChatRoom = async (
@@ -473,7 +652,7 @@ export const deleteRoomCategory = (
   })
 }
 
-export const createProperty = async (data: PropertyFormData) => {
+export const createProperty = async (data: PropertyFormData): Promise<CreatePropertyResponse> => {
   const formData = new FormData()
 
   for (const [key, value] of Object.entries(data)) {
@@ -484,18 +663,29 @@ export const createProperty = async (data: PropertyFormData) => {
       })
     } else if (key === 'facilities') {
       formData.append('facilities', JSON.stringify(value))
-    } else if (value !== null) {
+    } else if (value !== null && value !== undefined) {
       formData.append(key, String(value))
     }
   }
 
-  return request<CreatePropertyResponse>({
+  const res = await request<any>({
     endpoint: 'api/v1/hosts/properties',
     method: 'POST',
     body: formData,
     requiresAuth: true,
     errorContext: 'Create Property',
   })
+
+  const propertyId = res?.data?.id ?? res?.id ?? 0
+
+  return {
+    ...res,
+    id: propertyId,
+    data: {
+      ...res?.data,
+      id: propertyId,
+    },
+  }
 }
 
 export const updateProperty = async (propertyId: string, data: FormData) => {
@@ -530,18 +720,28 @@ export const createRoomCategory = async (
     } else if (key === 'images') {
       const compressedImages = await compressImagesToWebP((value as File[]) || [])
       compressedImages.forEach((file) => formData.append('images', file))
-    } else {
+    } else if (value !== null && value !== undefined) {
       formData.append(key, String(value))
+      if (key === 'petSizeCategoryId') {
+        formData.append('petSizeCategories', String(value))
+      }
     }
   }
 
-  return request({
+  const res = await request<any>({
     endpoint: `api/v1/hosts/properties/${propertyId}/room-categories`,
     method: 'POST',
     body: formData,
     requiresAuth: true,
     errorContext: 'Create Room Category',
   })
+
+  const roomCategory = res?.data?.roomCategory || res?.data || res?.roomCategory
+  return {
+    ...res,
+    roomCategory,
+    data: res?.data ?? { roomCategory },
+  }
 }
 
 export const updateRoomCategory = async (
@@ -556,6 +756,7 @@ export const updateRoomCategory = async (
   formData.append('basePrice', String(data.basePrice))
   formData.append('pets', JSON.stringify(data.pets))
   formData.append('facilities', JSON.stringify(data.facilities))
+  formData.append('petSizeCategoryId', String(data.petSizeCategoryId))
   formData.append('petSizeCategories', String(data.petSizeCategoryId))
   const compressedNewImages = await compressImagesToWebP(data.newImages || [])
   compressedNewImages.forEach((file) => formData.append('images', file))
@@ -570,18 +771,31 @@ export const updateRoomCategory = async (
   })
 }
 
-export const getRoomCategories = (
+export const getRoomCategories = async (
   propertyId: number
 ): Promise<RoomCategoriesResponse> => {
-  return request<RoomCategoriesResponse>({
+  const res = await request<any>({
     endpoint: `api/v1/hosts/properties/${propertyId}/room-categories/all`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Room Categories',
   })
+  const roomCategories: RoomCategories[] = Array.isArray(res?.data?.roomCategories)
+    ? res.data.roomCategories
+    : Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.roomCategories)
+    ? res.roomCategories
+    : []
+  return {
+    ...res,
+    roomCategories,
+    data: res?.data ?? { roomCategories },
+  }
 }
+export const getHostRoomCategories = getRoomCategories
 
-export const searchRoomCategories = (
+export const searchRoomCategories = async (
   propertyId: number,
   checkInDate: string,
   checkOutDate: string,
@@ -596,19 +810,37 @@ export const searchRoomCategories = (
   if (petSizeId !== undefined) {
     params.append('petSizeId', String(petSizeId))
   }
-  return request<RoomCategoriesResponse>({
+  const res = await request<any>({
     endpoint: `api/v1/properties/${propertyId}/room-categories/search?${params.toString()}`,
     method: 'GET',
     errorContext: 'Search Room Categories',
   })
+  const roomCategories: RoomCategories[] = Array.isArray(res?.data?.roomCategories)
+    ? res.data.roomCategories
+    : Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.roomCategories)
+    ? res.roomCategories
+    : []
+  return {
+    ...res,
+    roomCategories,
+    data: res?.data ?? { roomCategories },
+  }
 }
 
 // --- Booking Functions ---
 export const createBooking = (data: BookingRequestBody): Promise<Booking> => {
+  const payload = { ...data } as any
+  if (payload.petProfileIds && !payload.PetProfileIDs) {
+    payload.PetProfileIDs = payload.petProfileIds
+  } else if (payload.PetProfileIDs && !payload.petProfileIds) {
+    payload.petProfileIds = payload.PetProfileIDs
+  }
   return request<Booking>({
     endpoint: 'api/v1/bookings',
     method: 'POST',
-    body: data,
+    body: payload,
     requiresAuth: true,
     errorContext: 'Create Booking',
   })
@@ -927,13 +1159,20 @@ export const moveFavorite = async (data: {
 }
 
 // --- Report Functions ---
-export const getReportCategories = (type: string): Promise<ReportCategoriesResponse> => {
-  return request({
+export const getReportCategories = async (type: string): Promise<ReportCategoriesResponse> => {
+  const res = await request<any>({
     endpoint: `api/v1/report-categories?type=${type}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Report Categories',
   })
+  const reportCategories: import('@/types').ReportCategory[] =
+    res?.data?.reportCategories ?? res?.reportCategories ?? []
+  return {
+    ...res,
+    reportCategories,
+    data: res?.data ?? { reportCategories },
+  }
 }
 
 export const submitPropertyReport = async (

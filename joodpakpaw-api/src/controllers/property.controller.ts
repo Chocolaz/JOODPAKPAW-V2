@@ -423,31 +423,21 @@ export async function getProperties(
     }
 
     // Sort according to sortBy parameter
-    let orderByField = 'createdAt';
-    let sortDir = 'desc';
-
+        
     if (sortBy === 'price' || sortBy === 'price_asc' || sortBy === 'best_value') {
-      orderByField = 'basePrice';
-      sortDir = 'asc';
-      formattedList.sort((a, b) => {
+                  formattedList.sort((a, b) => {
         const priceA = a.lowestPrice > 0 ? a.lowestPrice : Number.MAX_SAFE_INTEGER;
         const priceB = b.lowestPrice > 0 ? b.lowestPrice : Number.MAX_SAFE_INTEGER;
         return priceA - priceB;
       });
     } else if (sortBy === 'price_desc') {
-      orderByField = 'basePrice';
-      sortDir = 'desc';
-      formattedList.sort((a, b) => b.lowestPrice - a.lowestPrice);
+                  formattedList.sort((a, b) => b.lowestPrice - a.lowestPrice);
     } else if (sortBy === 'rating' || sortBy === 'top_rated') {
-      orderByField = 'avgRating';
-      sortDir = 'desc';
-      formattedList.sort(
+                  formattedList.sort(
         (a, b) => b.avgRating - a.avgRating || b.reviewCount - a.reviewCount
       );
     } else if (sortBy === 'trending' || sortBy === 'popular') {
-      orderByField = 'trending';
-      sortDir = 'desc';
-      formattedList.sort(
+                  formattedList.sort(
         (a, b) =>
           b._bookingCount - a._bookingCount ||
           b.reviewCount - a.reviewCount ||
@@ -455,9 +445,7 @@ export async function getProperties(
       );
     } else {
       // Default / newest
-      orderByField = 'createdAt';
-      sortDir = 'desc';
-      formattedList.sort(
+                  formattedList.sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
@@ -473,14 +461,13 @@ export async function getProperties(
     res.status(200).json({
       code: 'S-0000',
       message: 'Success',
-      totalRows,
-      totalPages,
       data: paginatedData,
-      properties: paginatedData,
-      limit,
-      page,
-      orderBy: orderByField,
-      sort: sortDir,
+      pagination: {
+        page,
+        limit,
+        totalRows,
+        totalPages,
+      },
     });
   } catch (error) {
     next(error);
@@ -628,7 +615,6 @@ export async function getPropertyById(
     res.status(200).json({
       code: 'S-0000',
       message: 'Success',
-      property: propertyDto,
       data: {
         property: propertyDto,
       },
@@ -783,7 +769,6 @@ export async function getHostProfile(
     res.status(200).json({
       code: 'S-0000',
       message: 'Success',
-      host: hostProfile,
       data: {
         host: hostProfile,
       },
@@ -892,12 +877,13 @@ export async function getHostReviews(
     res.status(200).json({
       code: 'S-0000',
       message: 'Success',
-      totalRows,
-      totalPages,
-      page,
-      limit,
       data: formattedReviews,
-      reviews: formattedReviews,
+      pagination: {
+        page,
+        limit,
+        totalRows,
+        totalPages,
+      },
     });
   } catch (error) {
     next(error);
@@ -1078,7 +1064,6 @@ export async function searchPropertyRoomCategories(
     res.status(200).json({
       code: 'S-0000',
       message: 'Success',
-      roomCategories: formattedRoomCategories,
       data: {
         roomCategories: formattedRoomCategories,
       },

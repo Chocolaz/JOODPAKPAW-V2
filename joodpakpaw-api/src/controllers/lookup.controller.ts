@@ -62,7 +62,6 @@ export async function getAllFacilities(
     res.status(200).json({
       code: 'S-0000',
       message: 'Success',
-      facilities,
       data: {
         facilities,
       },
@@ -95,7 +94,6 @@ export async function getAllPets(
     res.status(200).json({
       code: 'S-0000',
       message: 'Success',
-      pets,
       data: {
         pets,
       },
@@ -141,7 +139,6 @@ export async function getPetBreedsByTypeId(
     res.status(200).json({
       code: 'S-0000',
       message: 'Success',
-      petBreeds,
       data: {
         petBreeds,
       },
@@ -176,7 +173,6 @@ export async function getAllPetSizeCategories(
     res.status(200).json({
       code: 'S-0000',
       message: 'Success',
-      petSizeCategories,
       data: {
         petSizeCategories,
       },
@@ -224,7 +220,6 @@ export async function getReportCategories(
     res.status(200).json({
       code: 'S-0000',
       message: 'Success',
-      reportCategories,
       data: {
         reportCategories,
       },
