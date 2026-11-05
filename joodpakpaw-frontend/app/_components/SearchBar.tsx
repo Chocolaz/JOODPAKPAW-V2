@@ -44,7 +44,7 @@ export function SearchBar({ onSearch, value, onFilterClick, activeFilterCount = 
             </button>
 
             <Input
-              placeholder="Search properties… (Press Enter or click to search)"
+              placeholder="Search properties…"
               className="pl-11 pr-20 h-full rounded-full border-0 bg-transparent focus-visible:ring-0 text-sm md:text-base"
               value={internalSearchValue}
               onChange={(e) => setInternalSearchValue(e.target.value)}
