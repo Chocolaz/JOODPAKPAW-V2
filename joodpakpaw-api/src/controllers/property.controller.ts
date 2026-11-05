@@ -3,6 +3,19 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../database/prisma';
 import { AppError } from '../middlewares/errorHandler';
 import { normalizePetName } from './lookup.controller';
+/**
+ * Safely converts any Date object, ISO string, or timestamp into an ISO string.
+ * Falls back to current date or custom fallback if input is null or undefined.
+ */
+export function toSafeIsoString(dateVal: any, fallback?: string): string {
+  if (!dateVal) return fallback !== undefined ? fallback : new Date().toISOString();
+  if (dateVal instanceof Date) {
+    return isNaN(dateVal.getTime()) ? (fallback !== undefined ? fallback : new Date().toISOString()) : dateVal.toISOString();
+  }
+  const parsed = new Date(dateVal);
+  return isNaN(parsed.getTime()) ? (fallback !== undefined ? fallback : new Date().toISOString()) : parsed.toISOString();
+}
+
 
 /**
  * Helper to fetch user's favorite property map (propertyId -> folderId)
@@ -178,7 +191,7 @@ export function formatPropertyDto(
           avatar: b.guest?.avatar || null,
           comment: b.comment || '',
           rating: b.rating || 0,
-          reviewedAt: (b.reviewedAt || b.updatedAt || b.createdAt).toISOString(),
+          reviewedAt: toSafeIsoString(b.reviewedAt || b.updatedAt || b.createdAt),
           reviewImages: Array.isArray(b.reviewImages)
             ? b.reviewImages.map((img: any) => ({
                 id: img.id,
@@ -229,9 +242,9 @@ export function formatPropertyDto(
     host: hostDto,
     ...(reviews !== undefined ? { reviews } : {}),
     chatRoomId: options?.chatRoomId ?? null,
-    createdAt: prop.createdAt.toISOString(),
-    publishedAt: prop.publishedAt ? prop.publishedAt.toISOString() : undefined,
-    updatedAt: prop.updatedAt.toISOString(),
+    createdAt: toSafeIsoString(prop.createdAt),
+    publishedAt: prop.publishedAt ? toSafeIsoString(prop.publishedAt) : undefined,
+    updatedAt: toSafeIsoString(prop.updatedAt),
     _bookingCount: Array.isArray(prop.bookings) ? prop.bookings.length : 0,
   };
 }
@@ -757,7 +770,7 @@ export async function getHostProfile(
       firstName: hostUser.firstName || 'Host',
       lastName: hostUser.lastName || '',
       avatar: hostUser.avatar || null,
-      createdAt: hostUser.createdAt.toISOString(),
+      createdAt: toSafeIsoString(hostUser.createdAt),
       avgRating,
       reviewCount,
       totalProperties: formattedProperties.length,
@@ -857,7 +870,7 @@ export async function getHostReviews(
       comment: b.comment || '',
       propertyId: b.property.id,
       propertyName: b.property.title,
-      reviewedAt: (b.reviewedAt || b.updatedAt || b.createdAt).toISOString(),
+      reviewedAt: toSafeIsoString(b.reviewedAt || b.updatedAt || b.createdAt),
       guestProfile: {
         id: b.guest.id,
         firstName: b.guest.firstName || 'Guest',
@@ -977,14 +990,14 @@ export async function searchPropertyRoomCategories(
       const basePrice = Number(rc.basePrice);
       const calendarByDate = new Map<string, any>();
       for (const cal of rc.calendars) {
-        calendarByDate.set(cal.date.toISOString().slice(0, 10), cal);
+        calendarByDate.set(toSafeIsoString(cal.date).slice(0, 10), cal);
       }
 
       let minAvailableRooms = rc.totalRoom;
       let totalPrice = 0;
 
       const dates = nightDates.map((d) => {
-        const dateKey = d.toISOString().slice(0, 10);
+        const dateKey = toSafeIsoString(d).slice(0, 10);
         const cal = calendarByDate.get(dateKey);
         const booked = cal ? cal.bookedRooms : 0;
         const unavailable = cal ? cal.unavailableRooms : 0;

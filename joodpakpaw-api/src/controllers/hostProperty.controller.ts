@@ -287,10 +287,14 @@ export async function getHostProperties(
             deletedAt: null,
             rating: { not: null },
           },
-          select: {
-            id: true,
-            rating: true,
+          include: {
+            guest: true,
+            reviewImages: {
+              where: { deletedAt: null },
+              orderBy: { id: 'asc' },
+            },
           },
+          orderBy: { reviewedAt: 'desc' },
         },
         reports: {
           where: {

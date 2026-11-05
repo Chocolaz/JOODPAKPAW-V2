@@ -31,7 +31,7 @@ Use this skill whenever modifying or upgrading the existing Next.js 16 Frontend 
      - Touch targets must be at least 44px (`min-h-[44px]`), and button typography should scale smoothly (`text-base sm:text-lg`).
      - Avoid `w-screen` that introduces horizontal overflow scrollbars; prefer `w-full`.
    - **Responsive Grids (`PropertyList`, Card Feeds)**:
-     - Adapt gracefully from compact devices: `grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4` (never force multi-columns on screens <380px that crush card content).
+     - Adapt gracefully from compact devices while preserving home feed card sizing consistency (`grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4`).
 5. **shadcn-First Component Strategy**:
    - Whenever building, refactoring, or creating any new UI component (inputs, buttons, dialogs, drawers, selects, tabs, popovers, tooltips, accordions, calendars, dropdowns, forms, etc.), **ALWAYS check and use official `shadcn/ui` components from `@/components/ui/` first**.
    - If a required component is not yet in the project, install it via the official shadcn registry:
@@ -39,6 +39,9 @@ Use this skill whenever modifying or upgrading the existing Next.js 16 Frontend 
      npx shadcn@latest add <component-name>
      ```
    - Never build custom ad-hoc primitive components when a clean, accessible, theme-consistent `shadcn/ui` (Radix UI + Tailwind) component exists. Preserve full design system consistency across the monorepo.
+6. **Canonical Frontend Design Specification (`joodpakpaw-frontend/DESIGN.md`)**:
+   - The official design specification for the Frontend Agent (`frontend-upgrader`) is designated at **`d:\Project\joodpakpaw\joodpakpaw-frontend\DESIGN.md`** (replacing the removed `docs/frontend-component-design.md`).
+   - Always consult `joodpakpaw-frontend/DESIGN.md` for typography scales, card grid columns, image skeleton/shimmer placeholders, page transitions, and UI consistency rules.
 
 ---
 

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../database/prisma';
+import { toSafeIsoString } from './property.controller';
 import { AppError } from '../middlewares/errorHandler';
 
 /**
@@ -213,8 +214,8 @@ export async function getReportCategories(
       name: c.name,
       label: c.label || c.name,
       type: c.type,
-      createdAt: c.createdAt.toISOString(),
-      updatedAt: c.updatedAt.toISOString(),
+      createdAt: toSafeIsoString(c.createdAt),
+      updatedAt: toSafeIsoString(c.updatedAt),
     }));
 
     res.status(200).json({
