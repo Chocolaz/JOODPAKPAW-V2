@@ -6,7 +6,7 @@ import { UserProfile } from '@/types'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Camera } from 'lucide-react'
+import { Camera, Loader2 } from 'lucide-react'
 import { assetPath } from '@/lib/utils'
 import { updateUserProfile } from '@/lib/api'
 import { useAuth } from '@/app/_components/AuthContext'
@@ -88,28 +88,35 @@ export const EditProfileForm = ({
         {/* Avatar */}
         <div className="flex justify-center">
           <div className="relative">
-            <Avatar className="w-24 h-24 ring-4 ring-gray-100">
+            <Avatar className="w-24 h-24 ring-4 ring-gray-100 overflow-hidden">
               <AvatarImage src={avatarPreview || undefined} alt="Avatar preview" />
-              <AvatarFallback className="text-2xl bg-gray-100 text-neutral-gray">
+              <AvatarFallback className="text-2xl bg-gray-100 text-neutral-gray font-semibold">
                 {profile.firstName?.charAt(0)}{profile.lastName?.charAt(0)}
               </AvatarFallback>
             </Avatar>
-            {avatarPreview ? (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="absolute bottom-0 right-0 w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-md border border-gray-100 hover:bg-gray-50 transition-colors"
-              >
-                <Camera className="w-4 h-4 text-neutral-gray" />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-sm"
-              >
-                <Camera className="w-6 h-6 text-white" />
-              </button>
+            {saving && (
+              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 backdrop-blur-[2px] z-10">
+                <Loader2 className="w-7 h-7 animate-spin text-white" />
+              </div>
+            )}
+            {!saving && (
+              avatarPreview ? (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute bottom-0 right-0 w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-md border border-gray-100 hover:bg-gray-50 transition-colors"
+                >
+                  <Camera className="w-4 h-4 text-neutral-gray" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-sm"
+                >
+                  <Camera className="w-6 h-6 text-white" />
+                </button>
+              )
             )}
             <input
               ref={fileInputRef}
@@ -117,6 +124,7 @@ export const EditProfileForm = ({
               accept="image/*"
               className="hidden"
               onChange={handleFileChange}
+              disabled={saving}
             />
           </div>
         </div>
@@ -133,6 +141,7 @@ export const EditProfileForm = ({
               onChange={e => setFirstName(e.target.value)}
               placeholder="First name"
               maxLength={60}
+              disabled={saving}
             />
           </div>
           <div className="space-y-1.5">
@@ -145,16 +154,24 @@ export const EditProfileForm = ({
               onChange={e => setLastName(e.target.value)}
               placeholder="Last name"
               maxLength={60}
+              disabled={saving}
             />
           </div>
         </div>
 
         <Button
           type="submit"
-          className="w-full h-12 text-base bg-positive-green hover:bg-positive-green/90"
+          className="w-full h-12 text-base bg-positive-green hover:bg-positive-green/90 font-medium"
           disabled={!isDirty || saving}
         >
-          {saving ? 'Saving…' : 'Save changes'}
+          {saving ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              กำลังบันทึกข้อมูล...
+            </span>
+          ) : (
+            'บันทึกการเปลี่ยนแปลง'
+          )}
         </Button>
       </form>
     </>

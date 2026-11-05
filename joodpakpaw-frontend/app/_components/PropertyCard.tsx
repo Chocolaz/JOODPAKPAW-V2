@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { cn, getLowestPrice, getPetPolicy, assetPath, getApiImageUrl } from '@/lib/utils'
 import { Globe, GlobeLock, Heart, Star, Ban } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 import { FavoriteDrawer } from './FavoriteDrawer'
 import { useAuth } from '@/app/_components/AuthContext'
 import {
@@ -41,6 +42,7 @@ export function PropertyCard({
   const { user } = useAuth()
   const isOwner = user && property.hostId === user.id
 
+  const [isImageLoaded, setIsImageLoaded] = useState(false)
   const [imgSrc, setImgSrc] = useState(
     getApiImageUrl(property.images[0]?.filePath) || assetPath('/graphics/welcome.svg')
   )
@@ -122,15 +124,25 @@ export function PropertyCard({
       {/* Card inner — hover lifts the whole card */}
       <div className="transition-transform duration-300 ease-out group-hover:-translate-y-1.5">
         {/* Image Box */}
-        <div className="w-full aspect-square relative">
+        <div className="w-full aspect-square relative rounded-[20px] overflow-hidden bg-gray-100">
           <Link href={finalHref} className="relative block w-full h-full" onClick={handleCardClick}>
+            {!isImageLoaded && (
+              <Skeleton className="absolute inset-0 w-full h-full rounded-[20px] bg-gray-200 animate-pulse" />
+            )}
             <Image
               src={imgSrc}
               alt={property.title}
               fill
               unoptimized
-              className="object-cover rounded-[20px] shadow-md group-hover:shadow-xl transition-shadow duration-300"
-              onError={() => setImgSrc(assetPath('/graphics/welcome.svg'))}
+              onLoad={() => setIsImageLoaded(true)}
+              className={cn(
+                'object-cover rounded-[20px] shadow-md group-hover:shadow-xl transition-all duration-300',
+                isImageLoaded ? 'opacity-100' : 'opacity-0'
+              )}
+              onError={() => {
+                setImgSrc(assetPath('/graphics/welcome.svg'))
+                setIsImageLoaded(true)
+              }}
             />
           </Link>
           {showPetPolicyChip && petPolicy && (

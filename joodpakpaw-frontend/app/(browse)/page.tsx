@@ -359,8 +359,8 @@ export default function Home() {
             <>
               {/* Flat results header — shown when searching or filtering */}
               {isFiltering && (
-                <div className="flex items-center justify-between mb-4 lg:mb-8 lg:pt-10">
-                  <h5 className="text-xl lg:text-3xl xl:text-4xl font-medium text-deep-teal truncate mr-4">
+                <div className="flex items-center justify-between mb-4 lg:mb-6 lg:pt-6">
+                  <h5 className="text-lg lg:text-xl xl:text-2xl font-semibold text-deep-teal truncate mr-4">
                     {filterLabel}
                   </h5>
                   <AnimatePresence>
@@ -370,7 +370,7 @@ export default function Home() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="text-sm lg:text-lg xl:text-xl text-neutral-gray shrink-0"
+                        className="text-sm lg:text-base font-normal text-neutral-gray shrink-0"
                       >
                         {filterTotal} {filterTotal === 1 ? 'place' : 'places'}
                       </motion.span>
@@ -435,7 +435,7 @@ export default function Home() {
                           animate={{ opacity: 1 }}
                           exit={{ opacity: 0 }}
                           transition={{ duration: 0.15 }}
-                          className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 lg:gap-6"
+                          className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4"
                         >
                           {Array.from({ length: 14 }).map((_, i) => (
                             <div key={i} className="animate-pulse">
@@ -462,7 +462,7 @@ export default function Home() {
                         >
                           <PropertyList
                             properties={filterResults}
-                            className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 lg:gap-6"
+                            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4"
                             showPetPolicyChip={true}
                             showHeartIcon={isAuthenticated}
                           />

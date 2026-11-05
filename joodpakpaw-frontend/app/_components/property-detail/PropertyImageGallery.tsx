@@ -15,6 +15,7 @@ import 'yet-another-react-lightbox/styles.css'
 import { Property } from '@/types'
 import { assetPath } from '@/lib/utils'
 import { Grid2x2 } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 
 interface PropertyImageGalleryProps {
   images: Property['images']
@@ -31,17 +32,58 @@ function Thumb({
   onClick: (i: number) => void
   className?: string
 }) {
+  const [isLoaded, setIsLoaded] = useState(false)
   return (
     <div
-      className={cn('relative cursor-pointer overflow-hidden group', className)}
+      className={cn('relative cursor-pointer overflow-hidden group bg-gray-100', className)}
       onClick={() => onClick(index)}
     >
+      {!isLoaded && (
+        <Skeleton className="absolute inset-0 w-full h-full rounded-none bg-gray-200 animate-pulse z-0" />
+      )}
       <Image
         src={src}
         alt={`Image ${index + 1}`}
         fill
         unoptimized
-        className="object-cover transition-transform duration-500 group-hover:scale-105"
+        onLoad={() => setIsLoaded(true)}
+        className={cn(
+          'object-cover transition-all duration-500 group-hover:scale-105',
+          isLoaded ? 'opacity-100' : 'opacity-0'
+        )}
+      />
+    </div>
+  )
+}
+
+function MobileCarouselSlide({
+  src,
+  index,
+  onClick,
+}: {
+  src: string
+  index: number
+  onClick: () => void
+}) {
+  const [isLoaded, setIsLoaded] = useState(false)
+  return (
+    <div
+      className="relative w-full aspect-[4/3] overflow-hidden cursor-pointer bg-gray-100"
+      onClick={onClick}
+    >
+      {!isLoaded && (
+        <Skeleton className="absolute inset-0 w-full h-full rounded-none bg-gray-200 animate-pulse z-0" />
+      )}
+      <Image
+        src={src}
+        alt={`Image ${index + 1}`}
+        fill
+        unoptimized
+        onLoad={() => setIsLoaded(true)}
+        className={cn(
+          'object-cover transition-opacity duration-300',
+          isLoaded ? 'opacity-100' : 'opacity-0'
+        )}
       />
     </div>
   )
@@ -158,12 +200,11 @@ export function PropertyImageGallery({ images: propImages }: PropertyImageGaller
           <CarouselContent>
             {images.map((src, i) => (
               <CarouselItem key={i}>
-                <div
-                  className="relative w-full aspect-[4/3] overflow-hidden cursor-pointer"
+                <MobileCarouselSlide
+                  src={src}
+                  index={i}
                   onClick={() => openLightbox(i)}
-                >
-                  <Image src={src} alt={`Image ${i + 1}`} fill unoptimized className="object-cover" />
-                </div>
+                />
               </CarouselItem>
             ))}
           </CarouselContent>

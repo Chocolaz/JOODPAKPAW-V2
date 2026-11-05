@@ -6,6 +6,7 @@ import { RoomCategories } from '@/types'
 import { useState, useMemo, useRef } from 'react'
 import { deleteRoomCategory } from '@/lib/api'
 import { toast } from 'sonner'
+import { Skeleton } from '@/components/ui/skeleton'
 import { ConfirmationModal } from '@/app/_components/ConfirmationModal'
 import { cn } from '@/lib/utils'
 import { getPetPolicy } from '@/lib/utils'
@@ -36,6 +37,7 @@ export function RoomCategoryCard({
   const [isDeleting, setIsDeleting] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [imgIndex, setImgIndex] = useState(0)
+  const [isImageLoaded, setIsImageLoaded] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(0)
   const touchStartX = useRef(0)
@@ -106,15 +108,22 @@ export function RoomCategoryCard({
           {images.length > 0 || fallbackImageUrl ? (
             <>
               <div
-                className={cn('relative w-full h-full', images.length > 0 && 'cursor-zoom-in')}
+                className={cn('relative w-full h-full bg-neutral-100', images.length > 0 && 'cursor-zoom-in')}
                 onClick={images.length > 0 ? openLightbox : undefined}
               >
+                {!isImageLoaded && (
+                  <Skeleton className="absolute inset-0 w-full h-full rounded-none bg-gray-200 animate-pulse z-0" />
+                )}
                 <Image
                   src={images.length > 0 ? images[imgIndex].filePath : fallbackImageUrl!}
                   alt={`${category.name} photo`}
                   fill
                   unoptimized
-                  className="object-cover transition-opacity duration-200"
+                  onLoad={() => setIsImageLoaded(true)}
+                  className={cn(
+                    'object-cover transition-opacity duration-300',
+                    isImageLoaded ? 'opacity-100' : 'opacity-0'
+                  )}
                 />
                 {images.length === 0 && fallbackImageUrl && (
                   <span className="absolute bottom-2 left-2 text-[10px] font-medium bg-black/50 text-white px-1.5 py-0.5 rounded-md backdrop-blur-sm">
