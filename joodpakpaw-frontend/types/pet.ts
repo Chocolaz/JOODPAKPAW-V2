@@ -4,6 +4,11 @@ export interface Pet {
 }
 
 export interface PetsResponse {
+  code?: string | number
+  message?: string
+  data?: {
+    pets: Pet[]
+  } | Pet[]
   pets: Pet[]
 }
 
@@ -16,6 +21,11 @@ export interface PetBreed {
 }
 
 export interface PetBreedsResponse {
+  code?: string | number
+  message?: string
+  data?: {
+    petBreeds: PetBreed[]
+  } | PetBreed[]
   petBreeds: PetBreed[]
 }
 
@@ -28,6 +38,11 @@ export interface PetSizeCategory {
 }
 
 export interface PetSizeCategoriesResponse {
+  code?: string | number
+  message?: string
+  data?: {
+    petSizeCategories: PetSizeCategory[]
+  } | PetSizeCategory[]
   petSizeCategories: PetSizeCategory[]
 }
 
@@ -49,6 +64,11 @@ export interface PetProfile {
 }
 
 export interface PetProfilesResponse {
+  code?: string | number
+  message?: string
+  data?: {
+    petProfiles: PetProfile[]
+  } | PetProfile[]
   petProfiles: PetProfile[]
 }
 

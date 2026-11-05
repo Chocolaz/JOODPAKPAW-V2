@@ -130,20 +130,50 @@ export interface Property {
   chatRoomId?: number | null
 }
 
+export interface PaginationInfo {
+  page: number
+  limit: number
+  totalRows: number
+  totalPages: number
+}
+
 export interface PropertiesResponse {
+  code?: string | number
+  message?: string
   totalRows: number
   totalPages: number
   data: Property[]
+  pagination?: PaginationInfo
   limit: number
   page: number
-  orderBy: string
-  sort: string
+  orderBy?: string
+  sort?: string
 }
 
 export interface HostPropertiesResponse {
+  code?: string | number
+  message?: string
+  data?: {
+    properties: Property[]
+  } | Property[]
   properties: Property[]
 }
 
 export interface RoomCategoriesResponse {
+  code?: string | number
+  message?: string
+  data?: {
+    roomCategories: RoomCategories[]
+  } | RoomCategories[]
   roomCategories: RoomCategories[]
 }
+
+export interface PropertyDetailResponse {
+  code?: string | number
+  message?: string
+  data?: {
+    property: Property
+  } | Property
+  property: Property
+}
+

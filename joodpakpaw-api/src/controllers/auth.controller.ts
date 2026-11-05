@@ -6,7 +6,7 @@ import { prisma } from '../database/prisma';
 import { config } from '../config/env';
 import { AppError, FieldValidationError } from '../middlewares/errorHandler';
 import { UserRoleInfo } from '../middlewares/auth.middleware';
-import { uploadImageAsWebp } from '../services/storage.service';
+import { uploadImageAsWebp, deleteObjectFromS3 } from '../services/storage.service';
 
 // In-memory store for OTP reference codes & active refresh tokens (cloud free-tier compatible)
 const otpRefCodeStore = new Map<string, { refCode: string; expiresAt: number }>();
@@ -167,7 +167,7 @@ export async function signUp(
       validationErrors.push({
         field: 'password',
         tag: 'min',
-        value: '',
+        value: '[REDACTED]',
       });
     }
 
@@ -181,7 +181,7 @@ export async function signUp(
 
     if (!resolvedFirstName) {
       validationErrors.push({
-        field: 'firstname',
+        field: 'firstName',
         tag: 'required',
         value: '',
       });
@@ -189,7 +189,7 @@ export async function signUp(
 
     if (!resolvedLastName) {
       validationErrors.push({
-        field: 'lastname',
+        field: 'lastName',
         tag: 'required',
         value: '',
       });
@@ -203,7 +203,7 @@ export async function signUp(
       validationErrors.push({
         field: 'confirmPassword',
         tag: 'match',
-        value: '',
+        value: '[REDACTED]',
       });
     }
 
@@ -291,8 +291,6 @@ export async function signUp(
     res.status(201).json({
       code: 'S-0000',
       message: 'User registered successfully. Please verify OTP.',
-      refCode,
-      ...(config.env !== 'production' ? { otp } : {}),
       data: {
         id: createdUser.id,
         email: createdUser.email,
@@ -300,7 +298,7 @@ export async function signUp(
         lastName: createdUser.lastName,
         phone: createdUser.phone,
         refCode,
-        ...(config.env !== 'production' ? { otp } : {}),
+        ...(config.env !== 'production' ? { otp, debugOtp: otp } : {}),
       },
     });
   } catch (error) {
@@ -409,13 +407,8 @@ export async function verifyOtp(
     };
 
     res.status(200).json({
-      code: 200,
+      code: 'S-0000',
       message: 'OTP verified successfully',
-      accessToken,
-      refreshToken,
-      tokenType,
-      expiresIn,
-      user: userPayload,
       data: {
         accessToken,
         refreshToken,
@@ -463,6 +456,14 @@ export async function resendOtp(
       throw new AppError('This email is not registered.', 404, 'DB-1002');
     }
 
+    if (user.isVerified) {
+      throw new AppError(
+        'Email is already verified. Please sign in instead.',
+        400,
+        'A-3008'
+      );
+    }
+
     const otp = generateSixDigitOtp();
     const refCode = generateRefCode();
     const otpExpiredAt = new Date(Date.now() + 15 * 60 * 1000);
@@ -483,11 +484,9 @@ export async function resendOtp(
     res.status(200).json({
       code: 'S-0000',
       message: 'OTP resent successfully',
-      refCode,
-      ...(config.env !== 'production' ? { otp } : {}),
       data: {
         refCode,
-        ...(config.env !== 'production' ? { otp } : {}),
+        ...(config.env !== 'production' ? { otp, debugOtp: otp } : {}),
       },
     });
   } catch (error) {
@@ -564,6 +563,15 @@ export async function signIn(
       throw new AppError('User account has been banned.', 403, 'A-3002');
     }
 
+    if (!user.isVerified) {
+      throw new AppError(
+        'Email not verified. Please verify your email with OTP first.',
+        403,
+        'A-3006',
+        { email: user.email }
+      );
+    }
+
     // Touch user updated_at to reflect recent sign-in
     await prisma.user.update({
       where: { id: user.id },
@@ -584,13 +592,8 @@ export async function signIn(
     };
 
     res.status(200).json({
-      code: 200,
+      code: 'S-0000',
       message: 'Sign in successful',
-      accessToken,
-      refreshToken,
-      tokenType,
-      expiresIn,
-      user: userPayload,
       data: {
         accessToken,
         refreshToken,
@@ -658,13 +661,11 @@ export async function refreshToken(
     res.status(200).json({
       code: 'S-0000',
       message: 'Token refreshed successfully',
-      accessToken: issued.accessToken,
-      refreshToken: issued.refreshToken,
-      tokenType: issued.tokenType,
-      expiresIn: issued.expiresIn,
       data: {
         accessToken: issued.accessToken,
         refreshToken: issued.refreshToken,
+        tokenType: issued.tokenType,
+        expiresIn: issued.expiresIn,
       },
     });
   } catch (error) {
@@ -727,8 +728,6 @@ export async function forgotPassword(
     res.status(200).json({
       code: 'S-0000',
       message: 'Password reset link sent',
-      resetPasswordToken: resetToken,
-      payload,
       data: {
         resetPasswordToken: resetToken,
         payload,
@@ -825,6 +824,15 @@ export async function resetPassword(
       );
     }
 
+    const isSameAsCurrent = await bcrypt.compare(password, user.password);
+    if (isSameAsCurrent) {
+      throw new AppError(
+        'New password cannot be the same as your current password.',
+        400,
+        'A-3012'
+      );
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
     await prisma.user.update({
@@ -839,6 +847,7 @@ export async function resetPassword(
     res.status(200).json({
       code: 'S-0000',
       message: 'Password has been reset successfully.',
+      data: null,
     });
   } catch (error) {
     next(error);
@@ -914,11 +923,9 @@ export async function getProfile(
     };
 
     res.status(200).json({
-      code: 200,
+      code: 'S-0000',
       message: 'Success',
       data: profileData,
-      profile: profileData,
-      user: profileData,
     });
   } catch (error) {
     next(error);
@@ -938,9 +945,14 @@ export async function changePassword(
       throw new AppError('Authentication required.', 401, 'A-3005');
     }
 
-    const targetUserId = parseInt(req.params.userId, 10);
-    if (isNaN(targetUserId)) {
-      throw new AppError('Invalid user ID.', 400, 'T-2007');
+    let targetUserId: number;
+    if (req.params.userId === 'me' || !req.params.userId) {
+      targetUserId = req.user.id;
+    } else {
+      targetUserId = parseInt(req.params.userId, 10);
+      if (isNaN(targetUserId)) {
+        throw new AppError('Invalid user ID.', 400, 'T-2007');
+      }
     }
 
     const isAdmin = req.user.roles.some(
@@ -1028,9 +1040,17 @@ export async function changePassword(
       },
     });
 
+    // Invalidate all active refresh tokens for this user
+    for (const [t, entry] of refreshTokenStore.entries()) {
+      if (entry.userId === user.id) {
+        refreshTokenStore.delete(t);
+      }
+    }
+
     res.status(200).json({
       code: 'S-0000',
       message: 'Password changed successfully.',
+      data: null,
     });
   } catch (error) {
     next(error);
@@ -1078,9 +1098,14 @@ export async function updateUserProfile(
       throw new AppError('Authentication required.', 401, 'A-3005');
     }
 
-    const targetUserId = parseInt(req.params.userId, 10);
-    if (isNaN(targetUserId)) {
-      throw new AppError('Invalid user ID.', 400, 'T-2007');
+    let targetUserId: number;
+    if (req.params.userId === 'me' || !req.params.userId) {
+      targetUserId = req.user.id;
+    } else {
+      targetUserId = parseInt(req.params.userId, 10);
+      if (isNaN(targetUserId)) {
+        throw new AppError('Invalid user ID.', 400, 'T-2007');
+      }
     }
 
     const isAdmin = req.user.roles.some(
@@ -1201,6 +1226,9 @@ export async function updateUserProfile(
     let updatedAvatar = existingUser.avatar;
     const uploadedFile = extractUploadedAvatarFile(req);
     if (uploadedFile && uploadedFile.buffer) {
+      if (existingUser.avatar) {
+        await deleteObjectFromS3(existingUser.avatar);
+      }
       updatedAvatar = await uploadImageAsWebp(
         uploadedFile.buffer,
         'avatars',
@@ -1278,8 +1306,41 @@ export async function updateUserProfile(
       code: 'S-0000',
       message: 'Profile updated successfully',
       data: updatedUserProfile,
-      profile: updatedUserProfile,
-      user: updatedUserProfile,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * POST /api/v1/auth/sign-out
+ */
+export async function signOut(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AppError('Authentication required.', 401, 'A-3005');
+    }
+
+    const { refreshToken: token } = req.body || {};
+    if (token && typeof token === 'string') {
+      refreshTokenStore.delete(token);
+    }
+
+    // Invalidate all active tokens for current user
+    for (const [t, entry] of refreshTokenStore.entries()) {
+      if (entry.userId === req.user.id) {
+        refreshTokenStore.delete(t);
+      }
+    }
+
+    res.status(200).json({
+      code: 'S-0000',
+      message: 'Signed out successfully',
+      data: null,
     });
   } catch (error) {
     next(error);

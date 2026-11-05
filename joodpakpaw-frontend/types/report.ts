@@ -8,6 +8,11 @@ export interface ReportCategory {
 }
 
 export interface ReportCategoriesResponse {
+  code?: string | number
+  message?: string
+  data?: {
+    reportCategories: ReportCategory[]
+  } | ReportCategory[]
   reportCategories: ReportCategory[]
 }
 

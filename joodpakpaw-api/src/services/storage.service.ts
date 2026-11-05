@@ -150,14 +150,29 @@ export async function uploadMultipleImagesAsWebp(
  * Gracefully ignores errors if S3 is offline.
  */
 export async function deleteObjectFromS3(fileUrlOrKey: string): Promise<void> {
-  if (!fileUrlOrKey) return;
+  if (!fileUrlOrKey || typeof fileUrlOrKey !== 'string') return;
   try {
-    const baseUrl = (
-      config.s3.publicUrl || `${config.s3.endpoint}/${config.s3.bucket}`
-    ).replace(/\/+$/, '');
-    const key = fileUrlOrKey.startsWith(baseUrl)
-      ? fileUrlOrKey.slice(baseUrl.length).replace(/^\/+/, '')
-      : fileUrlOrKey.replace(/^\/+/, '');
+    let key = fileUrlOrKey.trim();
+    if (key.startsWith('http://') || key.startsWith('https://')) {
+      try {
+        const parsed = new URL(key);
+        const parts = parsed.pathname.split('/').filter(Boolean);
+        if (parts.length > 0 && parts[0] === config.s3.bucket) {
+          key = parts.slice(1).join('/');
+        } else {
+          key = parts.join('/');
+        }
+      } catch {
+        const baseUrl = (
+          config.s3.publicUrl || `${config.s3.endpoint}/${config.s3.bucket}`
+        ).replace(/\/+$/, '');
+        if (key.startsWith(baseUrl)) {
+          key = key.slice(baseUrl.length).replace(/^\/+/, '');
+        }
+      }
+    } else {
+      key = key.replace(/^\/+/, '');
+    }
 
     if (!key) return;
 
