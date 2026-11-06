@@ -3,7 +3,7 @@ import path from 'path';
 import { prisma } from '../database/prisma';
 import { AppError, FieldValidationError } from '../middlewares/errorHandler';
 import { uploadMultipleImagesAsWebp, deleteObjectFromS3 } from '../services/storage.service';
-import { formatPropertyDto } from './property.controller';
+import { formatPropertyDto, syncPropertyMinPrice } from './property.controller';
 import { normalizePetName } from './lookup.controller';
 import { cacheService } from '../services/cache.service';
 
@@ -1328,6 +1328,7 @@ export async function createHostRoomCategory(
       address: prop.address || '',
     });
 
+    await syncPropertyMinPrice(propertyId);
     await cacheService.delByPrefix('properties:');
 
     res.status(201).json({
@@ -1597,6 +1598,7 @@ export async function updateHostRoomCategory(
         })
       : { id: roomId };
 
+    await syncPropertyMinPrice(propertyId);
     await cacheService.delByPrefix('properties:');
 
     res.status(200).json({
@@ -1710,6 +1712,7 @@ export async function deleteHostRoomCategory(
       },
     });
 
+    await syncPropertyMinPrice(propertyId);
     await cacheService.delByPrefix('properties:');
 
     res.status(200).json({

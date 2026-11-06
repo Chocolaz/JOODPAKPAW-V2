@@ -262,6 +262,10 @@ function installPrismaAuthMock() {
       isActive: true,
       isBannedByAdmin: false,
       isBannedBeforeAccountBan: false,
+      minPrice: 800,
+      avgRating: 5,
+      reviewCount: 1,
+      bookingCount: 1,
       hostId: hostUser.id,
       propertyTypeId: 1,
       propertyType: { id: 1, name: 'Pet Hotel' },
@@ -371,7 +375,17 @@ function installPrismaAuthMock() {
       )
     }
     // Public discovery: only return active, non-banned property 101
-    return [propertiesMap.get(101)!]
+    return [propertiesMap.get(101)!].filter(Boolean)
+  }
+
+  ;(prisma.property as any).count = async (args: any) => {
+    const hostId = args?.where?.hostId
+    if (typeof hostId === 'number') {
+      return Array.from(propertiesMap.values()).filter(
+        (p) => p.hostId === hostId && p.deletedAt === null
+      ).length
+    }
+    return [propertiesMap.get(101)!].filter(Boolean).length
   }
 
   ;(prisma.property as any).findUnique = async (args: any) => {
@@ -401,6 +415,10 @@ function installPrismaAuthMock() {
       zipcode: data.zipcode || '',
       isActive: Boolean(data.isActive),
       isBannedByAdmin: false,
+      minPrice: 0,
+      avgRating: 0,
+      reviewCount: 0,
+      bookingCount: 0,
       hostId: data.hostId,
       roomCategories: [],
       bookings: [],

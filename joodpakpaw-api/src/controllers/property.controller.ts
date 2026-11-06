@@ -60,9 +60,15 @@ export function formatPropertyDto(
     ? prop.bookings.filter((b: any) => typeof b.rating === 'number' && b.rating > 0)
     : [];
 
-  const reviewCount = ratedBookings.length;
+  const reviewCount =
+    typeof prop.reviewCount === 'number'
+      ? prop.reviewCount
+      : ratedBookings.length;
+
   const avgRating =
-    reviewCount > 0
+    typeof prop.avgRating === 'number'
+      ? Number(prop.avgRating)
+      : reviewCount > 0
       ? Number(
           (
             ratedBookings.reduce((sum: number, b: any) => sum + (b.rating || 0), 0) /
@@ -88,9 +94,10 @@ export function formatPropertyDto(
     ? prop.roomCategories.map((rc: any) => {
         const rcPets = Array.isArray(rc.pets)
           ? rc.pets.map((rcp: any) => {
+              const petObj = rcp.pet || rcp;
               const normalized = {
-                id: rcp.pet.id,
-                name: normalizePetName(rcp.pet.name),
+                id: petObj.id,
+                name: normalizePetName(petObj.name),
               };
               petMap.set(normalized.id, normalized);
               return normalized;
@@ -102,20 +109,20 @@ export function formatPropertyDto(
         return {
           id: rc.id,
           name: rc.name || '',
-          totalRoom: rc.totalRoom,
-          numberOfPets: rc.numberOfPets,
+          totalRoom: rc.totalRoom ?? 1,
+          numberOfPets: rc.numberOfPets ?? 1,
           basePrice: basePriceNum,
           roomSizeWidth: rc.roomSizeWidth != null ? Number(rc.roomSizeWidth) : null,
           roomSizeLength: rc.roomSizeLength != null ? Number(rc.roomSizeLength) : null,
           roomSizeHeight: rc.roomSizeHeight != null ? Number(rc.roomSizeHeight) : null,
-          propertyId: rc.propertyId,
+          propertyId: rc.propertyId ?? prop.id,
           petSizeCategoryId: rc.petSizeCategoryId ?? undefined,
-          isAvailable: rc.totalRoom > 0,
+          isAvailable: (rc.totalRoom ?? 1) > 0,
           isCapacityInsufficient: false,
           isBooked: false,
           availability: {
             roomsNeeded: 1,
-            availableRooms: rc.totalRoom,
+            availableRooms: rc.totalRoom ?? 1,
             totalPrice: basePriceNum,
             dates: [],
           },
@@ -133,8 +140,8 @@ export function formatPropertyDto(
           pets: rcPets,
           facilities: Array.isArray(rc.facilities)
             ? rc.facilities.map((rcf: any) => ({
-                id: rcf.facility.id,
-                name: rcf.facility.name,
+                id: rcf.facility?.id ?? rcf.id,
+                name: rcf.facility?.name ?? rcf.name,
               }))
             : [],
           images: Array.isArray(rc.images)
@@ -165,7 +172,9 @@ export function formatPropertyDto(
     : [];
 
   const lowestPrice =
-    roomCategories.length > 0
+    prop.minPrice !== undefined && prop.minPrice !== null && Number(prop.minPrice) > 0
+      ? Number(prop.minPrice)
+      : roomCategories.length > 0
       ? Math.min(...roomCategories.map((rc: any) => rc.basePrice))
       : 0;
 
@@ -246,15 +255,86 @@ export function formatPropertyDto(
     createdAt: toSafeIsoString(prop.createdAt),
     publishedAt: prop.publishedAt ? toSafeIsoString(prop.publishedAt) : undefined,
     updatedAt: toSafeIsoString(prop.updatedAt),
-    _bookingCount: Array.isArray(prop.bookings) ? prop.bookings.length : 0,
+    _bookingCount:
+      typeof prop.bookingCount === 'number'
+        ? prop.bookingCount
+        : Array.isArray(prop.bookings)
+        ? prop.bookings.length
+        : 0,
   };
 }
 
 /**
- * GET /api/v1/properties
+ * Invalidate all property-related caches.
  */
 export async function invalidatePropertyCaches(): Promise<number> {
   return cacheService.delByPrefix('properties:');
+}
+
+/**
+ * Synchronizes the materialized min_price column for a given property.
+ */
+export async function syncPropertyMinPrice(propertyId: number): Promise<void> {
+  const roomCategories = await prisma.roomCategory.findMany({
+    where: { propertyId, deletedAt: null },
+    select: { basePrice: true },
+  });
+  let minPrice = 0;
+  if (roomCategories.length > 0) {
+    minPrice = Math.min(...roomCategories.map((rc) => Number(rc.basePrice)));
+    if (!isFinite(minPrice) || minPrice < 0) minPrice = 0;
+  }
+  await prisma.property.update({
+    where: { id: propertyId },
+    data: { minPrice },
+  });
+  await invalidatePropertyCaches();
+}
+
+/**
+ * Synchronizes the materialized avg_rating and review_count columns for a given property.
+ */
+export async function syncPropertyRating(propertyId: number): Promise<void> {
+  const ratedBookings = await prisma.booking.findMany({
+    where: {
+      propertyId,
+      deletedAt: null,
+      rating: { not: null, gt: 0 },
+    },
+    select: { rating: true },
+  });
+  const reviewCount = ratedBookings.length;
+  const avgRating =
+    reviewCount > 0
+      ? Number(
+          (
+            ratedBookings.reduce((sum, b) => sum + (b.rating || 0), 0) /
+            reviewCount
+          ).toFixed(2)
+        )
+      : 0;
+  await prisma.property.update({
+    where: { id: propertyId },
+    data: { avgRating, reviewCount },
+  });
+  await invalidatePropertyCaches();
+}
+
+/**
+ * Synchronizes the materialized booking_count column for a given property.
+ */
+export async function syncPropertyBookingCount(propertyId: number): Promise<void> {
+  const bookingCount = await prisma.booking.count({
+    where: {
+      propertyId,
+      deletedAt: null,
+    },
+  });
+  await prisma.property.update({
+    where: { id: propertyId },
+    data: { bookingCount },
+  });
+  await invalidatePropertyCaches();
 }
 
 export async function getProperties(
@@ -384,120 +464,88 @@ export async function getProperties(
       }
     }
 
-    if (!isNaN(maxPrice) && maxPrice >= 0) {
-      andConditions.push({
-        roomCategories: {
-          some: {
-            deletedAt: null,
-            basePrice: { lte: maxPrice },
-          },
-        },
-      });
+    // 1. Push minRating directly to SQL
+    if (!isNaN(minRating) && minRating > 0) {
+      andConditions.push({ avgRating: { gte: minRating } });
     }
+
+    // 2. Push maxPrice directly to SQL
+    if (!isNaN(maxPrice) && maxPrice >= 0) {
+      andConditions.push({ minPrice: { lte: maxPrice, gt: 0 } });
+    }
+
+    // 3. Push sorting directly to SQL
+    let orderBy:
+      | Prisma.PropertyOrderByWithRelationInput
+      | Prisma.PropertyOrderByWithRelationInput[];
+    if (sortBy === 'price' || sortBy === 'price_asc' || sortBy === 'best_value') {
+      orderBy = { minPrice: 'asc' };
+    } else if (sortBy === 'price_desc') {
+      orderBy = { minPrice: 'desc' };
+    } else if (sortBy === 'rating' || sortBy === 'top_rated') {
+      orderBy = [{ avgRating: 'desc' }, { reviewCount: 'desc' }];
+    } else if (sortBy === 'trending' || sortBy === 'popular') {
+      orderBy = [
+        { bookingCount: 'desc' },
+        { reviewCount: 'desc' },
+        { avgRating: 'desc' },
+      ];
+    } else {
+      orderBy = { createdAt: 'desc' };
+    }
+
+    // 4. Push pagination directly to SQL
+    const totalRows = await prisma.property.count({
+      where: { AND: andConditions },
+    });
+    const totalPages = totalRows > 0 ? Math.ceil(totalRows / limit) : 0;
+
+    const dbProperties =
+      totalRows > 0
+        ? await prisma.property.findMany({
+            where: { AND: andConditions },
+            include: {
+              images: {
+                where: { deletedAt: null },
+                orderBy: { id: 'asc' },
+                take: 3,
+              },
+              propertyType: true,
+              roomCategories: {
+                where: { deletedAt: null },
+                select: {
+                  id: true,
+                  basePrice: true,
+                  pets: {
+                    select: {
+                      pet: true,
+                    },
+                  },
+                },
+                orderBy: { basePrice: 'asc' },
+              },
+              host: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  avatar: true,
+                  isVerifiedHost: true,
+                },
+              },
+            },
+            orderBy,
+            skip: (page - 1) * limit,
+            take: limit,
+          })
+        : [];
 
     const anonymousFavMap = new Map<number, number>();
-
-    const dbProperties = await prisma.property.findMany({
-      where: { AND: andConditions },
-      include: {
-        images: {
-          where: { deletedAt: null },
-          orderBy: { id: 'asc' },
-        },
-        propertyType: true,
-        facilities: {
-          include: {
-            facility: {
-              include: {
-                category: true,
-              },
-            },
-          },
-        },
-        roomCategories: {
-          where: { deletedAt: null },
-          include: {
-            images: {
-              where: { deletedAt: null },
-              orderBy: { id: 'asc' },
-            },
-            petSizeCategory: true,
-            pets: {
-              include: {
-                pet: true,
-              },
-            },
-            facilities: {
-              include: {
-                facility: true,
-              },
-            },
-          },
-          orderBy: { basePrice: 'asc' },
-        },
-        host: true,
-        bookings: {
-          where: { deletedAt: null },
-          select: {
-            id: true,
-            rating: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
+    const paginatedData = dbProperties.map((p) => {
+      const dto = formatPropertyDto(p, anonymousFavMap);
+      const { _bookingCount, ...rest } = dto;
+      return rest;
     });
-
-    let formattedList = dbProperties.map((p) =>
-      formatPropertyDto(p, anonymousFavMap)
-    );
-
-    // Filter by minRating if requested
-    if (!isNaN(minRating) && minRating > 0) {
-      formattedList = formattedList.filter((p) => p.avgRating >= minRating);
-    }
-
-    // Filter by maxPrice against the property's lowest room category price
-    if (!isNaN(maxPrice) && maxPrice >= 0) {
-      formattedList = formattedList.filter(
-        (p) => p.lowestPrice > 0 && p.lowestPrice <= maxPrice
-      );
-    }
-
-    // Sort according to sortBy parameter
-        
-    if (sortBy === 'price' || sortBy === 'price_asc' || sortBy === 'best_value') {
-                  formattedList.sort((a, b) => {
-        const priceA = a.lowestPrice > 0 ? a.lowestPrice : Number.MAX_SAFE_INTEGER;
-        const priceB = b.lowestPrice > 0 ? b.lowestPrice : Number.MAX_SAFE_INTEGER;
-        return priceA - priceB;
-      });
-    } else if (sortBy === 'price_desc') {
-                  formattedList.sort((a, b) => b.lowestPrice - a.lowestPrice);
-    } else if (sortBy === 'rating' || sortBy === 'top_rated') {
-                  formattedList.sort(
-        (a, b) => b.avgRating - a.avgRating || b.reviewCount - a.reviewCount
-      );
-    } else if (sortBy === 'trending' || sortBy === 'popular') {
-                  formattedList.sort(
-        (a, b) =>
-          b._bookingCount - a._bookingCount ||
-          b.reviewCount - a.reviewCount ||
-          b.avgRating - a.avgRating
-      );
-    } else {
-      // Default / newest
-                  formattedList.sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-    }
-
-    const totalRows = formattedList.length;
-    const totalPages = totalRows > 0 ? Math.ceil(totalRows / limit) : 0;
-    const startIdx = (page - 1) * limit;
-    const paginatedData = formattedList
-      .slice(startIdx, startIdx + limit)
-      .map(({ _bookingCount, ...rest }) => rest);
 
     const baseResponse = {
       code: 'S-0000',
