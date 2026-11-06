@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { PageHeader } from '@/app/_components/PageHeader'
 import { PropertyList } from '@/app/_components/PropertyList'
-import { getProperties, getRecommendedProperties, getPropertyById, getFeaturedSections } from '@/lib/api'
+import { getProperties, getRecommendedProperties, getPropertyById } from '@/lib/api'
 import { Property } from '@/types'
 import { useAuth } from '@/app/_components/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { useBrowseFilters } from '@/app/_hooks/useBrowseFilters'
 import { useRecentlyViewed } from '@/app/_hooks/useRecentlyViewed'
+import { useFeaturedSections } from '@/app/_hooks/useFeaturedSections'
 import { BrowseSection } from './_components/BrowseSection'
 
 function haversineDistance(
@@ -56,30 +57,19 @@ const EMPTY_SECTION = {
 }
 
 export default function Home() {
-  const [properties, setProperties] = useState<Property[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
+  const { featured, isLoading: isFeaturedLoading, mutate: mutateFeatured } = useFeaturedSections()
+
+  const [pagedProperties, setPagedProperties] = useState<Property[]>([])
   const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const [totalRows, setTotalRows] = useState(0)
+  const [pagedTotalPages, setPagedTotalPages] = useState<number | null>(null)
+  const [pagedTotalRows, setPagedTotalRows] = useState<number | null>(null)
+  const [loadingMore, setLoadingMore] = useState(false)
+
   const [recommendedProperties, setRecommendedProperties] = useState<
     Property[]
   >([])
   const [recommendedTotal, setRecommendedTotal] = useState(0)
-  const [sectionData, setSectionData] = useState({
-    topRated: [] as Property[],
-    topRatedTotal: 0,
-    bestValue: [] as Property[],
-    bestValueTotal: 0,
-    newListings: [] as Property[],
-    newListingsTotal: 0,
-    trending: [] as Property[],
-    trendingTotal: 0,
-    dogFriendly: [] as Property[],
-    dogFriendlyTotal: 0,
-    catFriendly: [] as Property[],
-    catFriendlyTotal: 0,
-  })
+
   const { isAuthenticated, user } = useAuth()
   const { searchQuery, filters, buildSeeAllUrl } = useBrowseFilters()
   const { ids: recentlyViewedIds } = useRecentlyViewed()
@@ -92,54 +82,75 @@ export default function Home() {
   const [filterTotal, setFilterTotal] = useState(0)
   const [isFilterLoading, setIsFilterLoading] = useState(false)
 
-  const fetchKeyRef = useRef(0)
   const filterKeyRef = useRef(0)
 
-  const fetchProperties = useCallback(
-    async (pageNum: number, reset = false) => {
-      const key = ++fetchKeyRef.current
-      if (reset) setIsLoading(true)
-      else setLoadingMore(true)
+  // Revalidate featured sections when auth status genuinely changes (e.g. login/logout)
+  const prevAuthRef = useRef(isAuthenticated)
+  useEffect(() => {
+    if (prevAuthRef.current !== isAuthenticated) {
+      prevAuthRef.current = isAuthenticated
+      mutateFeatured()
+    }
+  }, [isAuthenticated, mutateFeatured])
+
+  const sectionData = useMemo(() => ({
+    topRated: featured?.topRated || [],
+    topRatedTotal: featured?.topRatedTotal || 0,
+    bestValue: featured?.bestValue || [],
+    bestValueTotal: featured?.bestValueTotal || 0,
+    newListings: featured?.newListings || [],
+    newListingsTotal: featured?.newListingsTotal || 0,
+    trending: featured?.trending || [],
+    trendingTotal: featured?.trendingTotal || 0,
+    dogFriendly: featured?.dogFriendly || [],
+    dogFriendlyTotal: featured?.dogFriendlyTotal || 0,
+    catFriendly: featured?.catFriendly || [],
+    catFriendlyTotal: featured?.catFriendlyTotal || 0,
+  }), [featured])
+
+  const properties = useMemo(() => {
+    const base = featured?.allProperties || []
+    if (pagedProperties.length === 0) return base
+    return [...base, ...pagedProperties]
+  }, [featured?.allProperties, pagedProperties])
+
+  const totalPages = pagedTotalPages ?? (featured?.allPropertiesTotalPages || 1)
+  const totalRows = pagedTotalRows ?? (featured?.allPropertiesTotal || 0)
+
+  // Combined loading state: only true during initial network fetch when no cached data exists
+  const isLoading = isFeaturedLoading && !featured
+
+  const fetchMoreProperties = useCallback(
+    async (nextPage: number) => {
+      setLoadingMore(true)
       try {
-        if (reset) {
-          const featured = await getFeaturedSections()
-          if (key !== fetchKeyRef.current) return
-          setProperties(featured.allProperties || [])
-          setPage(pageNum)
-          setTotalPages(featured.allPropertiesTotalPages || 1)
-          setTotalRows(featured.allPropertiesTotal || 0)
-          setSectionData({
-            topRated: featured.topRated || [],
-            topRatedTotal: featured.topRatedTotal || 0,
-            bestValue: featured.bestValue || [],
-            bestValueTotal: featured.bestValueTotal || 0,
-            newListings: featured.newListings || [],
-            newListingsTotal: featured.newListingsTotal || 0,
-            trending: featured.trending || [],
-            trendingTotal: featured.trendingTotal || 0,
-            dogFriendly: featured.dogFriendly || [],
-            dogFriendlyTotal: featured.dogFriendlyTotal || 0,
-            catFriendly: featured.catFriendly || [],
-            catFriendlyTotal: featured.catFriendlyTotal || 0,
-          })
-        } else {
-          const response = await getProperties(pageNum, PAGE_SIZE)
-          if (key !== fetchKeyRef.current) return
-          setProperties((prev) => [...prev, ...response.data])
-          setPage(pageNum)
-          setTotalPages(response.totalPages)
-          setTotalRows(response.totalRows)
-        }
+        const response = await getProperties(nextPage, PAGE_SIZE)
+        setPagedProperties((prev) => [...prev, ...response.data])
+        setPage(nextPage)
+        setPagedTotalPages(response.totalPages)
+        setPagedTotalRows(response.totalRows)
       } catch (error) {
-        console.error(error)
+        console.error('Failed to load more properties:', error)
       } finally {
-        if (key === fetchKeyRef.current) {
-          setIsLoading(false)
-          setLoadingMore(false)
-        }
+        setLoadingMore(false)
       }
     },
     []
+  )
+
+  const fetchProperties = useCallback(
+    async (pageNum: number, reset = false) => {
+      if (reset) {
+        setPagedProperties([])
+        setPage(1)
+        setPagedTotalPages(null)
+        setPagedTotalRows(null)
+        await mutateFeatured()
+      } else {
+        await fetchMoreProperties(pageNum)
+      }
+    },
+    [fetchMoreProperties, mutateFeatured]
   )
 
   useEffect(() => {
@@ -191,10 +202,6 @@ export default function Home() {
     filters.minRating,
     filters.maxPrice,
   ])
-
-  useEffect(() => {
-    fetchProperties(1, true)
-  }, [fetchProperties, isAuthenticated])
 
   useEffect(() => {
     if (!isAuthenticated) {
