@@ -2439,8 +2439,7 @@ async function main() {
 
     // Test 36: PBI-10 Multi-Room Booking Engine, Row-Locking & Booking Guards
     let createdBookingId = 0
-    let secondBookingId = 0;
-    void secondBookingId;
+    let secondBookingId = 0
     await runTest('PBI-10: Row-Locked Multi-Room Booking Engine & Enterprise Booking Guards (B-4002, B-4003, B-4004)', async () => {
       // Re-create a fresh active pet for User A
       const petRes = await makeRequest(pipePath, '/api/v1/profiles/pet-profiles', 'POST', {
@@ -2523,8 +2522,7 @@ async function main() {
       }
     })
 
-    /* SKIPPED FOR PBI STAGING:
-// Test 37: PBI-11 Payment Slip, Cancel, and Host Booking Workflows
+    // Test 37: PBI-11 Payment Slip, Cancel, and Host Booking Workflows
     await runTest('PBI-11: Payment Slip, Cancel, and Host Booking Workflows', async () => {
       // 1. Payment confirmation IDOR: User B tries to confirm User A's booking -> 403 A-3007
       const idorPayment = await makeRequest(
@@ -2645,7 +2643,8 @@ async function main() {
     })
 
     // =========================================================================
-    // PBI-12 QA Audit Tests: Host Room Availability & Price Calendar
+    /* SKIPPED FOR PBI STAGING:
+// PBI-12 QA Audit Tests: Host Room Availability & Price Calendar
     // =========================================================================
     await runTest('PBI-12: Host Room Availability & Price Calendar (GET/PATCH calendars, Booked Guard B-4001, Price Floor T-2007)', async () => {
       // 1. IDOR: User A (guest, not host) attempts to view property 101 calendars -> 403 A-3007
