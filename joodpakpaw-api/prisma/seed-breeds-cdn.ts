@@ -48,6 +48,52 @@ export const breedImagesMap: Record<string, string> = {
   'Tortoise / Turtle (เต่าบก / เต่าน้ำ)': '/images/breeds/exotic_tortoise.webp',
   'Parrot / Cockatiel (นกแก้ว / คอกคาเทล)': '/images/breeds/exotic_cockatiel.webp',
   'Mixed / Other Exotic (สัตว์พิเศษอื่นๆ)': '/images/breeds/exotic_mixed_other.webp',
+
+  // Rabbits (petId: 3)
+  'Netherland Dwarf (เนเธอร์แลนด์ ดวอฟ)': '/images/breeds/exotic_netherland_dwarf.webp',
+  'Holland Lop (ฮอลแลนด์ ลอป)': '/images/breeds/exotic_holland_lop.webp',
+  'Mini Rex (มินิเร็กซ์)': '/images/breeds/rabbit_mini_rex.webp',
+  'Lionhead (ไลออนเฮด)': '/images/breeds/rabbit_lionhead.webp',
+  'English Angora (อิงลิช แองโกร่า)': '/images/breeds/rabbit_english_angora.webp',
+  'Dutch Rabbit (ดัตช์)': '/images/breeds/rabbit_dutch.webp',
+  'Mini Lop (มินิลอป)': '/images/breeds/rabbit_mini_lop.webp',
+  'Polish Rabbit (โปลิช)': '/images/breeds/rabbit_polish.webp',
+  'Flemish Giant (เฟลมมิช ไจแอนท์)': '/images/breeds/rabbit_flemish_giant.webp',
+  'Rex Rabbit (เร็กซ์)': '/images/breeds/rabbit_rex.webp',
+
+  // Hamsters (petId: 4)
+  'Syrian Hamster (แฮมสเตอร์สีทอง / ไจแอนท์)': '/images/breeds/exotic_syrian_hamster.webp',
+  'Winter White Dwarf (วินเทอร์ไวท์)': '/images/breeds/exotic_winter_white_hamster.webp',
+  'Campbell Dwarf (แคมป์เบลล์)': '/images/breeds/hamster_campbell.webp',
+  'Roborovski Dwarf (โรโบรอฟสกี้)': '/images/breeds/hamster_roborovski.webp',
+  'Chinese Hamster (แฮมสเตอร์จีน)': '/images/breeds/hamster_chinese.webp',
+  'European Hamster (แฮมสเตอร์ยุโรป)': '/images/breeds/hamster_european.webp',
+  'Golden Hamster Longhair (แฮมสเตอร์ขนยาว)': '/images/breeds/hamster_longhair.webp',
+  'Russian Dwarf (รัสเซียน ดวอฟ)': '/images/breeds/hamster_russian_dwarf.webp',
+  'Djungarian Hamster (ดจุงกาเรียน)': '/images/breeds/hamster_djungarian.webp',
+  'Panda Hamster (แพนด้า แฮมสเตอร์)': '/images/breeds/hamster_panda.webp',
+
+  // Birds (petId: 5)
+  'Budgerigar / Parakeet (นกหงส์หยก)': '/images/breeds/bird_budgerigar.webp',
+  'Cockatiel (นกคอกคาเทล)': '/images/breeds/exotic_cockatiel.webp',
+  'Lovebird (นกเลิฟเบิร์ด)': '/images/breeds/bird_lovebird.webp',
+  'African Grey Parrot (นกแก้วแอฟริกันเกรย์)': '/images/breeds/bird_african_grey.webp',
+  'Sun Conure (นกแก้วซันคอนัวร์)': '/images/breeds/bird_sun_conure.webp',
+  'Green-cheeked Conure (กรีนชีค คอนัวร์)': '/images/breeds/bird_green_cheeked_conure.webp',
+  'Macaw (นกแก้วมาคอว์)': '/images/breeds/bird_macaw.webp',
+  'Cockatoo (นกกระตั้ว)': '/images/breeds/bird_cockatoo.webp',
+  'Zebra Finch (นกฟินช์เจ็ดสี / ม้าลาย)': '/images/breeds/bird_zebra_finch.webp',
+  'Canary (นกคีรีบูน)': '/images/breeds/bird_canary.webp',
+
+  // Reptiles (petId: 6)
+  'Crested Gecko (ตุ๊กแกหงอน)': '/images/breeds/reptile_crested_gecko.webp',
+  'Ball Python (งูบอลไพธอน)': '/images/breeds/reptile_ball_python.webp',
+  'Corn Snake (งูคอร์นสเนค)': '/images/breeds/reptile_corn_snake.webp',
+  'Red-eared Slider (เต่าแก้มแดง / ญี่ปุ่น)': '/images/breeds/reptile_red_eared_slider.webp',
+  'Sulcata Tortoise (เต่าซูลคาต้า)': '/images/breeds/exotic_tortoise.webp',
+  'Russian Tortoise (เต่ารัสเซีย)': '/images/breeds/reptile_russian_tortoise.webp',
+  'Blue-tongued Skink (กิ้งก่าลิ้นน้ำเงิน)': '/images/breeds/reptile_blue_tongued_skink.webp',
+  'Green Iguana (อิกัวนาเขียว)': '/images/breeds/reptile_green_iguana.webp',
 };
 
 async function seedBreedImages() {
@@ -191,7 +237,22 @@ async function seedBreedImages() {
     await upsertBreed(exoticPet.id, b, img);
   }
 
-  console.log('✅ Successfully seeded 100% verified breed studio portrait images!');
+  // 6. Upsert remaining lookup breeds for Rabbit (3), Hamster (4), Bird (5), Reptile (6)
+  const otherTypes = [3, 4, 5, 6];
+  for (const pid of otherTypes) {
+    const existingBreeds = await prisma.petBreed.findMany({ where: { petId: pid } });
+    for (const b of existingBreeds) {
+      const img = breedImagesMap[b.breed];
+      if (img) {
+        await prisma.petBreed.update({
+          where: { id: b.id },
+          data: { imageUrl: img },
+        });
+      }
+    }
+  }
+
+  console.log('✅ Successfully seeded all 82 verified breed studio portrait images!');
 }
 
 seedBreedImages()
