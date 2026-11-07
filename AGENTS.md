@@ -32,9 +32,13 @@
 3. **กฎ Auditor-Gated Commits & Local-First (ห้าม Builder Commit/Push เอง):**
    - **Builder Agents ห้ามรันคำสั่ง `git commit`, `git merge`, `git reset --hard` หรือ `git push` โดยเด็ดขาด**
    - เมื่อ Builder ทำงานเสร็จ ต้องให้ **`qa-auditor`** ตรวจสอบ `git status` / `git diff` (ป้องกันไฟล์ขยะหรือ `.env` หลุด) และรันเทสต์จนได้ผลลัพธ์ `STATUS: PASS`
-   - เฉพาะ **Lead Orchestrator** เท่านั้นที่เป็นผู้รัน `git commit` (แบบ Conventional Commits) ลงกิ่ง `feat/phase-X-...` และ Merge เข้า `develop` เมื่อผ่าน QA แล้ว
+   - เฉพาะ **Lead Orchestrator** เท่านั้นที่เป็นผู้รัน `git commit` ลงกิ่ง `feat/phase-X-...` และ Merge เข้า `develop` เมื่อผ่าน QA แล้ว
    - **ห้ามรัน `git push` อัตโนมัติ** จนกว่าผู้ใช้จะสั่งหรือระบุ Remote URL
-4. **กฎ Human Approval Gate ก่อนเข้า Main (User-Gated Main Release):**
+4. **กฎ Granular Per-PBI Atomic Commits (แตก 1 Commit ต่อ 1 PBI เสมอ - กฎเหล็ก):**
+   - **ห้าม Commit รวมกันทั้ง Wave หรือทั้ง Sprint เป็นก้อนใหญ่โดยเด็ดขาด**
+   - ทุกๆ 1 Product Backlog Item (PBI) เช่น `PBI-09`, `PBI-10`, `PBI-11`, ... จะต้องมี Git Commit แยกเฉพาะของตัวเองอย่างชัดเจนในรูปแบบ Conventional Commits: `feat(pbi-XX): <รายละเอียดฟีเจอร์>` หรือ `fix(pbi-XX): <รายละเอียด>` พร้อมชุดเทสต์ที่เกี่ยวข้องของ PBI นั้นๆ
+   - Lead Orchestrator จะต้องแตกและบันทึก Commit ทีละ 1 PBI เสมอ เพื่อให้ประวัติ Git สะอาด โปร่งใส สามารถตรวจสอบย้อนหลัง (Auditability), ทำ `git bisect` และ Rollback รายฟีเจอร์ได้ง่าย
+5. **กฎ Human Approval Gate ก่อนเข้า Main (User-Gated Main Release):**
    - เมื่อจบแต่ละ Sprint: Lead Orchestrator จะรวบรวมงานเข้า `develop`, อัปเดตและซิงค์ Postman ขึ้น Cloud และส่งมอบ **Sprint Handover Report** ให้ผู้ใช้ตรวจสอบ
    - **ห้าม Merge เข้า `main` เด็ดขาดจนกว่าผู้ใช้จะตรวจงานและพิมพ์ "อนุมัติ"**
    - เมื่อผู้ใช้อนุมัติ: Lead Orchestrator จะเป็นผู้ทำการ `git merge develop` เข้าสู่ `main` พร้อมติด Tag เวอร์ชัน Milestone ให้ทันที จากนั้นผู้ใช้สามารถสั่ง `git push` ได้อย่างมั่นใจ
