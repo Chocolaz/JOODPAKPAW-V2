@@ -170,7 +170,7 @@ export function Step3({ onBack, onNext }: { onBack: () => void; onNext: () => vo
                 )}
               >
                 <span className="text-base font-bold text-sky-500">♂</span>
-                <span>Male (ตัวผู้)</span>
+                <span>Male</span>
               </button>
 
               <button
@@ -184,7 +184,7 @@ export function Step3({ onBack, onNext }: { onBack: () => void; onNext: () => vo
                 )}
               >
                 <span className="text-base font-bold text-rose-500">♀</span>
-                <span>Female (ตัวเมีย)</span>
+                <span>Female</span>
               </button>
             </div>
           </div>

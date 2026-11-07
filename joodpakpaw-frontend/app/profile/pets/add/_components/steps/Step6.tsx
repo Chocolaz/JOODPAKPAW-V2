@@ -36,6 +36,11 @@ const ACTIVITY_LABELS: Record<number, { title: string; emoji: string }> = {
   5: { title: 'Hyperactive', emoji: '⚡' },
 }
 
+function formatCleanBreedName(rawBreed: string): string {
+  const match = /(.*?)\s*\(.*?\)/.exec(rawBreed)
+  return (match ? match[1] : rawBreed).trim()
+}
+
 export function Step6({ onBack }: { onBack: () => void }) {
   const { formData, clearAddPetSession } = useAddPet()
   const { petProfiles } = useProfileContext()
@@ -186,7 +191,7 @@ export function Step6({ onBack }: { onBack: () => void }) {
                   </div>
 
                   <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 truncate">
-                    {formData.petTypeName} • {formData.petBreedName || 'Mixed / Other'}
+                    {formData.petTypeName} • {formatCleanBreedName(formData.petBreedName || 'Mixed / Other')}
                   </p>
 
                   <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-1.5">
