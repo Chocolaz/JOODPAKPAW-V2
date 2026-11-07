@@ -7,14 +7,14 @@ import { cn } from '@/lib/utils'
 import { getPetTypes } from '@/lib/api'
 import { Pet } from '@/types'
 import { ErrorState } from '@/app/profile/_components/ErrorState'
+import Image from 'next/image'
 import { Check } from 'lucide-react'
-import { PiDogBold, PiCatBold, PiRabbitBold } from 'react-icons/pi'
 
 interface SpeciesCardDef {
   key: 'dog' | 'cat' | 'exotic'
   label: string
   subtitle: string
-  icon: React.ComponentType<{ className?: string }>
+  imageSrc: string
 }
 
 const SPECIES_CONFIG: SpeciesCardDef[] = [
@@ -22,19 +22,19 @@ const SPECIES_CONFIG: SpeciesCardDef[] = [
     key: 'dog',
     label: 'Dog',
     subtitle: 'All breeds, shapes, and sizes',
-    icon: PiDogBold,
+    imageSrc: '/icons/species/clay-dog-transparent.webp',
   },
   {
     key: 'cat',
     label: 'Cat',
     subtitle: 'All breeds & indoor companions',
-    icon: PiCatBold,
+    imageSrc: '/icons/species/clay-cat-transparent.webp',
   },
   {
     key: 'exotic',
     label: 'Exotic Pet',
     subtitle: 'Rabbits, hamsters, birds, ferrets & reptiles',
-    icon: PiRabbitBold,
+    imageSrc: '/icons/species/clay-exotic-transparent.webp',
   },
 ]
 
@@ -150,7 +150,6 @@ export function Step1({ onNext }: { onNext: () => void }) {
           {SPECIES_CONFIG.map((cfg) => {
             const { id } = resolvePetTypeId(cfg.key)
             const isSelected = formData.petTypeId === id
-            const Icon = cfg.icon
 
             return (
               <button
@@ -166,21 +165,29 @@ export function Step1({ onNext }: { onNext: () => void }) {
               >
                 {/* Active check pill */}
                 {isSelected && (
-                  <div className="absolute top-3.5 right-3.5 w-5 h-5 rounded-full bg-amber-500 text-stone-950 flex items-center justify-center shadow-sm">
+                  <div className="absolute top-3.5 right-3.5 w-5 h-5 rounded-full bg-amber-500 text-stone-950 flex items-center justify-center shadow-sm z-10">
                     <Check className="w-3 h-3 stroke-[3]" />
                   </div>
                 )}
 
-                {/* Professional Icon from Phosphor Icons library */}
+                {/* Minimal 3D Clay Icon */}
                 <div
                   className={cn(
-                    'w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center mt-2 mb-4 transition-transform group-hover:scale-105 duration-200',
+                    'w-20 h-20 sm:w-24 sm:h-24 rounded-2xl flex items-center justify-center mt-1 mb-4 transition-transform group-hover:scale-105 duration-200 relative',
                     isSelected
-                      ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                      : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 group-hover:text-stone-800 dark:group-hover:text-stone-200'
+                      ? 'bg-amber-500/15 ring-2 ring-amber-500/30'
+                      : 'bg-stone-100/80 dark:bg-stone-800/60'
                   )}
                 >
-                  <Icon className="w-9 h-9 sm:w-11 sm:h-11" />
+                  <Image
+                    src={cfg.imageSrc}
+                    alt={cfg.label}
+                    width={96}
+                    height={96}
+                    className="w-16 h-16 sm:w-20 sm:h-20 object-contain drop-shadow-sm transition-transform duration-200 group-hover:scale-110"
+                    unoptimized
+                    priority
+                  />
                 </div>
 
                 <h3 className="text-base sm:text-lg font-bold text-stone-900 dark:text-stone-100">
