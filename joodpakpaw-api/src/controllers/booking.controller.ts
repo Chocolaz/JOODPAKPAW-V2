@@ -2,7 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../database/prisma';
 import { AppError } from '../middlewares/errorHandler';
 import { uploadImageAsWebp, deleteObjectFromS3 } from '../services/storage.service';
-import { syncPropertyBookingCount } from './property.controller';
+import { syncPropertyBookingCount, syncPropertyRating } from './property.controller';
+import { cacheService } from '../services/cache.service';
 
 /**
  * Returns an array of YYYY-MM-DD date strings for each night in [startDate, endDate).
@@ -1405,3 +1406,112 @@ export async function completeHostBooking(
     next(error);
   }
 }
+
+/**
+ * POST /api/v1/bookings/:bookingId/review
+ * Submits a verified-stay review with optional images and updates property rating aggregates.
+ */
+export async function submitBookingReview(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new AppError('Unauthorized', 401, 'A-3001');
+    }
+
+    const bookingId = Number(req.params.bookingId);
+    if (isNaN(bookingId) || bookingId <= 0) {
+      throw new AppError('Invalid booking ID', 400, 'T-2007');
+    }
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
+
+    if (!booking || booking.deletedAt) {
+      throw new AppError('Booking not found', 404, 'DB-1002');
+    }
+
+    // Ownership check: only the guest who booked can submit a review
+    if (booking.guestId !== userId) {
+      throw new AppError('Forbidden: You can only review your own bookings', 403, 'A-3007');
+    }
+
+    // Verified-Stay Status Guard: bookingStatus must be 'successful'
+    if (booking.bookingStatus !== 'successful' && booking.bookingStatus !== 'success' && booking.bookingStatus !== 'completed') {
+      throw new AppError('You can only review a completed stay', 400, 'B-4003');
+    }
+
+    // Single Review Lock: booking cannot be reviewed more than once
+    if (booking.reviewedAt != null || booking.rating != null) {
+      throw new AppError('This booking has already been reviewed', 409, 'B-4001');
+    }
+
+    const ratingNum = Number(req.body?.rating);
+    if (isNaN(ratingNum) || !Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+      throw new AppError('Rating must be an integer between 1 and 5', 400, 'T-2007');
+    }
+
+    const comment = typeof req.body?.comment === 'string' ? req.body.comment.trim() : '';
+
+    // Handle review images upload (up to 5 images)
+    const uploadedFiles: Express.Multer.File[] = [];
+    if (Array.isArray(req.files)) {
+      uploadedFiles.push(...req.files);
+    } else if (req.files && typeof req.files === 'object') {
+      for (const key of Object.keys(req.files)) {
+        const arr = (req.files as Record<string, Express.Multer.File[]>)[key];
+        if (Array.isArray(arr)) uploadedFiles.push(...arr);
+      }
+    } else if (req.file) {
+      uploadedFiles.push(req.file);
+    }
+
+    for (const file of uploadedFiles.slice(0, 5)) {
+      try {
+        const uploadedUrl = await uploadImageAsWebp(file.buffer, 'reviews', file.originalname);
+        await prisma.bookingReviewImage.create({
+          data: {
+            bookingId: booking.id,
+            filePath: uploadedUrl,
+            fileName: file.originalname || 'review-image',
+            fileContentType: 'image/webp',
+            fileExtensionName: '.webp',
+            fileSize: file.size,
+          },
+        });
+      } catch (uploadErr) {
+        console.error('[BookingReview] Failed to upload review image:', uploadErr);
+      }
+    }
+
+    const reviewedAt = new Date();
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        rating: ratingNum,
+        comment,
+        reviewedAt,
+      },
+    });
+
+    await syncPropertyRating(booking.propertyId);
+    await cacheService.delByPrefix('properties:');
+
+    res.status(200).json({
+      code: 'S-0000',
+      message: 'Review submitted successfully',
+      data: {
+        bookingId: booking.id,
+        rating: ratingNum,
+        comment,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+

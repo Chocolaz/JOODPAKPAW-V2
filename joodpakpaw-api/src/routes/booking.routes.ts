@@ -5,6 +5,7 @@ import {
   getBookingById,
   confirmBookingPayment,
   cancelBooking,
+  submitBookingReview,
 } from '../controllers/booking.controller';
 import { authenticateToken } from '../middlewares/auth.middleware';
 import { uploadMiddleware } from '../services/storage.service';
@@ -22,3 +23,9 @@ bookingRouter.patch(
   confirmBookingPayment
 );
 bookingRouter.patch('/:bookingId/cancel', authenticateToken, cancelBooking);
+bookingRouter.post(
+  '/:bookingId/review',
+  authenticateToken,
+  uploadMiddleware.array('images', 5),
+  submitBookingReview
+);

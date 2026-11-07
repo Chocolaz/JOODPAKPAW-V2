@@ -1152,95 +1152,131 @@ export const getHostPropertyBookings = async (
 }
 
 // --- Favorite Functions ---
-export const getFavoriteFolders = (): Promise<FavoriteFoldersResponse> => {
-  return request<FavoriteFoldersResponse>({
+export const getFavoriteFolders = async (): Promise<FavoriteFoldersResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/favorite-folders/all',
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Favorite Folders',
+    cache: 'no-store',
   })
+  const favoriteFolders: import('@/types').FavoriteFolder[] =
+    res?.data?.favoriteFolders ??
+    res?.favoriteFolders ??
+    (Array.isArray(res?.data) ? res.data : [])
+  return {
+    ...res,
+    favoriteFolders,
+    data: res?.data ?? { favoriteFolders },
+  }
 }
 
 export const getFavoriteFolderById = async (
-  folderId: string
+  folderId: string | number
 ): Promise<FavoriteFolderDetail> => {
-  // Define local types for the raw API response to avoid conflicts
-  interface ApiFavoriteProperty {
-    id: number
-    title: string
-    province: string
-    firstImage: string
-  }
-
-  interface ApiFavoriteFolderDetail {
-    id: number
-    name: string
-    propertyCount: number
-    createdAt: string
-    properties: ApiFavoriteProperty[]
-  }
-
-  const response = await request<ApiFavoriteFolderDetail>({
+  const response = await request<any>({
     endpoint: `api/v1/favorite-folders/${folderId}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Favorite Folder By Id',
+    cache: 'no-store',
   })
 
-  // Transform the simplified properties into full Property objects
-  const transformedProperties: Property[] = response.properties.map(
-    (favProperty) => ({
-      id: favProperty.id,
-      title: favProperty.title,
-      province: favProperty.province,
-      images: favProperty.firstImage
-        ? [
-            {
-              id: 0,
-              filePath: favProperty.firstImage,
-              fileName: '',
-              fileContentType: '',
-              fileExtensionName: '',
-              fileSize: 0,
-            },
-          ]
-        : [],
-      // Add default values for other required fields
-      description: '',
-      district: '',
-      country: '',
-      latitude: '0',
-      longitude: '0',
-      zipcode: '',
-      isActive: true,
-      isFavorite: true, // Favorites are always favorited
-      avgRating: 0,
-      hostId: 0,
-      propertyTypeId: 0,
-      createdAt: '',
-      updatedAt: '',
-    })
+  const folderData = response?.data?.folder ?? response?.data ?? response
+  const rawProperties = Array.isArray(folderData?.properties) ? folderData.properties : []
+
+  // Transform the simplified properties into full Property objects using real data from backend
+  const transformedProperties: Property[] = rawProperties.map(
+    (favProperty: any) => {
+      const minPrice = Number(favProperty.minPrice || 0)
+      const avgRating = Number(favProperty.avgRating || 0)
+      const reviewCount = Number(favProperty.reviewCount || 0)
+      const imagePath =
+        favProperty.firstImage ||
+        (Array.isArray(favProperty.images) && favProperty.images[0]?.filePath) ||
+        ''
+
+      return {
+        id: favProperty.id,
+        title: favProperty.title || '',
+        province: favProperty.province || '',
+        description: favProperty.description || '',
+        district: favProperty.district || '',
+        country: favProperty.country || 'Thailand',
+        latitude: favProperty.latitude || '0',
+        longitude: favProperty.longitude || '0',
+        zipcode: favProperty.zipcode || '',
+        isActive: favProperty.isActive !== undefined ? favProperty.isActive : true,
+        isFavorite: true,
+        avgRating,
+        reviewCount,
+        hostId: favProperty.hostId || 0,
+        propertyTypeId: favProperty.propertyTypeId || 0,
+        createdAt: favProperty.createdAt || '',
+        updatedAt: favProperty.updatedAt || '',
+        images: imagePath
+          ? [
+              {
+                id: 0,
+                filePath: imagePath,
+                fileName: '',
+                fileContentType: 'image/webp',
+                fileExtensionName: 'webp',
+                fileSize: 0,
+              },
+            ]
+          : [],
+        pets: Array.isArray(favProperty.pets) ? favProperty.pets : [],
+        roomCategories:
+          minPrice > 0
+            ? ([
+                {
+                  id: 0,
+                  name: 'Standard',
+                  totalRoom: 1,
+                  numberOfPets: 1,
+                  basePrice: minPrice,
+                  propertyId: favProperty.id,
+                  isAvailable: true,
+                  isCapacityInsufficient: false,
+                  isBooked: false,
+                  availability: {
+                    roomsNeeded: 1,
+                    availableRooms: 1,
+                    totalPrice: minPrice,
+                    dates: [],
+                  },
+                  pets: favProperty.pets || [],
+                } as any,
+              ] as any)
+            : [],
+      }
+    }
   )
 
   const firstPropertyImage =
-    transformedProperties.length > 0 &&
-    transformedProperties[0].images.length > 0
+    folderData.firstPropertyImage ||
+    (transformedProperties.length > 0 && transformedProperties[0].images.length > 0
       ? transformedProperties[0].images[0].filePath
-      : ''
+      : '')
 
   return {
-    ...response,
+    ...folderData,
+    id: folderData.id,
+    name: folderData.name || '',
+    propertyCount: transformedProperties.length,
     firstPropertyImage,
+    createdAt: folderData.createdAt || '',
     properties: transformedProperties,
   }
 }
 
-export const addFavorite = (data: {
+export const addFavorite = async (data: {
   propertyId: number
   folderId?: number
   folderName?: string
 }): Promise<void> => {
-  return request<void>({
+  await request<any>({
     endpoint: 'api/v1/favorite-folders',
     method: 'POST',
     body: data,
@@ -1249,8 +1285,8 @@ export const addFavorite = (data: {
   })
 }
 
-export const createFavoriteFolder = (name: string): Promise<void> => {
-  return request<void>({
+export const createFavoriteFolder = async (name: string): Promise<void> => {
+  await request<any>({
     endpoint: 'api/v1/favorite-folders',
     method: 'POST',
     body: { folderName: name },
@@ -1259,8 +1295,8 @@ export const createFavoriteFolder = (name: string): Promise<void> => {
   })
 }
 
-export const deleteFavoriteFolder = (folderId: string): Promise<void> => {
-  return request<void>({
+export const deleteFavoriteFolder = async (folderId: string | number): Promise<void> => {
+  await request<any>({
     endpoint: `api/v1/favorite-folders/${folderId}`,
     method: 'DELETE',
     requiresAuth: true,
@@ -1268,11 +1304,11 @@ export const deleteFavoriteFolder = (folderId: string): Promise<void> => {
   })
 }
 
-export const renameFavoriteFolder = (
-  folderId: string,
+export const renameFavoriteFolder = async (
+  folderId: string | number,
   name: string
 ): Promise<void> => {
-  return request<void>({
+  await request<any>({
     endpoint: `api/v1/favorite-folders/${folderId}`,
     method: 'PUT',
     body: { name },
@@ -1281,8 +1317,8 @@ export const renameFavoriteFolder = (
   })
 }
 
-export const deleteFavoriteProperty = (propertyId: number): Promise<void> => {
-  return request<void>({
+export const deleteFavoriteProperty = async (propertyId: number): Promise<void> => {
+  await request<any>({
     endpoint: `api/v1/favorite-properties/${propertyId}`,
     method: 'DELETE',
     requiresAuth: true,
@@ -1292,7 +1328,7 @@ export const deleteFavoriteProperty = (propertyId: number): Promise<void> => {
 
 // --- Review Functions ---
 export const submitReview = async (
-  bookingId: string,
+  bookingId: string | number,
   data: { rating: number; comment: string; images?: File[] }
 ): Promise<void> => {
   const formData = new FormData()
@@ -1302,13 +1338,14 @@ export const submitReview = async (
     const compressedImages = await compressImagesToWebP(data.images)
     compressedImages.forEach((img) => formData.append('images', img))
   }
-  return request<void>({
+  const res = await request<any>({
     endpoint: `api/v1/bookings/${bookingId}/review`,
     method: 'POST',
     body: formData,
     requiresAuth: true,
     errorContext: 'Submit Review',
   })
+  return res?.data ?? res
 }
 
 export const submitBookingReview = submitReview

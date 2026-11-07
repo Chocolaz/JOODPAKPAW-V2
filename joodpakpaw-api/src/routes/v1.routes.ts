@@ -6,6 +6,7 @@ import { propertyRouter } from './property.routes';
 import { hostRouter } from './host.routes';
 import { petProfileRouter } from './petProfile.routes';
 import { bookingRouter } from './booking.routes';
+import { favoriteFolderRouter, favoritePropertyRouter } from './favorite.routes';
 
 export const v1Router = Router();
 
@@ -26,6 +27,8 @@ v1Router.get('/', (_req: Request, res: Response) => {
       facilities: '/api/v1/hosts/facilities/all',
       reportCategories: '/api/v1/report-categories',
       bookings: '/api/v1/bookings',
+      favoriteFolders: '/api/v1/favorite-folders',
+      favoriteProperties: '/api/v1/favorite-properties',
       chat: '/api/v1/chat-rooms',
       notifications: '/api/v1/notifications',
       recommendations: '/api/v1/properties/recommend',
@@ -40,3 +43,5 @@ v1Router.use('/hosts', hostRouter);
 v1Router.use('/', lookupRouter);
 v1Router.use('/properties', propertyRouter);
 v1Router.use('/bookings', bookingRouter);
+v1Router.use('/favorite-folders', favoriteFolderRouter);
+v1Router.use('/favorite-properties', favoritePropertyRouter);

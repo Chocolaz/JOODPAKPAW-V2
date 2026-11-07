@@ -2753,8 +2753,7 @@ async function main() {
     })
 
     // =========================================================================
-    /* SKIPPED FOR PBI STAGING:
-// PBI-13 QA Audit Tests: Verified-Stay Single Review
+    // PBI-13 QA Audit Tests: Verified-Stay Single Review
     // =========================================================================
     await runTest('PBI-13: Verified-Stay Single Review (Status Guard B-4003, Lock B-4001, Rating Sync)', async () => {
       // 1. IDOR: User B (host) cannot review User A's booking -> 403 A-3007
@@ -2958,9 +2957,7 @@ async function main() {
         throw new Error(`Expected 404 DB-1002 on deleted folder query, got ${afterDeleteRes.statusCode}`)
       }
     })
-  
-*/
-    } finally {
+  } finally {
     mockDb.restore()
     server.close()
     await prisma.$disconnect()
