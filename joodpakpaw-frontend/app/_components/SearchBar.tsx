@@ -72,7 +72,7 @@ export function SearchBar({ onSearch, value, onFilterClick, activeFilterCount = 
             <button
               type="submit"
               aria-label="Search"
-              className="absolute right-1.5 flex items-center justify-center h-9 w-9 md:h-10 md:w-10 rounded-full bg-deep-teal text-white hover:bg-deep-teal/90 transition-all shadow-sm hover:scale-105 active:scale-95"
+              className="absolute right-1.5 flex items-center justify-center h-9 w-9 md:h-10 md:w-10 rounded-full bg-deep-teal text-white hover:bg-deep-teal/90 transition-colors shadow-sm"
             >
               <Search className="h-4 w-4" />
             </button>

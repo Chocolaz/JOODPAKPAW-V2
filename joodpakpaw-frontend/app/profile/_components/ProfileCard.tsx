@@ -20,11 +20,8 @@ export const ProfileCard = ({
     <div className="space-y-4 py-2">
       {/* Profile card with banner */}
       <Card className="w-full overflow-hidden">
-        {/* Gradient banner */}
-        <div className="h-20 relative bg-gradient-to-br from-deep-teal via-deep-teal/80 to-positive-green/60">
-          <div className="absolute top-2 right-6 w-16 h-16 rounded-full bg-white/10" />
-          <div className="absolute -bottom-2 left-8 w-10 h-10 rounded-full bg-white/5" />
-        </div>
+        {/* Banner */}
+        <div className="h-20 relative bg-deep-teal border-b border-deep-teal/20" />
 
         <CardContent className="px-5 pb-5 pt-0 relative">
           {/* Avatar overlapping banner */}

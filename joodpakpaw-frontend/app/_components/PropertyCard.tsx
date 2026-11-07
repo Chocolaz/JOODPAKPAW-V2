@@ -121,13 +121,13 @@ export function PropertyCard({
 
   return (
     <div className={cn('group', className)}>
-      {/* Card inner — hover lifts the whole card */}
-      <div className="transition-transform duration-300 ease-out group-hover:-translate-y-1.5">
+      {/* Card inner */}
+      <div className="transition-colors duration-200">
         {/* Image Box */}
-        <div className="w-full aspect-square relative rounded-[20px] overflow-hidden bg-gray-100">
+        <div className="w-full aspect-square relative rounded-2xl overflow-hidden bg-gray-100 border border-gray-100 group-hover:border-gray-200/80 shadow-sm transition-colors">
           <Link href={finalHref} className="relative block w-full h-full" onClick={handleCardClick}>
             {!isImageLoaded && (
-              <Skeleton className="absolute inset-0 w-full h-full rounded-[20px] bg-gray-200 animate-pulse" />
+              <Skeleton className="absolute inset-0 w-full h-full rounded-2xl bg-gray-200 animate-pulse" />
             )}
             <Image
               src={imgSrc}
@@ -136,7 +136,7 @@ export function PropertyCard({
               unoptimized
               onLoad={() => setIsImageLoaded(true)}
               className={cn(
-                'object-cover rounded-[20px] shadow-md group-hover:shadow-xl transition-all duration-300',
+                'object-cover rounded-2xl transition-all duration-300',
                 isImageLoaded ? 'opacity-100' : 'opacity-0'
               )}
               onError={() => {
@@ -146,7 +146,7 @@ export function PropertyCard({
             />
           </Link>
           {showPetPolicyChip && petPolicy && (
-            <div className="absolute top-2 left-2 px-2 py-1 bg-white rounded-full opacity-90 text-xs font-semibold text-deep-teal shadow-sm">
+            <div className="absolute top-2 left-2 px-2 py-0.5 bg-white/95 rounded-md text-[11px] font-medium text-deep-teal shadow-sm">
               {petPolicy}
             </div>
           )}
@@ -194,7 +194,7 @@ export function PropertyCard({
             </p>
 
             <div className="flex items-start justify-between gap-1">
-              <div className="text-xs md:text-sm lg:text-xs xl:text-sm text-neutral-gray leading-tight">
+              <div className="text-xs md:text-sm text-neutral-gray leading-tight">
                 <p>{property.province}</p>
                 <p>{property.district}</p>
               </div>
@@ -221,8 +221,8 @@ export function PropertyCard({
             )}
 
             {lowestPrice !== null && (
-              <p className="font-bold text-xs md:text-sm lg:text-sm xl:text-base text-deep-teal">
-                THB {lowestPrice}
+              <p className="font-semibold text-xs md:text-sm lg:text-sm xl:text-base text-deep-teal tabular-nums">
+                ฿{lowestPrice.toLocaleString()}
               </p>
             )}
           </div>

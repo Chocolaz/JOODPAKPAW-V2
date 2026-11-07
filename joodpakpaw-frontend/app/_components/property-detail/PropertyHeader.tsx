@@ -1,6 +1,6 @@
 'use client'
 
-import { Star, MapPin, Sparkles } from 'lucide-react'
+import { Star, MapPin, Clock } from 'lucide-react'
 import { Property } from '@/types'
 
 interface PropertyHeaderProps {
@@ -37,7 +37,7 @@ export function PropertyHeader({ property }: PropertyHeaderProps) {
         </div>
 
         {property.avgRating > 0 ? (
-          <div className="flex items-center gap-1.5 bg-yellow-50 border border-yellow-200 rounded-full px-3 py-1">
+          <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full px-3 py-1">
             <Star
               className="w-4 h-4 fill-yellow-400 text-yellow-400"
               strokeWidth={0}
@@ -52,8 +52,8 @@ export function PropertyHeader({ property }: PropertyHeaderProps) {
           </div>
         ) : (
           <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full px-3 py-1">
-            <Sparkles className="w-4 h-4 text-yellow-400" />
-            <span className="text-xs">New listing</span>
+            <Clock className="w-3.5 h-3.5 text-neutral-gray" strokeWidth={1.5} />
+            <span className="text-xs text-neutral-gray font-medium">New listing</span>
           </div>
         )}
       </div>

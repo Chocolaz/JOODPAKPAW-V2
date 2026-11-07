@@ -26,7 +26,7 @@ const QUICK_PRICE_CHIPS = [
 ]
 
 const chipBase =
-  'flex items-center gap-1.5 shrink-0 px-3.5 py-1.5 rounded-full border text-sm font-medium transition-colors shadow-sm'
+  'flex items-center gap-1.5 shrink-0 px-3.5 py-1.5 rounded-xl border text-sm font-medium transition-colors shadow-sm'
 const chipActive = 'bg-accent-orange text-white border-accent-orange'
 const chipInactive =
   'bg-white border-gray-200 text-neutral-gray hover:border-deep-teal hover:text-deep-teal'
@@ -112,7 +112,7 @@ export function BrowseLayoutClient({ children }: BrowseLayoutClientProps) {
                   }
                   className={cn(chipBase, active ? chipActive : chipInactive)}
                 >
-                  <Icon className="w-3.5 h-3.5" />
+                  <Icon className="w-3.5 h-3.5" strokeWidth={1.5} />
                   {label}
                 </button>
               )
@@ -129,7 +129,7 @@ export function BrowseLayoutClient({ children }: BrowseLayoutClientProps) {
                   onClick={() => setFilter('minRating', active ? 0 : value)}
                   className={cn(chipBase, active ? chipActive : chipInactive)}
                 >
-                  <Star className="w-3.5 h-3.5" />
+                  <Star className="w-3.5 h-3.5" strokeWidth={1.5} />
                   {label}
                 </button>
               )
@@ -148,15 +148,12 @@ export function BrowseLayoutClient({ children }: BrowseLayoutClientProps) {
                   }
                   className={cn(chipBase, active ? chipActive : chipInactive)}
                 >
-                  <Banknote className="w-3.5 h-3.5" />
+                  <Banknote className="w-3.5 h-3.5" strokeWidth={1.5} />
                   {label}
                 </button>
               )
             })}
           </div>
-
-          {/* Right-edge fade for mobile scroll */}
-          <div className="absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-white to-transparent pointer-events-none lg:hidden" />
         </div>
       </div>
 

@@ -9,7 +9,7 @@ import { useAuth } from '@/app/_components/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   SearchX,
-  Sparkles,
+  Compass,
   Star,
   Heart,
   Loader2,
@@ -463,7 +463,7 @@ export default function Home() {
                     {recentlyViewedFullProperties.length > 0 && (
                       <BrowseSection
                         title="Recently Viewed"
-                        icon={<Clock className="w-5 h-5 text-neutral-gray" />}
+                        icon={<Clock className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />}
                         properties={recentlyViewedFullProperties}
                         totalCount={recentlyViewedFullProperties.length}
                         showHeartIcon={isAuthenticated}
@@ -477,7 +477,7 @@ export default function Home() {
                       <BrowseSection
                         title="Recommended for You"
                         icon={
-                          <Heart className="w-5 h-5 fill-accent-orange text-accent-orange" />
+                          <Heart className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />
                         }
                         properties={recommendedProperties}
                         totalCount={recommendedTotal}
@@ -496,7 +496,7 @@ export default function Home() {
                           <BrowseSection
                             title="Near You"
                             icon={
-                              <MapPin className="w-5 h-5 text-accent-orange" />
+                              <MapPin className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />
                             }
                             properties={nearYou}
                             totalCount={nearYou.length}
@@ -509,7 +509,7 @@ export default function Home() {
                         <BrowseSection
                           title="Top Rated"
                           icon={
-                            <Star className="w-5 h-5 fill-yellow-400 text-yellow-500" />
+                            <Star className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />
                           }
                           properties={topRatedItems}
                           totalCount={sectionData.topRatedTotal}
@@ -519,7 +519,7 @@ export default function Home() {
                         />
                         <BrowseSection
                           title="Best Value"
-                          icon={<Tag className="w-5 h-5 text-positive-green" />}
+                          icon={<Tag className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />}
                           properties={bestValueItems}
                           totalCount={sectionData.bestValueTotal}
                           showHeartIcon={isAuthenticated}
@@ -528,7 +528,7 @@ export default function Home() {
                         />
                         <BrowseSection
                           title="New Listings"
-                          icon={<Sparkles className="w-5 h-5 text-deep-teal" />}
+                          icon={<Compass className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />}
                           properties={newListingsItems}
                           totalCount={sectionData.newListingsTotal}
                           showHeartIcon={isAuthenticated}
@@ -538,7 +538,7 @@ export default function Home() {
                         <BrowseSection
                           title="Trending"
                           icon={
-                            <TrendingUp className="w-5 h-5 text-accent-orange" />
+                            <TrendingUp className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />
                           }
                           properties={trendingItems}
                           totalCount={sectionData.trendingTotal}
@@ -551,7 +551,7 @@ export default function Home() {
                         {dogFriendly.length > 0 && (
                           <BrowseSection
                             title="Dog-Friendly"
-                            icon={<Dog className="w-5 h-5 text-amber-500" />}
+                            icon={<Dog className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />}
                             properties={dogFriendly}
                             totalCount={sectionData.dogFriendlyTotal}
                             showHeartIcon={isAuthenticated}
@@ -564,7 +564,7 @@ export default function Home() {
                         {catFriendly.length > 0 && (
                           <BrowseSection
                             title="Cat-Friendly"
-                            icon={<Cat className="w-5 h-5 text-purple-400" />}
+                            icon={<Cat className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />}
                             properties={catFriendly}
                             totalCount={sectionData.catFriendlyTotal}
                             showHeartIcon={isAuthenticated}

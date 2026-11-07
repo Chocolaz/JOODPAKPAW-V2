@@ -50,13 +50,13 @@ export function BookingCard({ booking, onClick }: BookingCardProps) {
       onClick={handleCardClick}
       className={cn(
         'cursor-pointer group rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden',
-        'hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 active:scale-[0.99]',
+        'hover:shadow-md transition-shadow duration-200 active:scale-[0.99]',
         isCancelled && 'opacity-55',
         isPending && 'border-amber-200/70'
       )}
     >
       {/* Status colour bar */}
-      <div className={cn('h-[3px] w-full', cfg.bar)} />
+      <div className={cn('h-1 w-full', cfg.bar)} />
 
       <div className="p-4">
         {/* ── Header ── */}
@@ -66,7 +66,7 @@ export function BookingCard({ booking, onClick }: BookingCardProps) {
           </p>
           <div className="flex flex-col items-end gap-1 shrink-0">
             <span className={cn('inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full', cfg.pill)}>
-              {isPending && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />}
+              {isPending && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
               {cfg.label}
             </span>
             {isSuccessful && (

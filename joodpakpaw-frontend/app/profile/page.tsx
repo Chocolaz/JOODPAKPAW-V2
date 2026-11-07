@@ -179,19 +179,15 @@ export default function ProfilePage() {
       className="w-full overflow-hidden cursor-pointer hover:shadow-md transition-all duration-300 group"
       onClick={handleProfileClick}
     >
-      {/* Gradient banner */}
+      {/* Banner */}
       <div
         className={clsx(
-          'h-20 md:h-36 lg:h-44 relative',
+          'h-20 md:h-36 lg:h-44 relative border-b',
           isAuthenticated
-            ? 'bg-gradient-to-br from-deep-teal via-deep-teal/80 to-positive-green/60'
-            : 'bg-gradient-to-br from-gray-300 via-gray-200 to-gray-100'
+            ? 'bg-deep-teal border-deep-teal/20'
+            : 'bg-gray-100 border-gray-200'
         )}
-      >
-        <div className="absolute top-2 right-6 w-16 h-16 md:w-24 md:h-24 rounded-full bg-white/10" />
-        <div className="absolute -bottom-2 left-8 w-10 h-10 md:w-16 md:h-16 rounded-full bg-white/5" />
-        <div className="absolute top-4 left-1/2 w-8 h-8 md:w-12 md:h-12 rounded-full bg-white/5 hidden md:block" />
-      </div>
+      />
 
       <CardContent className="px-5 pb-5 md:px-6 md:pb-7 pt-0 relative">
         {/* Avatar overlapping the banner */}

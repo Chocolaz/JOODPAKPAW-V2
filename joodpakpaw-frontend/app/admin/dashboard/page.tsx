@@ -79,7 +79,7 @@ function StatCard({
         )}
       </div>
       <div>
-        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">{label}</p>
+        <p className="text-xs font-medium text-gray-500 mb-1">{label}</p>
         <p className="text-[32px] font-bold text-gray-900 font-baloo2 leading-none">{value.toLocaleString()}</p>
       </div>
     </div>
