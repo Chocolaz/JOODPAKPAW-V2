@@ -381,7 +381,17 @@ export async function createBooking(
       // Pet species & size eligibility check
       for (const pet of userPets) {
         const isEligibleForAnyRoom = roomCategories.some((rc) => {
-          const speciesMatch = rc.pets.some((p) => p.petId === pet.petTypeId || p.pet.name.toLowerCase() === pet.petType.name.toLowerCase());
+          const speciesMatch = rc.pets.some((p) => {
+            if (p.petId === pet.petTypeId || p.pet.name.toLowerCase() === pet.petType.name.toLowerCase()) {
+              return true;
+            }
+            // Small & Exotic pet cross-compatibility (Rabbit: 3, Hamster: 4, Bird: 5, Reptile: 6, Exotic: 7)
+            const exoticIds = [3, 4, 5, 6, 7];
+            if (exoticIds.includes(pet.petTypeId) && exoticIds.includes(p.petId)) {
+              return true;
+            }
+            return false;
+          });
           const sizeMatch = !rc.petSizeCategoryId || !pet.petSizeCategoryId || pet.petSizeCategoryId <= rc.petSizeCategoryId;
           return speciesMatch && sizeMatch;
         });
