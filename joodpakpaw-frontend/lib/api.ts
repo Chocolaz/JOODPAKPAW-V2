@@ -166,48 +166,73 @@ export const updateUserProfile = async (userId: string, formData: FormData) => {
   })
 }
 
-export const getAllPetProfiles = (): Promise<PetProfilesResponse> => {
-  return request<PetProfilesResponse>({
+export const getAllPetProfiles = async (): Promise<PetProfilesResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/profiles/pet-profiles/all',
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get All Pet Profiles',
   })
+  const petProfiles: PetProfile[] = Array.isArray(res?.data?.petProfiles)
+    ? res.data.petProfiles
+    : Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.petProfiles)
+    ? res.petProfiles
+    : []
+  return {
+    ...res,
+    petProfiles,
+    data: res?.data ?? { petProfiles },
+  }
 }
 
-export const getPetProfileById = (id: string): Promise<PetProfile> => {
-  return request<PetProfile>({
+export const getPetProfileById = async (id: string): Promise<PetProfile> => {
+  const res = await request<any>({
     endpoint: `api/v1/profiles/pet-profiles/${id}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Pet Profile By Id',
   })
+  return (res?.data?.petProfile ?? res?.data ?? res) as PetProfile
 }
 
 export const createPetProfile = async (formData: FormData) => {
   const compressedFormData = await compressFormDataImages(formData)
-  return request({
+  const res = await request<any>({
     endpoint: 'api/v1/profiles/pet-profiles',
     method: 'POST',
     body: compressedFormData,
     requiresAuth: true,
     errorContext: 'Create Pet Profile',
   })
+  const petProfile = res?.data?.petProfile ?? res?.data ?? res
+  return {
+    ...res,
+    petProfile,
+    data: res?.data ?? { petProfile },
+  }
 }
 
 export const updatePetProfile = async (id: string, formData: FormData) => {
   const compressedFormData = await compressFormDataImages(formData)
-  return request({
+  const res = await request<any>({
     endpoint: `api/v1/profiles/pet-profiles/${id}`,
     method: 'PUT',
     body: compressedFormData,
     requiresAuth: true,
     errorContext: 'Update Pet Profile',
   })
+  const petProfile = res?.data?.petProfile ?? res?.data ?? res
+  return {
+    ...res,
+    petProfile,
+    data: res?.data ?? { petProfile },
+  }
 }
 
-export const deletePetProfile = (id: string): Promise<void> => {
-  return request<void>({
+export const deletePetProfile = async (id: string): Promise<void> => {
+  await request<void>({
     endpoint: `api/v1/profiles/pet-profiles/${id}`,
     method: 'DELETE',
     requiresAuth: true,

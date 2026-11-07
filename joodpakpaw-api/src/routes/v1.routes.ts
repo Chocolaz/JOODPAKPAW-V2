@@ -4,6 +4,7 @@ import { userRouter } from './user.routes';
 import { lookupRouter } from './lookup.routes';
 import { propertyRouter } from './property.routes';
 import { hostRouter } from './host.routes';
+import { petProfileRouter } from './petProfile.routes';
 
 export const v1Router = Router();
 
@@ -16,6 +17,7 @@ v1Router.get('/', (_req: Request, res: Response) => {
       health: '/health',
       auth: '/api/v1/auth',
       users: '/api/v1/users',
+      petProfiles: '/api/v1/profiles/pet-profiles',
       properties: '/api/v1/properties',
       hosts: '/api/v1/hosts',
       pets: '/api/v1/pets/all',
@@ -32,6 +34,7 @@ v1Router.get('/', (_req: Request, res: Response) => {
 
 v1Router.use('/auth', authRouter);
 v1Router.use('/users', userRouter);
+v1Router.use('/profiles/pet-profiles', petProfileRouter);
 v1Router.use('/hosts', hostRouter);
 v1Router.use('/', lookupRouter);
 v1Router.use('/properties', propertyRouter);
