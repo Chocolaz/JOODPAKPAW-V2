@@ -20,6 +20,25 @@ function calculateAge(birthDate: Date | string | null | undefined): number {
 }
 
 /**
+ * Calculates pet age in years and months from birthDate.
+ */
+function calculateAgeMonths(birthDate: Date | string | null | undefined): { ageYears: number; ageMonths: number } {
+  if (!birthDate) return { ageYears: 0, ageMonths: 0 };
+  const birth = new Date(birthDate);
+  if (isNaN(birth.getTime())) return { ageYears: 0, ageMonths: 0 };
+  const now = new Date();
+  let totalMonths = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth());
+  if (now.getDate() < birth.getDate()) {
+    totalMonths--;
+  }
+  if (totalMonths < 0) totalMonths = 0;
+  return {
+    ageYears: Math.floor(totalMonths / 12),
+    ageMonths: totalMonths % 12,
+  };
+}
+
+/**
  * Formats PetProfile record into full DTO matching frontend PetProfile interface.
  */
 export function formatPetProfileDto(pet: any) {
@@ -30,6 +49,7 @@ export function formatPetProfileDto(pet: any) {
     : '';
 
   const age = calculateAge(pet.birthDate);
+  const { ageYears, ageMonths } = calculateAgeMonths(pet.birthDate);
 
   return {
     id: pet.id,
@@ -37,6 +57,8 @@ export function formatPetProfileDto(pet: any) {
     image: pet.image || null,
     birthDate: birthDateStr,
     age,
+    ageYears,
+    ageMonths,
     sex: (pet.petSex as 'male' | 'female' | 'other') || 'male',
     petSex: pet.petSex || 'male',
     weight:
@@ -211,7 +233,7 @@ export async function createPetProfile(
     const breedId = breedIdRaw !== undefined && breedIdRaw !== '' ? parseInt(String(breedIdRaw), 10) : null;
 
     const petSizeIdRaw = req.body.petSizeCategoryId || req.body.petSizeId;
-    const petSizeCategoryId = petSizeIdRaw !== undefined && petSizeIdRaw !== '' ? parseInt(String(petSizeIdRaw), 10) : null;
+    let petSizeCategoryId = petSizeIdRaw !== undefined && petSizeIdRaw !== '' ? parseInt(String(petSizeIdRaw), 10) : null;
 
     const petEnergyRaw = req.body.petEnergyId || req.body.petActivityLevel;
     const petEnergyId = petEnergyRaw !== undefined && petEnergyRaw !== '' ? parseInt(String(petEnergyRaw), 10) : null;
@@ -225,6 +247,15 @@ export async function createPetProfile(
       if (!isNaN(parsed.getTime())) {
         birthDate = parsed;
       }
+    } else if (req.body.ageYears !== undefined || req.body.ageMonths !== undefined) {
+      const years = parseInt(String(req.body.ageYears || '0'), 10) || 0;
+      const months = parseInt(String(req.body.ageMonths || '0'), 10) || 0;
+      const totalMonths = years * 12 + months;
+      if (totalMonths > 0) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - totalMonths);
+        birthDate = d;
+      }
     }
 
     let weight: number | null = null;
@@ -232,6 +263,54 @@ export async function createPetProfile(
       const parsedWeight = parseFloat(String(req.body.weight));
       if (!isNaN(parsedWeight)) {
         weight = parsedWeight;
+      }
+    }
+
+    // Auto-map pet size category if not explicitly provided
+    if (!petSizeCategoryId) {
+      if (weight !== null) {
+        if (weight <= 5) {
+          petSizeCategoryId = 1; // Small (0-5 kg)
+        } else if (weight <= 15) {
+          petSizeCategoryId = 2; // Medium (5-15 kg)
+        } else if (weight <= 30) {
+          petSizeCategoryId = 3; // Large (15-30 kg)
+        } else {
+          petSizeCategoryId = 4; // Giant (>30 kg)
+        }
+      } else if (breedId && !isNaN(breedId)) {
+        const breedRecord = await prisma.petBreed.findUnique({ where: { id: breedId } });
+        if (breedRecord) {
+          const bLower = breedRecord.breed.toLowerCase();
+          if (bLower.includes('giant') || bLower.includes('maine coon') || bLower.includes('dane')) {
+            petSizeCategoryId = 4;
+          } else if (
+            bLower.includes('golden') ||
+            bLower.includes('labrador') ||
+            bLower.includes('husky') ||
+            bLower.includes('shepherd') ||
+            bLower.includes('bangkaew') ||
+            bLower.includes('ridgeback') ||
+            bLower.includes('ragdoll')
+          ) {
+            petSizeCategoryId = 3;
+          } else if (
+            bLower.includes('corgi') ||
+            bLower.includes('beagle') ||
+            bLower.includes('bulldog') ||
+            bLower.includes('shorthair') ||
+            bLower.includes('persian') ||
+            bLower.includes('bengal') ||
+            bLower.includes('siamese')
+          ) {
+            petSizeCategoryId = 2;
+          } else {
+            petSizeCategoryId = 1;
+          }
+        }
+      } else {
+        // Fallback default: Dog -> 2 (Medium), Cat/Exotic -> 1 (Small)
+        petSizeCategoryId = petTypeId === 1 ? 2 : 1;
       }
     }
 
@@ -387,6 +466,15 @@ export async function updatePetProfile(
         if (!isNaN(parsed.getTime())) {
           updateData.birthDate = parsed;
         }
+      }
+    } else if (req.body.ageYears !== undefined || req.body.ageMonths !== undefined) {
+      const years = parseInt(String(req.body.ageYears || '0'), 10) || 0;
+      const months = parseInt(String(req.body.ageMonths || '0'), 10) || 0;
+      const totalMonths = years * 12 + months;
+      if (totalMonths > 0) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - totalMonths);
+        updateData.birthDate = d;
       }
     }
 

@@ -8,13 +8,10 @@ import { cn } from '@/lib/utils'
 const PET_STEPS = [
   { id: 1, label: 'Species' },
   { id: 2, label: 'Breed' },
-  { id: 3, label: 'Photo' },
-  { id: 4, label: 'Gender' },
-  { id: 5, label: 'Size' },
-  { id: 6, label: 'Age' },
-  { id: 7, label: 'Activity' },
-  { id: 8, label: 'Contact' },
-  { id: 9, label: 'Review' },
+  { id: 3, label: 'Identity' },
+  { id: 4, label: 'Age & Energy' },
+  { id: 5, label: 'Emergency' },
+  { id: 6, label: 'Review' },
 ]
 
 export function DesktopPetStepper({ stepId }: { stepId: number }) {

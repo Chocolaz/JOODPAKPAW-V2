@@ -10,6 +10,7 @@ export interface User {
   lastName: string
   role: Role[]
   avatar?: string
+  phone?: string
   isVerifiedHost?: boolean
 }
 

@@ -83,11 +83,18 @@ export interface PetProfileFormData {
   petTypeName: string | null
   petBreedId: number | null
   petBreedName: string | null
+  petBreedImageUrl?: string | null
+  isMixedBreed?: boolean
+  approxWeight?: number | null
   petName: string | null
   petImage: File | null
+  petImagePreview?: string | null
   petGender: PetGender | null
   petSizeCategoryId: number | null
   petSizeName: string | null
+  ageYears?: number | null
+  ageMonths?: number | null
+  isExactBirthDate?: boolean
   petBirthDate: string | null
   petActivityLevel: number | null
   contactName: string | null
