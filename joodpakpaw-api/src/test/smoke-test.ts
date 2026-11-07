@@ -121,6 +121,16 @@ function installPrismaAuthMock() {
     bookingCount: prisma.booking.count,
     chatRoomFindFirst: prisma.chatRoom.findFirst,
     roomCategoryFindMany: prisma.roomCategory.findMany,
+    favoriteFolderFindMany: prisma.favoriteFolder.findMany,
+    favoriteFolderFindUnique: prisma.favoriteFolder.findUnique,
+    favoriteFolderFindFirst: prisma.favoriteFolder.findFirst,
+    favoriteFolderCreate: prisma.favoriteFolder.create,
+    favoriteFolderUpdate: prisma.favoriteFolder.update,
+    favoritePropertyFindFirst: prisma.favoriteProperty.findFirst,
+    favoritePropertyCreate: prisma.favoriteProperty.create,
+    favoritePropertyDeleteMany: prisma.favoriteProperty.deleteMany,
+    roomCategoryCalendarFindMany: prisma.roomCategoryCalendar.findMany,
+    bookingReviewImageCreate: prisma.bookingReviewImage.create,
   }
 
   ;(prisma.role as any).upsert = async (args: any) => {
@@ -357,6 +367,7 @@ function installPrismaAuthMock() {
     propertiesMap.set(101, p101)
     propertiesMap.set(102, p102)
     propertiesMap.set(103, p103)
+    p101.roomCategories[0].property = p101
     roomsMap.set(501, p101.roomCategories[0])
   }
   initDefaultMockProperties()
@@ -464,9 +475,18 @@ function installPrismaAuthMock() {
 
   ;(prisma.roomCategory as any).findMany = async (args: any) => {
     const propId = args?.where?.propertyId
-    return Array.from(roomsMap.values()).filter(
-      (r) => r.propertyId === propId && !r.deletedAt
-    )
+    const idIn = args?.where?.id?.in
+    const id = args?.where?.id
+    return Array.from(roomsMap.values()).filter((r) => {
+      if (r.deletedAt) return false
+      if (propId !== undefined && r.propertyId !== propId) return false
+      if (Array.isArray(idIn) && !idIn.includes(r.id)) return false
+      if (typeof id === 'number' && r.id !== id) return false
+      return true
+    }).map((r) => ({
+      ...r,
+      property: propertiesMap.get(r.propertyId) || r.property,
+    }))
   }
   ;(prisma.roomCategory as any).findFirst = async (args: any) => {
     const id = args?.where?.id
@@ -528,10 +548,441 @@ function installPrismaAuthMock() {
     return ops(prisma)
   }
 
+  const petProfilesMap = new Map<number, any>()
+  let nextPetProfileId = 1
+  let mockActivePetBooking = false
+
+  ;(prisma.petProfile as any).findMany = async (args: any) => {
+    const guestId = args?.where?.guestId
+    const idIn = args?.where?.id?.in
+    return Array.from(petProfilesMap.values()).filter((p) => {
+      if (p.deletedAt !== null && args?.where?.deletedAt === null) return false
+      if (guestId !== undefined && p.guestId !== guestId) return false
+      if (Array.isArray(idIn) && !idIn.includes(p.id)) return false
+      return true
+    }).sort((a, b) => a.id - b.id)
+  }
+
+  ;(prisma.petProfile as any).findUnique = async (args: any) => {
+    const id = args?.where?.id
+    return petProfilesMap.get(id) || null
+  }
+
+  ;(prisma.petProfile as any).findFirst = async (args: any) => {
+    const id = args?.where?.id
+    return petProfilesMap.get(id) || null
+  }
+
+  ;(prisma.petProfile as any).create = async (args: any) => {
+    const data = args?.data || {}
+    const id = nextPetProfileId++
+    const petType = mockPets.find((p) => p.id === data.petTypeId) || mockPets[0]
+    const breed = mockBreeds.find((b) => b.id === data.breedId) || null
+    const petSizeCategory = mockPetSizes.find((s) => s.id === data.petSizeCategoryId) || null
+    const record = {
+      id,
+      name: data.name,
+      petSex: data.petSex || 'male',
+      birthDate: data.birthDate || null,
+      weight: data.weight ?? null,
+      contactName: data.contactName || '',
+      contactPhone: data.contactPhone || '',
+      note: data.note || '',
+      image: data.image || null,
+      guestId: data.guestId,
+      petTypeId: data.petTypeId,
+      petType,
+      breedId: data.breedId ?? null,
+      breed,
+      petSizeCategoryId: data.petSizeCategoryId ?? null,
+      petSizeCategory,
+      petEnergyId: data.petEnergyId ?? null,
+      energy: data.petEnergyId ? { id: data.petEnergyId, rating: data.petEnergyId, description: 'Active' } : null,
+      deletedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+    petProfilesMap.set(id, record)
+    return record
+  }
+
+  ;(prisma.petProfile as any).update = async (args: any) => {
+    const id = args?.where?.id
+    const record = petProfilesMap.get(id)
+    if (!record) throw new Error(`Mock petProfile ${id} not found`)
+    Object.assign(record, args?.data || {})
+    if (args?.data?.petTypeId !== undefined) {
+      record.petType = mockPets.find((p) => p.id === args.data.petTypeId) || record.petType
+    }
+    record.updatedAt = new Date()
+    return record
+  }
+
+  const bookingsMap = new Map<number, any>()
+  let nextBookingId = 1001
+
+  const defaultBooking9001 = {
+    id: 9001,
+    rating: 5,
+    comment: 'Amazing stay for my dog!',
+    reviewedAt: nowDate,
+    updatedAt: nowDate,
+    createdAt: nowDate,
+    propertyId: 101,
+    property: { id: 101, title: 'Pawradise Luxury Cat & Dog Hotel', hostId: 2 },
+    guestId: 1,
+    guest: { id: 1, firstName: 'Alicia', lastName: 'Wonderland', avatar: '' },
+    bookingOrders: [],
+    bookingPetProfiles: [],
+    reviewImages: [],
+    deletedAt: null,
+  }
+  bookingsMap.set(9001, defaultBooking9001)
+
+  ;(prisma.booking as any).findUnique = async (args: any) => {
+    const id = args?.where?.id
+    return bookingsMap.get(id) || null
+  }
+
+  ;(prisma.booking as any).findMany = async (args: any) => {
+    const guestId = args?.where?.guestId
+    const hostId = args?.where?.property?.hostId
+    const propId = args?.where?.propertyId
+
+    let list = Array.from(bookingsMap.values()).filter((b) => {
+      if (b.deletedAt !== null && args?.where?.deletedAt === null) return false
+      if (guestId !== undefined && b.guestId !== guestId) return false
+      if (hostId !== undefined && b.property?.hostId !== hostId) return false
+      if (propId !== undefined && b.propertyId !== propId) return false
+      if (args?.where?.rating?.not !== undefined && (b.rating === null || b.rating === undefined)) return false
+      if (args?.where?.rating?.gt !== undefined && (b.rating === null || b.rating <= args.where.rating.gt)) return false
+      return true
+    })
+
+    list.sort((a, b) => b.id - a.id)
+    if (args?.skip !== undefined) {
+      list = list.slice(args.skip)
+    }
+    if (args?.take !== undefined) {
+      list = list.slice(0, args.take)
+    }
+    return list
+  }
+
+  ;(prisma.booking as any).count = async (args: any) => {
+    const guestId = args?.where?.guestId
+    const hostId = args?.where?.property?.hostId
+    const propId = args?.where?.propertyId
+    if (propId !== undefined && !args?.where?.property && !args?.where?.guestId) {
+      return mockActiveBookingCount
+    }
+    return Array.from(bookingsMap.values()).filter((b) => {
+      if (b.deletedAt !== null && args?.where?.deletedAt === null) return false
+      if (guestId !== undefined && b.guestId !== guestId) return false
+      if (hostId !== undefined && b.property?.hostId !== hostId) return false
+      if (propId !== undefined && b.propertyId !== propId) return false
+      return true
+    }).length
+  }
+
+  ;(prisma.booking as any).create = async (args: any) => {
+    const data = args?.data || {}
+    const id = nextBookingId++
+    const prop = propertiesMap.get(data.propertyId) || makeMockProperty({ id: data.propertyId })
+    const guestUser = users.get(data.guestId) || { id: data.guestId, firstName: 'Alice', lastName: 'Wonder', email: 'alice@joodpakpaw.com', phone: '0812345678' }
+
+    const createdOrders = (data.bookingOrders?.create || []).map((bo: any, idx: number) => {
+      const rc = roomsMap.get(bo.roomCategoryId) || prop.roomCategories[0]
+      return {
+        id: idx + 1,
+        checkInDate: bo.checkInDate,
+        checkOutDate: bo.checkOutDate,
+        roomsBooked: bo.roomsBooked,
+        pricePerRoom: bo.pricePerRoom,
+        totalPrice: bo.totalPrice,
+        roomCategoryId: bo.roomCategoryId,
+        roomCategory: rc,
+        propertyId: data.propertyId,
+        property: prop,
+      }
+    })
+
+    const createdPetProfiles = (data.bookingPetProfiles?.create || []).map((bpp: any) => {
+      const pet = petProfilesMap.get(bpp.petProfileId) || { id: bpp.petProfileId, name: 'Pet' }
+      return {
+        petProfileId: bpp.petProfileId,
+        petProfile: pet,
+      }
+    })
+
+    const bookingRecord = {
+      id,
+      checkInDate: data.checkInDate,
+      checkOutDate: data.checkOutDate,
+      numberOfPets: data.numberOfPets,
+      totalPrice: data.totalPrice,
+      bookingStatus: data.bookingStatus || 'pending',
+      guestNote: data.guestNote || null,
+      paymentSlipUrl: data.paymentSlipUrl || null,
+      rating: null,
+      comment: null,
+      reviewedAt: null,
+      confirmedAt: data.confirmedAt || null,
+      successedAt: data.successedAt || null,
+      guestId: data.guestId,
+      guest: guestUser,
+      propertyId: data.propertyId,
+      property: prop,
+      bookingOrders: createdOrders,
+      bookingPetProfiles: createdPetProfiles,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+    }
+    bookingsMap.set(id, bookingRecord)
+    return bookingRecord
+  }
+
+  ;(prisma.booking as any).update = async (args: any) => {
+    const id = args?.where?.id
+    const b = bookingsMap.get(id)
+    if (!b) throw new Error(`Mock booking ${id} not found`)
+    Object.assign(b, args?.data || {})
+    b.updatedAt = new Date()
+    return b
+  }
+
+  ;(prisma.bookingPetProfile as any).findFirst = async (args: any) => {
+    if (mockActivePetBooking) {
+      return { petProfileId: args?.where?.petProfileId || 1, bookingId: 9999 }
+    }
+    const petId = args?.where?.petProfileId
+    for (const b of bookingsMap.values()) {
+      if (b.deletedAt !== null) continue
+      if (['pending', 'confirmed'].includes(b.bookingStatus)) {
+        if (b.bookingPetProfiles?.some((bpp: any) => bpp.petProfileId === petId)) {
+          return { petProfileId: petId, bookingId: b.id, booking: b }
+        }
+      }
+    }
+    return null
+  }
+
+  const calendarsMap = new Map<string, any>()
+  let nextCalId = 1
+
+  ;(prisma.roomCategoryCalendar as any).findUnique = async (args: any) => {
+    if (args?.where?.id) {
+      for (const cal of calendarsMap.values()) {
+        if (cal.id === args.where.id) return cal
+      }
+    }
+    const rcId = args?.where?.roomCategoryId_date?.roomCategoryId
+    const dateStr = args?.where?.roomCategoryId_date?.date ? new Date(args.where.roomCategoryId_date.date).toISOString().slice(0, 10) : ''
+    const key = `${rcId}:${dateStr}`
+    return calendarsMap.get(key) || null
+  }
+
+  ;(prisma.roomCategoryCalendar as any).create = async (args: any) => {
+    const data = args?.data || {}
+    const id = nextCalId++
+    const dateStr = new Date(data.date).toISOString().slice(0, 10)
+    const key = `${data.roomCategoryId}:${dateStr}`
+    const cal = {
+      id,
+      roomCategoryId: data.roomCategoryId,
+      date: data.date,
+      availableRooms: data.availableRooms,
+      bookedRooms: data.bookedRooms || 0,
+      unavailableRooms: data.unavailableRooms || 0,
+      priceAdjustment: data.priceAdjustment || 0,
+    }
+    calendarsMap.set(key, cal)
+    return cal
+  }
+
+  ;(prisma.roomCategoryCalendar as any).update = async (args: any) => {
+    const id = args?.where?.id
+    for (const cal of calendarsMap.values()) {
+      if (cal.id === id) {
+        Object.assign(cal, args?.data || {})
+        return cal
+      }
+    }
+    return null
+  }
+
+  ;(prisma.roomCategoryCalendar as any).findMany = async (args: any) => {
+    const rcId = args?.where?.roomCategoryId
+    const gte = args?.where?.date?.gte ? new Date(args.where.date.gte).getTime() : 0
+    const lte = args?.where?.date?.lte ? new Date(args.where.date.lte).getTime() : Infinity
+    return Array.from(calendarsMap.values())
+      .filter((cal) => {
+        if (rcId !== undefined && cal.roomCategoryId !== rcId) return false
+        const t = new Date(cal.date).getTime()
+        if (t < gte || t > lte) return false
+        return true
+      })
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  }
+
+  ;(prisma.bookingReviewImage as any).create = async (args: any) => {
+    return {
+      id: 1,
+      ...args?.data,
+    }
+  }
+
+  const favoriteFoldersMap = new Map<number, any>()
+  let nextFolderId = 1
+  let favoritePropertiesList: Array<{ folderId: number; propertyId: number }> = []
+
+  ;(prisma.favoriteFolder as any).findMany = async (args: any) => {
+    const userId = args?.where?.userId
+    return Array.from(favoriteFoldersMap.values())
+      .filter((f) => {
+        if (f.deletedAt !== null && args?.where?.deletedAt === null) return false
+        if (userId !== undefined && f.userId !== userId) return false
+        return true
+      })
+      .map((f) => {
+        const fps = favoritePropertiesList
+          .filter((fp) => fp.folderId === f.id)
+          .map((fp) => {
+            const prop = propertiesMap.get(fp.propertyId) || makeMockProperty({ id: fp.propertyId })
+            return {
+              folderId: fp.folderId,
+              propertyId: fp.propertyId,
+              property: prop,
+            }
+          })
+        return {
+          ...f,
+          favoriteProperties: fps,
+        }
+      })
+  }
+
+  ;(prisma.favoriteFolder as any).findUnique = async (args: any) => {
+    const id = args?.where?.id
+    const f = favoriteFoldersMap.get(id)
+    if (!f) return null
+    const fps = favoritePropertiesList
+      .filter((fp) => fp.folderId === f.id)
+      .map((fp) => {
+        const prop = propertiesMap.get(fp.propertyId) || makeMockProperty({ id: fp.propertyId })
+        return {
+          folderId: fp.folderId,
+          propertyId: fp.propertyId,
+          property: prop,
+        }
+      })
+    return {
+      ...f,
+      favoriteProperties: fps,
+    }
+  }
+
+  ;(prisma.favoriteFolder as any).findFirst = async (args: any) => {
+    const userId = args?.where?.userId
+    const name = args?.where?.name
+    for (const f of favoriteFoldersMap.values()) {
+      if (f.deletedAt !== null && args?.where?.deletedAt === null) continue
+      if (userId !== undefined && f.userId !== userId) continue
+      if (name !== undefined && f.name !== name) continue
+      const fps = favoritePropertiesList
+        .filter((fp) => fp.folderId === f.id)
+        .map((fp) => {
+          const prop = propertiesMap.get(fp.propertyId) || makeMockProperty({ id: fp.propertyId })
+          return {
+            folderId: fp.folderId,
+            propertyId: fp.propertyId,
+            property: prop,
+          }
+        })
+      return {
+        ...f,
+        favoriteProperties: fps,
+      }
+    }
+    return null
+  }
+
+  ;(prisma.favoriteFolder as any).create = async (args: any) => {
+    const data = args?.data || {}
+    const id = nextFolderId++
+    const folder = {
+      id,
+      name: data.name,
+      userId: data.userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+      favoriteProperties: [],
+    }
+    favoriteFoldersMap.set(id, folder)
+    return folder
+  }
+
+  ;(prisma.favoriteFolder as any).update = async (args: any) => {
+    const id = args?.where?.id
+    const f = favoriteFoldersMap.get(id)
+    if (!f) throw new Error(`Favorite folder ${id} not found`)
+    Object.assign(f, args?.data || {})
+    f.updatedAt = new Date()
+    return f
+  }
+
+  ;(prisma.favoriteProperty as any).findFirst = async (args: any) => {
+    const propId = args?.where?.propertyId
+    const userId = args?.where?.folder?.userId
+    for (const fp of favoritePropertiesList) {
+      if (propId !== undefined && fp.propertyId !== propId) continue
+      const folder = favoriteFoldersMap.get(fp.folderId)
+      if (!folder || (args?.where?.folder?.deletedAt === null && folder.deletedAt !== null)) continue
+      if (userId !== undefined && folder.userId !== userId) continue
+      return {
+        ...fp,
+        folder,
+      }
+    }
+    return null
+  }
+
+  ;(prisma.favoriteProperty as any).create = async (args: any) => {
+    const data = args?.data || {}
+    const rec = { folderId: data.folderId, propertyId: data.propertyId }
+    favoritePropertiesList.push(rec)
+    return rec
+  }
+
+  ;(prisma.favoriteProperty as any).deleteMany = async (args: any) => {
+    const folderId = args?.where?.folderId
+    const propertyId = args?.where?.propertyId
+    const folderIdIn = args?.where?.folderId?.in
+    const initialLen = favoritePropertiesList.length
+    favoritePropertiesList = favoritePropertiesList.filter((fp) => {
+      if (folderId !== undefined && fp.folderId === folderId) return false
+      if (propertyId !== undefined && Array.isArray(folderIdIn) && fp.propertyId === propertyId && folderIdIn.includes(fp.folderId)) return false
+      return true
+    })
+    return { count: initialLen - favoritePropertiesList.length }
+  }
+
+  ;(prisma as any).$queryRawUnsafe = async () => []
+
   return {
     users,
     propertiesMap,
     roomsMap,
+    bookingsMap,
+    petProfilesMap,
+    calendarsMap,
+    favoriteFoldersMap,
+    favoritePropertiesList,
+    setMockActivePetBooking(val: boolean) {
+      mockActivePetBooking = val
+    },
     setActiveBookingCount(n: number) {
       mockActiveBookingCount = n
     },
@@ -557,6 +1008,16 @@ function installPrismaAuthMock() {
       prisma.booking.count = originals.bookingCount
       prisma.chatRoom.findFirst = originals.chatRoomFindFirst
       prisma.roomCategory.findMany = originals.roomCategoryFindMany
+      prisma.favoriteFolder.findMany = originals.favoriteFolderFindMany
+      prisma.favoriteFolder.findUnique = originals.favoriteFolderFindUnique
+      prisma.favoriteFolder.findFirst = originals.favoriteFolderFindFirst
+      prisma.favoriteFolder.create = originals.favoriteFolderCreate
+      prisma.favoriteFolder.update = originals.favoriteFolderUpdate
+      prisma.favoriteProperty.findFirst = originals.favoritePropertyFindFirst
+      prisma.favoriteProperty.create = originals.favoritePropertyCreate
+      prisma.favoriteProperty.deleteMany = originals.favoritePropertyDeleteMany
+      ;(prisma.roomCategoryCalendar as any).findMany = originals.roomCategoryCalendarFindMany
+      ;(prisma.bookingReviewImage as any).create = originals.bookingReviewImageCreate
     },
   }
 }
@@ -1867,6 +2328,633 @@ async function main() {
       const checkList = await cacheService.get('properties:list:test')
       if (checkBase !== null || checkList !== null) {
         throw new Error('Expected properties:* cache keys to be invalidated after property update')
+      }
+    })
+
+    // Prepare User B (Host) token for Wave 2A tests
+    const userBRecord = mockDb.users.get(2)
+    if (userBRecord) {
+      userBRecord.isVerified = true
+      userBRecord.isVerifiedHost = true
+    }
+    const userBSign = await makeRequest(pipePath, '/api/v1/auth/sign-in', 'POST', {
+      email: 'bob@joodpakpaw.com',
+      password: 'Password123!',
+    })
+    const userBAccessToken = userBSign.body?.data?.accessToken || userBSign.body?.accessToken
+
+    // Test 35: PBI-09 Pet Profile CRUD, Ownership & Active Booking Guard (B-4001)
+    let createdPetId = 0
+    await runTest('PBI-09: Pet Profile CRUD, S3 WebP GC & Active Booking Guard (B-4001)', async () => {
+      // 1. Initial list should be empty for User A
+      const listEmpty = await makeRequest(pipePath, '/api/v1/profiles/pet-profiles/all', 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (listEmpty.statusCode !== 200 || !Array.isArray(listEmpty.body?.data?.petProfiles)) {
+        throw new Error(`Expected 200 with data.petProfiles array, got ${listEmpty.statusCode}`)
+      }
+
+      // 2. Missing required fields returns 400 T-2007
+      const invalidCreate = await makeRequest(pipePath, '/api/v1/profiles/pet-profiles', 'POST', {
+        name: '',
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      if (invalidCreate.statusCode !== 400 || invalidCreate.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on invalid pet profile create, got ${invalidCreate.statusCode}`)
+      }
+
+      // 3. Create valid pet profile
+      const validCreate = await makeRequest(pipePath, '/api/v1/profiles/pet-profiles', 'POST', {
+        name: 'Mochi',
+        petSex: 'male',
+        birthDate: '2023-01-01',
+        weight: 8.5,
+        contactName: 'Alice Wonder',
+        contactPhone: '0812345678',
+        note: 'Allergic to seafood',
+        petTypeId: 1,
+        petBreedId: 10,
+        petSizeCategoryId: 1,
+        petEnergyId: 2,
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+
+      if (validCreate.statusCode !== 201 || validCreate.body?.code !== 'S-0000') {
+        throw new Error(`Expected 201 S-0000 on valid create, got ${validCreate.statusCode}: ${JSON.stringify(validCreate.body)}`)
+      }
+      createdPetId = validCreate.body?.data?.petProfile?.id
+      if (!createdPetId || validCreate.body?.data?.petProfile?.name !== 'Mochi') {
+        throw new Error('Created pet profile missing ID or name')
+      }
+
+      // 4. GET /:id with User A -> 200
+      const getOwn = await makeRequest(pipePath, `/api/v1/profiles/pet-profiles/${createdPetId}`, 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (getOwn.statusCode !== 200 || getOwn.body?.data?.petProfile?.id !== createdPetId) {
+        throw new Error(`Expected 200 for own pet profile, got ${getOwn.statusCode}`)
+      }
+
+      // 5. GET /:id with User B -> 403 A-3007 (IDOR Guard)
+      const getIdor = await makeRequest(pipePath, `/api/v1/profiles/pet-profiles/${createdPetId}`, 'GET', undefined, {
+        Authorization: `Bearer ${userBAccessToken}`,
+      })
+      if (getIdor.statusCode !== 403 || getIdor.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on IDOR get pet profile, got ${getIdor.statusCode}`)
+      }
+
+      // 6. PUT /:id with User B -> 403 A-3007
+      const putIdor = await makeRequest(pipePath, `/api/v1/profiles/pet-profiles/${createdPetId}`, 'PUT', {
+        name: 'Hacked Mochi',
+      }, { Authorization: `Bearer ${userBAccessToken}` })
+      if (putIdor.statusCode !== 403 || putIdor.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on IDOR put pet profile, got ${putIdor.statusCode}`)
+      }
+
+      // 7. PUT /:id with User A -> 200 updates name
+      const putOwn = await makeRequest(pipePath, `/api/v1/profiles/pet-profiles/${createdPetId}`, 'PUT', {
+        name: 'Mochi The Shiba',
+        weight: 9.0,
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      if (putOwn.statusCode !== 200 || putOwn.body?.data?.petProfile?.name !== 'Mochi The Shiba') {
+        throw new Error(`Expected 200 with updated name, got ${putOwn.statusCode}`)
+      }
+
+      // 8. Active booking guard: DELETE /:id when active booking exists -> 409 B-4001
+      mockDb.setMockActivePetBooking(true)
+      const deleteBlocked = await makeRequest(pipePath, `/api/v1/profiles/pet-profiles/${createdPetId}`, 'DELETE', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (deleteBlocked.statusCode !== 409 || deleteBlocked.body?.code !== 'B-4001') {
+        throw new Error(`Expected 409 B-4001 on delete pet with active booking, got ${deleteBlocked.statusCode}`)
+      }
+      mockDb.setMockActivePetBooking(false)
+
+      // 9. Soft delete succeeds when no active bookings
+      const deleteSuccess = await makeRequest(pipePath, `/api/v1/profiles/pet-profiles/${createdPetId}`, 'DELETE', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (deleteSuccess.statusCode !== 200 || deleteSuccess.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 on successful soft delete, got ${deleteSuccess.statusCode}`)
+      }
+    })
+
+    // Test 36: PBI-10 Multi-Room Booking Engine, Row-Locking & Booking Guards
+    let createdBookingId = 0
+    let secondBookingId = 0
+    await runTest('PBI-10: Row-Locked Multi-Room Booking Engine & Enterprise Booking Guards (B-4002, B-4003, B-4004)', async () => {
+      // Re-create a fresh active pet for User A
+      const petRes = await makeRequest(pipePath, '/api/v1/profiles/pet-profiles', 'POST', {
+        name: 'Kuro',
+        petSex: 'female',
+        birthDate: '2022-06-15',
+        weight: 6.0,
+        contactName: 'Alice Wonder',
+        contactPhone: '0812345678',
+        petTypeId: 1,
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      const kuroId = petRes.body?.data?.petProfile?.id
+
+      // 1. Self-booking guard: Host (User B) books property 101 -> 400 B-4002
+      const selfBookRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+        bookingOrders: [
+          { roomCategoryId: 501, checkInDate: '2026-12-10', checkOutDate: '2026-12-12', roomsBooked: 1 },
+        ],
+      }, { Authorization: `Bearer ${userBAccessToken}` })
+      if (selfBookRes.statusCode !== 400 || selfBookRes.body?.code !== 'B-4002') {
+        throw new Error(`Expected 400 B-4002 on self-booking, got ${selfBookRes.statusCode} ${selfBookRes.body?.code}`)
+      }
+
+      // 2. Date hygiene: check-in in past -> 400 B-4003
+      const pastDateRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+        bookingOrders: [
+          { roomCategoryId: 501, checkInDate: '2020-01-01', checkOutDate: '2020-01-03', roomsBooked: 1 },
+        ],
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      if (pastDateRes.statusCode !== 400 || pastDateRes.body?.code !== 'B-4003') {
+        throw new Error(`Expected 400 B-4003 on past checkInDate, got ${pastDateRes.statusCode}`)
+      }
+
+      // 3. Date hygiene: checkOut <= checkIn -> 400 B-4003
+      const invalidRangeRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+        bookingOrders: [
+          { roomCategoryId: 501, checkInDate: '2026-12-15', checkOutDate: '2026-12-15', roomsBooked: 1 },
+        ],
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      if (invalidRangeRes.statusCode !== 400 || invalidRangeRes.body?.code !== 'B-4003') {
+        throw new Error(`Expected 400 B-4003 on checkOut <= checkIn, got ${invalidRangeRes.statusCode}`)
+      }
+
+      // 4. Overbooking guard: requesting more rooms than total capacity (totalRoom=3) -> 409 B-4004
+      const overbookRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+        bookingOrders: [
+          { roomCategoryId: 501, checkInDate: '2026-12-20', checkOutDate: '2026-12-22', roomsBooked: 99 },
+        ],
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      if (overbookRes.statusCode !== 409 || overbookRes.body?.code !== 'B-4004') {
+        throw new Error(`Expected 409 B-4004 on overbooking, got ${overbookRes.statusCode}`)
+      }
+
+      // 5. Valid Multi-Room Booking: User A books 1 room for 2 nights
+      const validBookingRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+        petProfileIds: [kuroId],
+        guestNote: 'Please take good care of Kuro',
+        bookingOrders: [
+          { roomCategoryId: 501, checkInDate: '2026-12-20', checkOutDate: '2026-12-22', roomsBooked: 1 },
+        ],
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+
+      if (validBookingRes.statusCode !== 201 || validBookingRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 201 S-0000 on valid booking, got ${validBookingRes.statusCode}: ${JSON.stringify(validBookingRes.body)}`)
+      }
+      createdBookingId = validBookingRes.body?.data?.booking?.id
+      if (!createdBookingId || validBookingRes.body?.data?.booking?.bookingStatus !== 'pending') {
+        throw new Error('Created booking missing ID or not in pending status')
+      }
+
+      // 6. Pet double-booking guard: same pet on overlapping dates -> 409 B-4004
+      const dupPetRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+        petProfileIds: [kuroId],
+        bookingOrders: [
+          { roomCategoryId: 501, checkInDate: '2026-12-21', checkOutDate: '2026-12-23', roomsBooked: 1 },
+        ],
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      if (dupPetRes.statusCode !== 409 || dupPetRes.body?.code !== 'B-4004') {
+        throw new Error(`Expected 409 B-4004 on pet double-booking, got ${dupPetRes.statusCode} ${dupPetRes.body?.code}`)
+      }
+    })
+
+    // Test 37: PBI-11 Payment Slip, Cancel, and Host Booking Workflows
+    await runTest('PBI-11: Payment Slip, Cancel, and Host Booking Workflows', async () => {
+      // 1. Payment confirmation IDOR: User B tries to confirm User A's booking -> 403 A-3007
+      const idorPayment = await makeRequest(
+        pipePath,
+        `/api/v1/bookings/${createdBookingId}/confirm-payment`,
+        'PATCH',
+        { slipUrl: 'http://localhost:9000/slips/test.webp' },
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (idorPayment.statusCode !== 403 || idorPayment.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on IDOR payment confirm, got ${idorPayment.statusCode}`)
+      }
+
+      // 2. User A confirms payment -> 200, status becomes "confirmed"
+      const confirmPaymentRes = await makeRequest(
+        pipePath,
+        `/api/v1/bookings/${createdBookingId}/confirm-payment`,
+        'PATCH',
+        { slipUrl: 'http://localhost:9000/slips/valid-slip.webp' },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (confirmPaymentRes.statusCode !== 200 || confirmPaymentRes.body?.data?.booking?.bookingStatus !== 'confirmed') {
+        throw new Error(`Expected 200 with status=confirmed, got ${confirmPaymentRes.statusCode}: ${JSON.stringify(confirmPaymentRes.body)}`)
+      }
+
+      // 3. Guest get paginated bookings: User A calls GET /api/v1/bookings/paginate
+      const guestPaginateRes = await makeRequest(
+        pipePath,
+        '/api/v1/bookings/paginate?page=1&limit=10',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (guestPaginateRes.statusCode !== 200 || !Array.isArray(guestPaginateRes.body?.data)) {
+        throw new Error(`Expected 200 with data array on guest paginate, got ${guestPaginateRes.statusCode}`)
+      }
+
+      // 4. Guest get single booking: GET /api/v1/bookings/:id
+      const guestDetailRes = await makeRequest(
+        pipePath,
+        `/api/v1/bookings/${createdBookingId}`,
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (guestDetailRes.statusCode !== 200 || guestDetailRes.body?.data?.booking?.id !== createdBookingId) {
+        throw new Error(`Expected 200 for guest booking detail, got ${guestDetailRes.statusCode}`)
+      }
+
+      // 5. Host listing: User B calls GET /api/v1/hosts/bookings/all
+      const hostAllRes = await makeRequest(
+        pipePath,
+        '/api/v1/hosts/bookings/all',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (hostAllRes.statusCode !== 200 || !Array.isArray(hostAllRes.body?.data?.bookings)) {
+        throw new Error(`Expected 200 on host bookings all, got ${hostAllRes.statusCode}`)
+      }
+
+      // 6. Host paginated: User B calls GET /api/v1/hosts/bookings/paginate
+      const hostPaginatedRes = await makeRequest(
+        pipePath,
+        '/api/v1/hosts/bookings/paginate?page=1&limit=10',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (hostPaginatedRes.statusCode !== 200 || !Array.isArray(hostPaginatedRes.body?.data)) {
+        throw new Error(`Expected 200 on host bookings paginate, got ${hostPaginatedRes.statusCode}`)
+      }
+
+      // 7. Host booking detail: User B calls GET /api/v1/hosts/bookings/:id
+      const hostDetailRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/bookings/${createdBookingId}`,
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (hostDetailRes.statusCode !== 200 || !hostDetailRes.body?.guest?.userId) {
+        throw new Error(`Expected 200 with HostBookingDetail DTO, got ${hostDetailRes.statusCode}`)
+      }
+
+      // 8. Host marks booking as successful: PATCH /api/v1/hosts/bookings/:id/success
+      const completeRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/bookings/${createdBookingId}/success`,
+        'PATCH',
+        undefined,
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (completeRes.statusCode !== 200 || completeRes.body?.data?.booking?.bookingStatus !== 'successful') {
+        throw new Error(`Expected 200 with status=successful, got ${completeRes.statusCode}`)
+      }
+
+      // 9. Booking cancellation and quota restoration workflow:
+      // Create a new pending booking
+      const secondBookingRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+        bookingOrders: [
+          { roomCategoryId: 501, checkInDate: '2026-12-25', checkOutDate: '2026-12-27', roomsBooked: 1 },
+        ],
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      secondBookingId = secondBookingRes.body?.data?.booking?.id
+
+      // User A cancels the booking
+      const cancelRes = await makeRequest(
+        pipePath,
+        `/api/v1/bookings/${secondBookingId}/cancel`,
+        'PATCH',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (cancelRes.statusCode !== 200 || cancelRes.body?.data?.booking?.bookingStatus !== 'cancelled') {
+        throw new Error(`Expected 200 with status=cancelled on cancel booking, got ${cancelRes.statusCode}`)
+      }
+    })
+
+    // =========================================================================
+    // PBI-12 QA Audit Tests: Host Room Availability & Price Calendar
+    // =========================================================================
+    await runTest('PBI-12: Host Room Availability & Price Calendar (GET/PATCH calendars, Booked Guard B-4001, Price Floor T-2007)', async () => {
+      // 1. IDOR: User A (guest, not host) attempts to view property 101 calendars -> 403 A-3007
+      const idorCalRes = await makeRequest(
+        pipePath,
+        '/api/v1/hosts/properties/101/room-categories/501/calendars?startDate=2026-12-01&endDate=2026-12-05',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (idorCalRes.statusCode !== 403 || idorCalRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on IDOR calendar access, got ${idorCalRes.statusCode}`)
+      }
+
+      // 2. User B (host) queries calendars for room 501
+      const getCalRes = await makeRequest(
+        pipePath,
+        '/api/v1/hosts/properties/101/room-categories/501/calendars?startDate=2026-12-01&endDate=2026-12-05',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (getCalRes.statusCode !== 200 || !Array.isArray(getCalRes.body?.data?.calendars)) {
+        throw new Error(`Expected 200 with calendars array, got ${getCalRes.statusCode}: ${JSON.stringify(getCalRes.body)}`)
+      }
+      const cals = getCalRes.body.data.calendars
+      if (cals.length !== 5) {
+        throw new Error(`Expected 5 calendar days, got ${cals.length}`)
+      }
+      // Check calendar properties
+      const day1 = cals[0]
+      if (day1.totalRooms !== 3 || day1.basePrice !== 800 || day1.effectivePrice !== 800) {
+        throw new Error(`Unexpected calendar day1 data: ${JSON.stringify(day1)}`)
+      }
+
+      // 3. Validation failure: Negative unavailableRooms -> 400 T-2007
+      const negRes = await makeRequest(
+        pipePath,
+        '/api/v1/hosts/properties/101/room-categories/501/calendars',
+        'PATCH',
+        { updates: [{ date: '2026-12-02', unavailableRooms: -2 }] },
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (negRes.statusCode !== 400 || negRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on negative unavailableRooms, got ${negRes.statusCode}`)
+      }
+
+      // 4. Validation failure: Price Floor Guard (effectivePrice <= 0) -> 400 T-2007
+      const floorRes = await makeRequest(
+        pipePath,
+        '/api/v1/hosts/properties/101/room-categories/501/calendars',
+        'PATCH',
+        { updates: [{ date: '2026-12-02', priceAdjustment: -850 }] },
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (floorRes.statusCode !== 400 || floorRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on price floor violation, got ${floorRes.statusCode}`)
+      }
+
+      // 5. Booked-Room Protection Guard:
+      // Room 501 has totalRoom = 3. Set a mock calendar row for 2026-12-01 with bookedRooms = 2.
+      mockDb.calendarsMap.set('501:2026-12-01', {
+        id: 991,
+        roomCategoryId: 501,
+        date: new Date('2026-12-01T00:00:00.000Z'),
+        availableRooms: 1,
+        bookedRooms: 2,
+        unavailableRooms: 0,
+        priceAdjustment: 0,
+      })
+      // Host attempts to set unavailableRooms = 2 (which exceeds totalRoom (3) - bookedRooms (2) = 1) -> 409 B-4001
+      const bookedGuardRes = await makeRequest(
+        pipePath,
+        '/api/v1/hosts/properties/101/room-categories/501/calendars',
+        'PATCH',
+        { updates: [{ date: '2026-12-01', unavailableRooms: 2 }] },
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (bookedGuardRes.statusCode !== 409 || bookedGuardRes.body?.code !== 'B-4001') {
+        throw new Error(`Expected 409 B-4001 on booked-room protection violation, got ${bookedGuardRes.statusCode}`)
+      }
+
+      // 6. Valid Calendar Update: Host sets unavailableRooms = 1, priceAdjustment = 200 for 2026-12-03
+      const validUpdateRes = await makeRequest(
+        pipePath,
+        '/api/v1/hosts/properties/101/room-categories/501/calendars',
+        'PATCH',
+        { updates: [{ date: '2026-12-03', unavailableRooms: 1, priceAdjustment: 200 }] },
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (validUpdateRes.statusCode !== 200 || validUpdateRes.body?.data?.updatedCount !== 1) {
+        throw new Error(`Expected 200 with updatedCount=1, got ${validUpdateRes.statusCode}`)
+      }
+
+      // Verify effectivePrice calculation on subsequent GET
+      const verifyGetRes = await makeRequest(
+        pipePath,
+        '/api/v1/hosts/properties/101/room-categories/501/calendars?startDate=2026-12-03&endDate=2026-12-03',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      const updatedDay = verifyGetRes.body?.data?.calendars?.[0]
+      if (updatedDay?.unavailableRooms !== 1 || updatedDay?.priceAdjustment !== 200 || updatedDay?.effectivePrice !== 1000) {
+        throw new Error(`Expected effectivePrice=1000 & unavailableRooms=1, got ${JSON.stringify(updatedDay)}`)
+      }
+    })
+
+    // =========================================================================
+    // PBI-13 QA Audit Tests: Verified-Stay Single Review
+    // =========================================================================
+    await runTest('PBI-13: Verified-Stay Single Review (Status Guard B-4003, Lock B-4001, Rating Sync)', async () => {
+      // 1. IDOR: User B (host) cannot review User A's booking -> 403 A-3007
+      const idorReview = await makeRequest(
+        pipePath,
+        `/api/v1/bookings/${createdBookingId}/review`,
+        'POST',
+        { rating: 5, comment: 'Self review attempt' },
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (idorReview.statusCode !== 403 || idorReview.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on IDOR review submission, got ${idorReview.statusCode}`)
+      }
+
+      // 2. Verified-Stay Status Guard: Reviewing a cancelled booking -> 400 B-4003
+      const nonCompletedReview = await makeRequest(
+        pipePath,
+        `/api/v1/bookings/${secondBookingId}/review`,
+        'POST',
+        { rating: 5, comment: 'Reviewing cancelled stay' },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (nonCompletedReview.statusCode !== 400 || nonCompletedReview.body?.code !== 'B-4003') {
+        throw new Error(`Expected 400 B-4003 on non-successful stay review, got ${nonCompletedReview.statusCode}`)
+      }
+
+      // 3. Validation Guard: Invalid rating (e.g. 7) -> 400 T-2007
+      const badRatingRes = await makeRequest(
+        pipePath,
+        `/api/v1/bookings/${createdBookingId}/review`,
+        'POST',
+        { rating: 7, comment: 'Invalid rating' },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (badRatingRes.statusCode !== 400 || badRatingRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on rating > 5, got ${badRatingRes.statusCode}`)
+      }
+
+      // 4. Valid Review Submission: User A reviews completed stay createdBookingId
+      const validReviewRes = await makeRequest(
+        pipePath,
+        `/api/v1/bookings/${createdBookingId}/review`,
+        'POST',
+        { rating: 5, comment: 'Wonderful care for my pet! Clean and caring staff.' },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (validReviewRes.statusCode !== 200 || validReviewRes.body?.data?.rating !== 5) {
+        throw new Error(`Expected 200 on valid review submission, got ${validReviewRes.statusCode}: ${JSON.stringify(validReviewRes.body)}`)
+      }
+
+      // 5. Single Review Lock Guard: Second review on same booking -> 409 B-4001
+      const duplicateReviewRes = await makeRequest(
+        pipePath,
+        `/api/v1/bookings/${createdBookingId}/review`,
+        'POST',
+        { rating: 4, comment: 'Trying to review again' },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (duplicateReviewRes.statusCode !== 409 || duplicateReviewRes.body?.code !== 'B-4001') {
+        throw new Error(`Expected 409 B-4001 on duplicate review submission, got ${duplicateReviewRes.statusCode}`)
+      }
+    })
+
+    // =========================================================================
+    // PBI-13 QA Audit Tests: Favorites Folders & Property Wishlist (FF-4101)
+    // =========================================================================
+    await runTest('PBI-13: Favorites Folders & Property Wishlist (Folder CRUD, Duplicate Guard FF-4101, IDOR A-3007)', async () => {
+      // 1. User A lists favorite folders (initially empty)
+      const listEmptyRes = await makeRequest(
+        pipePath,
+        '/api/v1/favorite-folders/all',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (listEmptyRes.statusCode !== 200 || !Array.isArray(listEmptyRes.body?.data?.favoriteFolders)) {
+        throw new Error(`Expected 200 with favoriteFolders array, got ${listEmptyRes.statusCode}`)
+      }
+
+      // 2. User A creates a new folder "Bangkok Pet Getaways"
+      const createFolderRes = await makeRequest(
+        pipePath,
+        '/api/v1/favorite-folders',
+        'POST',
+        { folderName: 'Bangkok Pet Getaways' },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (createFolderRes.statusCode !== 201 || !createFolderRes.body?.data?.folder?.id) {
+        throw new Error(`Expected 201 with created folder, got ${createFolderRes.statusCode}: ${JSON.stringify(createFolderRes.body)}`)
+      }
+      const myFolderId = createFolderRes.body.data.folder.id
+
+      // 3. User A adds property 101 to the folder
+      const addFavRes = await makeRequest(
+        pipePath,
+        '/api/v1/favorite-folders',
+        'POST',
+        { propertyId: 101, folderId: myFolderId },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (addFavRes.statusCode !== 201 || addFavRes.body?.data?.propertyId !== 101) {
+        throw new Error(`Expected 201 on add favorite property, got ${addFavRes.statusCode}`)
+      }
+
+      // 4. Duplicate Favorite Guard: User A attempts to add property 101 again -> 409 FF-4101
+      const dupFavRes = await makeRequest(
+        pipePath,
+        '/api/v1/favorite-folders',
+        'POST',
+        { propertyId: 101, folderId: myFolderId },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (dupFavRes.statusCode !== 409 || dupFavRes.body?.code !== 'FF-4101') {
+        throw new Error(`Expected 409 FF-4101 on duplicate favorite add, got ${dupFavRes.statusCode}: ${JSON.stringify(dupFavRes.body)}`)
+      }
+
+      // 5. User A gets folder details with properties
+      const folderDetailRes = await makeRequest(
+        pipePath,
+        `/api/v1/favorite-folders/${myFolderId}`,
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (folderDetailRes.statusCode !== 200 || !Array.isArray(folderDetailRes.body?.data?.properties)) {
+        throw new Error(`Expected 200 with properties array in folder detail, got ${folderDetailRes.statusCode}`)
+      }
+      const favProp = folderDetailRes.body.data.properties[0]
+      if (favProp?.id !== 101 || favProp?.minPrice <= 0 || favProp?.isFavorite !== true) {
+        throw new Error(`Expected favorite property 101 with minPrice and isFavorite, got ${JSON.stringify(favProp)}`)
+      }
+
+      // 6. IDOR: User B cannot view, rename, or delete User A's folder -> 403 A-3007
+      const idorViewRes = await makeRequest(
+        pipePath,
+        `/api/v1/favorite-folders/${myFolderId}`,
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (idorViewRes.statusCode !== 403 || idorViewRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on IDOR folder view, got ${idorViewRes.statusCode}`)
+      }
+
+      const idorRenameRes = await makeRequest(
+        pipePath,
+        `/api/v1/favorite-folders/${myFolderId}`,
+        'PUT',
+        { name: 'Hacked Name' },
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (idorRenameRes.statusCode !== 403 || idorRenameRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on IDOR folder rename, got ${idorRenameRes.statusCode}`)
+      }
+
+      // 7. User A renames the folder
+      const renameRes = await makeRequest(
+        pipePath,
+        `/api/v1/favorite-folders/${myFolderId}`,
+        'PUT',
+        { name: 'Luxury Pet Resorts' },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (renameRes.statusCode !== 200 || renameRes.body?.data?.folder?.name !== 'Luxury Pet Resorts') {
+        throw new Error(`Expected 200 with renamed folder name, got ${renameRes.statusCode}`)
+      }
+
+      // 8. User A removes property 101 from favorites
+      const removePropRes = await makeRequest(
+        pipePath,
+        '/api/v1/favorite-properties/101',
+        'DELETE',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (removePropRes.statusCode !== 200) {
+        throw new Error(`Expected 200 on remove favorite property, got ${removePropRes.statusCode}`)
+      }
+
+      // 9. User A deletes the folder
+      const deleteFolderRes = await makeRequest(
+        pipePath,
+        `/api/v1/favorite-folders/${myFolderId}`,
+        'DELETE',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (deleteFolderRes.statusCode !== 200) {
+        throw new Error(`Expected 200 on delete favorite folder, got ${deleteFolderRes.statusCode}`)
+      }
+
+      // 10. Re-query deleted folder -> 404 DB-1002
+      const afterDeleteRes = await makeRequest(
+        pipePath,
+        `/api/v1/favorite-folders/${myFolderId}`,
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (afterDeleteRes.statusCode !== 404 || afterDeleteRes.body?.code !== 'DB-1002') {
+        throw new Error(`Expected 404 DB-1002 on deleted folder query, got ${afterDeleteRes.statusCode}`)
       }
     })
   } finally {

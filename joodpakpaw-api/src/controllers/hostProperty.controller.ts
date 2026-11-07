@@ -1724,3 +1724,297 @@ export async function deleteHostRoomCategory(
     next(error);
   }
 }
+
+/**
+ * Returns an array of YYYY-MM-DD date strings inclusive of startDate and endDate, up to maxDays.
+ */
+function getInclusiveDatesInRange(
+  startDateStr: string | Date,
+  endDateStr: string | Date,
+  maxDays = 90
+): string[] {
+  const dates: string[] = [];
+  const startRaw = startDateStr instanceof Date ? startDateStr.toISOString().slice(0, 10) : String(startDateStr).slice(0, 10);
+  const endRaw = endDateStr instanceof Date ? endDateStr.toISOString().slice(0, 10) : String(endDateStr).slice(0, 10);
+
+  const start = new Date(`${startRaw}T00:00:00.000Z`);
+  const end = new Date(`${endRaw}T00:00:00.000Z`);
+
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) {
+    return dates;
+  }
+
+  const cursor = new Date(start);
+  while (cursor <= end && dates.length < maxDays) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+/**
+ * GET /api/v1/hosts/properties/:propertyId/room-categories/:roomId/calendars
+ */
+export async function getRoomCategoryCalendars(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const propertyId = Number(req.params.propertyId);
+    const roomId = Number(req.params.roomId);
+
+    if (isNaN(propertyId) || propertyId <= 0 || isNaN(roomId) || roomId <= 0) {
+      throw new AppError('Invalid property ID or room category ID', 400, 'T-2007');
+    }
+
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+    });
+
+    if (!property || property.deletedAt) {
+      throw new AppError('Property not found', 404, 'DB-1002');
+    }
+
+    if (property.hostId !== req.user?.id && !isAdminUser(req)) {
+      throw new AppError('Forbidden: You do not own this property', 403, 'A-3007');
+    }
+
+    const room = await prisma.roomCategory.findFirst({
+      where: {
+        id: roomId,
+        propertyId,
+        deletedAt: null,
+      },
+    });
+
+    if (!room) {
+      throw new AppError('Room category not found', 404, 'DB-1002');
+    }
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const startDateStr = typeof req.query.startDate === 'string' && req.query.startDate.trim()
+      ? req.query.startDate.trim()
+      : todayStr;
+
+    let endDateStr = typeof req.query.endDate === 'string' && req.query.endDate.trim()
+      ? req.query.endDate.trim()
+      : '';
+
+    if (!endDateStr) {
+      const defaultEnd = new Date(`${startDateStr}T00:00:00.000Z`);
+      defaultEnd.setUTCDate(defaultEnd.getUTCDate() + 30);
+      endDateStr = defaultEnd.toISOString().slice(0, 10);
+    }
+
+    const allDates = getInclusiveDatesInRange(startDateStr, endDateStr, 90);
+
+    const startDate = new Date(`${startDateStr}T00:00:00.000Z`);
+    const endDate = new Date(`${endDateStr}T23:59:59.999Z`);
+
+    const dbRows = await prisma.roomCategoryCalendar.findMany({
+      where: {
+        roomCategoryId: roomId,
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+        deletedAt: null,
+      },
+      orderBy: { date: 'asc' },
+    });
+
+    const rowMap = new Map<string, typeof dbRows[0]>();
+    for (const row of dbRows) {
+      const dStr = row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date).slice(0, 10);
+      rowMap.set(dStr, row);
+    }
+
+    const basePrice = Number(room.basePrice);
+    const totalRooms = room.totalRoom;
+
+    const calendars = allDates.map((dStr) => {
+      const row = rowMap.get(dStr);
+      if (row) {
+        const priceAdjustment = Number(row.priceAdjustment);
+        return {
+          id: row.id,
+          date: dStr,
+          totalRooms,
+          bookedRooms: row.bookedRooms,
+          unavailableRooms: row.unavailableRooms,
+          availableRooms: row.availableRooms,
+          priceAdjustment,
+          basePrice,
+          effectivePrice: basePrice + priceAdjustment,
+        };
+      }
+      return {
+        id: null,
+        date: dStr,
+        totalRooms,
+        bookedRooms: 0,
+        unavailableRooms: 0,
+        availableRooms: totalRooms,
+        priceAdjustment: 0,
+        basePrice,
+        effectivePrice: basePrice,
+      };
+    });
+
+    res.status(200).json({
+      code: 'S-0000',
+      message: 'Room category calendars retrieved successfully',
+      data: {
+        calendars,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * PATCH /api/v1/hosts/properties/:propertyId/room-categories/:roomId/calendars
+ */
+export async function updateRoomCategoryCalendars(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const propertyId = Number(req.params.propertyId);
+    const roomId = Number(req.params.roomId);
+
+    if (isNaN(propertyId) || propertyId <= 0 || isNaN(roomId) || roomId <= 0) {
+      throw new AppError('Invalid property ID or room category ID', 400, 'T-2007');
+    }
+
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+    });
+
+    if (!property || property.deletedAt) {
+      throw new AppError('Property not found', 404, 'DB-1002');
+    }
+
+    if (property.hostId !== req.user?.id && !isAdminUser(req)) {
+      throw new AppError('Forbidden: You do not own this property', 403, 'A-3007');
+    }
+
+    const room = await prisma.roomCategory.findFirst({
+      where: {
+        id: roomId,
+        propertyId,
+        deletedAt: null,
+      },
+    });
+
+    if (!room) {
+      throw new AppError('Room category not found', 404, 'DB-1002');
+    }
+
+    const updates = req.body?.updates;
+    if (!Array.isArray(updates) || updates.length === 0) {
+      throw new AppError('Validation failed: updates must be a non-empty array', 400, 'T-2007');
+    }
+
+    const basePrice = Number(room.basePrice);
+    const totalRoom = room.totalRoom;
+
+    // Pre-validate all updates before modifying database
+    for (const update of updates) {
+      if (!update.date || typeof update.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(update.date)) {
+        throw new AppError('Invalid date format (must be YYYY-MM-DD)', 400, 'T-2007');
+      }
+
+      if (update.unavailableRooms !== undefined) {
+        const uRooms = Number(update.unavailableRooms);
+        if (isNaN(uRooms) || !Number.isInteger(uRooms) || uRooms < 0) {
+          throw new AppError('Unavailable rooms cannot be negative', 400, 'T-2007');
+        }
+      }
+
+      if (update.priceAdjustment !== undefined) {
+        const pAdj = Number(update.priceAdjustment);
+        if (isNaN(pAdj)) {
+          throw new AppError('Invalid price adjustment', 400, 'T-2007');
+        }
+        if (basePrice + pAdj <= 0) {
+          throw new AppError('Effective price must be greater than 0', 400, 'T-2007');
+        }
+      }
+    }
+
+    // Execute updates inside transaction with Booked-Room Protection Guard
+    await prisma.$transaction(async (tx) => {
+      for (const update of updates) {
+        const dateObj = new Date(`${update.date}T00:00:00.000Z`);
+
+        const existing = await tx.roomCategoryCalendar.findUnique({
+          where: {
+            roomCategoryId_date: {
+              roomCategoryId: roomId,
+              date: dateObj,
+            },
+          },
+        });
+
+        const bookedRooms = existing ? existing.bookedRooms : 0;
+        const currentUnavailable = existing ? existing.unavailableRooms : 0;
+        const currentPriceAdj = existing ? Number(existing.priceAdjustment) : 0;
+
+        const targetUnavailable = update.unavailableRooms !== undefined ? Number(update.unavailableRooms) : currentUnavailable;
+        const targetPriceAdj = update.priceAdjustment !== undefined ? Number(update.priceAdjustment) : currentPriceAdj;
+
+        // Booked-Room Protection Guard:
+        // Cannot set unavailableRooms > totalRoom - bookedRooms (cannot block rooms that guests have already booked)
+        if (targetUnavailable > totalRoom - bookedRooms) {
+          throw new AppError(
+            `Cannot set unavailable rooms (${targetUnavailable}) greater than available capacity (${totalRoom - bookedRooms}) for date ${update.date}`,
+            409,
+            'B-4001'
+          );
+        }
+
+        const availableRooms = totalRoom - bookedRooms - targetUnavailable;
+
+        if (existing) {
+          await tx.roomCategoryCalendar.update({
+            where: { id: existing.id },
+            data: {
+              unavailableRooms: targetUnavailable,
+              availableRooms,
+              priceAdjustment: targetPriceAdj,
+            },
+          });
+        } else {
+          await tx.roomCategoryCalendar.create({
+            data: {
+              roomCategoryId: roomId,
+              date: dateObj,
+              bookedRooms: 0,
+              unavailableRooms: targetUnavailable,
+              availableRooms,
+              priceAdjustment: targetPriceAdj,
+            },
+          });
+        }
+      }
+    });
+
+    await syncPropertyMinPrice(propertyId);
+    await cacheService.delByPrefix('properties:');
+
+    res.status(200).json({
+      code: 'S-0000',
+      message: 'Room category calendars updated successfully',
+      data: {
+        updatedCount: updates.length,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+

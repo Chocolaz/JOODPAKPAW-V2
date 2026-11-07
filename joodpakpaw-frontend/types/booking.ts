@@ -33,6 +33,11 @@ export interface Booking {
 }
 
 export interface BookingsResponse {
+  code?: string | number
+  message?: string
+  data?: {
+    bookings: Booking[]
+  } | Booking[]
   bookings: Booking[]
 }
 

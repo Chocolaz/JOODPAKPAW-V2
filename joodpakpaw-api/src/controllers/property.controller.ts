@@ -1244,9 +1244,12 @@ export async function searchPropertyRoomCategories(
       parseInt(String(req.query.numberOfPets || '1'), 10) || 1
     );
     const petSizeId =
-      req.query.petSizeId !== undefined
+      req.query.petSizeId !== undefined && req.query.petSizeId !== ''
         ? parseInt(String(req.query.petSizeId), 10)
+        : req.query.petSizeCategoryId !== undefined && req.query.petSizeCategoryId !== ''
+        ? parseInt(String(req.query.petSizeCategoryId), 10)
         : NaN;
+    const petTypesParam = String(req.query.petTypes || '').trim();
 
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
@@ -1301,7 +1304,21 @@ export async function searchPropertyRoomCategories(
       orderBy: { basePrice: 'asc' },
     });
 
-    const formattedRoomCategories = roomCategories.map((rc) => {
+    const requestedPets = petTypesParam
+      ? petTypesParam.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+      : [];
+
+    const activeRoomCategories = requestedPets.length > 0
+      ? roomCategories.filter((rc) =>
+          rc.pets.some(
+            (p) =>
+              requestedPets.includes(p.pet.name.toLowerCase()) ||
+              requestedPets.includes(String(p.pet.id))
+          )
+        )
+      : roomCategories;
+
+    const formattedRoomCategories = activeRoomCategories.map((rc) => {
       const basePrice = Number(rc.basePrice);
       const calendarByDate = new Map<string, any>();
       for (const cal of rc.calendars) {

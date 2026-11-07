@@ -168,6 +168,27 @@ export interface RoomCategoriesResponse {
   roomCategories: RoomCategories[]
 }
 
+export interface RoomCategoryCalendarItem {
+  id?: number | null
+  date: string
+  totalRooms: number
+  bookedRooms: number
+  unavailableRooms: number
+  availableRooms: number
+  priceAdjustment: number
+  basePrice: number
+  effectivePrice: number
+}
+
+export interface RoomCategoryCalendarsResponse {
+  code?: string | number
+  message?: string
+  calendars: RoomCategoryCalendarItem[]
+  data?: {
+    calendars: RoomCategoryCalendarItem[]
+  }
+}
+
 export interface PropertyDetailResponse {
   code?: string | number
   message?: string

@@ -10,7 +10,16 @@ import {
   createHostRoomCategory,
   updateHostRoomCategory,
   deleteHostRoomCategory,
+  getRoomCategoryCalendars,
+  updateRoomCategoryCalendars,
 } from '../controllers/hostProperty.controller';
+import {
+  getHostBookingsAll,
+  getHostBookingsPaginated,
+  getHostBookingById,
+  getHostPropertyBookingsPaginated,
+  completeHostBooking,
+} from '../controllers/booking.controller';
 import { getAllFacilities } from '../controllers/lookup.controller';
 import {
   authenticateToken,
@@ -23,6 +32,12 @@ export const hostRouter = Router();
 // Master lookup under /api/v1/hosts/facilities/all
 hostRouter.get('/facilities/all', optionalAuthenticateToken, getAllFacilities);
 
+// Host bookings routes (MUST precede generic /:propertyId or :bookingId where applicable)
+hostRouter.get('/bookings/all', authenticateToken, getHostBookingsAll);
+hostRouter.get('/bookings/paginate', authenticateToken, getHostBookingsPaginated);
+hostRouter.get('/bookings/:bookingId', authenticateToken, getHostBookingById);
+hostRouter.patch('/bookings/:bookingId/success', authenticateToken, completeHostBooking);
+
 // Host properties CRUD
 hostRouter.get('/properties/all', authenticateToken, getHostProperties);
 hostRouter.post(
@@ -32,7 +47,24 @@ hostRouter.post(
   createHostProperty
 );
 
-// Room categories CRUD under a host property (must precede /properties/:propertyId where applicable)
+// Specific property bookings pagination (must precede /properties/:propertyId)
+hostRouter.get(
+  '/properties/:propertyId/bookings/paginate',
+  authenticateToken,
+  getHostPropertyBookingsPaginated
+);
+
+// Room categories CRUD under a host property
+hostRouter.get(
+  '/properties/:propertyId/room-categories/:roomId/calendars',
+  authenticateToken,
+  getRoomCategoryCalendars
+);
+hostRouter.patch(
+  '/properties/:propertyId/room-categories/:roomId/calendars',
+  authenticateToken,
+  updateRoomCategoryCalendars
+);
 hostRouter.get(
   '/properties/:propertyId/room-categories/all',
   authenticateToken,
