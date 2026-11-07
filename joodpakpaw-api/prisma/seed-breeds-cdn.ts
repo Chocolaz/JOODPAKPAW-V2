@@ -1,53 +1,53 @@
 import { prisma } from '../src/database/prisma';
 
 export const breedImagesMap: Record<string, string> = {
-  // Dogs - 100% verified active Unsplash URLs
-  'Golden Retriever (โกลเด้น รีทรีฟเวอร์)': 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=400&auto=format&fit=crop&q=80',
-  'Pomeranian (ปอมเมอเรเนียน)': 'https://images.unsplash.com/photo-1583511655826-05700d52f4d9?w=400&auto=format&fit=crop&q=80',
-  'French Bulldog (เฟรนช์ บูลด็อก)': 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=400&auto=format&fit=crop&q=80',
-  'Siberian Husky (ไซบีเรียน ฮัสกี้)': 'https://images.unsplash.com/photo-1605568427561-40dd23c2acea?w=400&auto=format&fit=crop&q=80',
-  'Poodle (พุดเดิ้ล)': 'https://images.unsplash.com/photo-1516371535707-512a1e83bb9a?w=400&auto=format&fit=crop&q=80',
-  'Pembroke Welsh Corgi (พ็อมโบรค เวลช์ คอร์กี้)': 'https://images.unsplash.com/photo-1589941013453-ec89f33b5e95?w=400&auto=format&fit=crop&q=80',
-  'Shih Tzu (ชิสุ)': 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=400&auto=format&fit=crop&q=80',
-  'Beagle (บีเกิล)': 'https://images.unsplash.com/photo-1505628346881-b72b27e84530?w=400&auto=format&fit=crop&q=80',
-  'Labrador Retriever (ลาบราดอร์ รีทรีฟเวอร์)': 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=400&auto=format&fit=crop&q=80',
-  'Chihuahua (ชิวาวา)': 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=400&auto=format&fit=crop&q=80',
-  'Thai Ridgeback (ไทยหลังอาน)': 'https://images.unsplash.com/photo-1561037404-61cd46aa615b?w=400&auto=format&fit=crop&q=80',
-  'Thai Bangkaew (ไทยบางแก้ว)': 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=400&auto=format&fit=crop&q=80',
-  'Mixed Breed (สุนัขพันธุ์ผสม)': 'https://images.unsplash.com/photo-1537151625747-768eb6cf92b2?w=400&auto=format&fit=crop&q=80',
-  'Other / Unknown (อื่นๆ / ไม่ทราบพันธุ์)': 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=400&auto=format&fit=crop&q=80',
+  // Dogs - Real breed studio portraits
+  'Golden Retriever (โกลเด้น รีทรีฟเวอร์)': '/images/breeds/dog_golden_retriever.webp',
+  'Pomeranian (ปอมเมอเรเนียน)': '/images/breeds/dog_pomeranian.webp',
+  'French Bulldog (เฟรนช์ บูลด็อก)': '/images/breeds/dog_french_bulldog.webp',
+  'Siberian Husky (ไซบีเรียน ฮัสกี้)': '/images/breeds/dog_siberian_husky.webp',
+  'Poodle (พุดเดิ้ล)': '/images/breeds/dog_poodle.webp',
+  'Pembroke Welsh Corgi (พ็อมโบรค เวลช์ คอร์กี้)': '/images/breeds/dog_welsh_corgi.webp',
+  'Shih Tzu (ชิสุ)': '/images/breeds/dog_shih_tzu.webp',
+  'Beagle (บีเกิล)': '/images/breeds/dog_beagle.webp',
+  'Labrador Retriever (ลาบราดอร์ รีทรีฟเวอร์)': '/images/breeds/dog_labrador_retriever.webp',
+  'Chihuahua (ชิวาวา)': '/images/breeds/dog_chihuahua.webp',
+  'Thai Ridgeback (ไทยหลังอาน)': '/images/breeds/dog_thai_ridgeback.webp',
+  'Thai Bangkaew (ไทยบางแก้ว)': '/images/breeds/dog_thai_bangkaew.webp',
+  'Mixed Breed (สุนัขพันธุ์ผสม)': '/images/breeds/dog_mixed_breed.webp',
+  'Other / Unknown (อื่นๆ / ไม่ทราบพันธุ์)': '/images/breeds/dog_other.webp',
 
-  // Cats - 100% verified active Unsplash URLs
-  'Persian (เปอร์เซีย)': 'https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=400&auto=format&fit=crop&q=80',
-  'Scottish Fold (สก็อตติช โฟลด์)': 'https://images.unsplash.com/photo-1574158622682-e40e69881006?w=400&auto=format&fit=crop&q=80',
-  'British Shorthair (บริติช ช็อตแฮร์)': 'https://images.unsplash.com/photo-1592194996308-7b43878e84a6?w=400&auto=format&fit=crop&q=80',
-  'American Shorthair (อเมริกัน ช็อตแฮร์)': 'https://images.unsplash.com/photo-1533738363-b7f9aef128ce?w=400&auto=format&fit=crop&q=80',
-  'Siamese (วิเชียรมาศ / แมวไทย)': 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=400&auto=format&fit=crop&q=80',
-  'Maine Coon (เมนคูน)': 'https://images.unsplash.com/photo-1561948955-570b270e7c36?w=400&auto=format&fit=crop&q=80',
-  'Ragdoll (แร็กดอลล์)': 'https://images.unsplash.com/photo-1548802673-380ab8ebc7b7?w=400&auto=format&fit=crop&q=80',
-  'Bengal (เบงกอล)': 'https://images.unsplash.com/photo-1513245543132-31f507417b26?w=400&auto=format&fit=crop&q=80',
-  'Sphynx (สฟิงซ์)': 'https://images.unsplash.com/photo-1526336024174-e58f5cdd8e13?w=400&auto=format&fit=crop&q=80',
-  'Russian Blue (รัสเซียน บลู)': 'https://images.unsplash.com/photo-1573865526739-10659fec78a5?w=400&auto=format&fit=crop&q=80',
-  'Khao Manee (ขาวมณี)': 'https://images.unsplash.com/photo-1511044568932-338cba0ad803?w=400&auto=format&fit=crop&q=80',
-  'Korat (โคราช / มาเลศ)': 'https://images.unsplash.com/photo-1577023311546-cdc07a8454d9?w=400&auto=format&fit=crop&q=80',
-  'Mixed Breed (แมวพันธุ์ผสม)': 'https://images.unsplash.com/photo-1592194996308-7b43878e84a6?w=400&auto=format&fit=crop&q=80',
-  'Other / Unknown (แมวอื่นๆ / ไม่ทราบพันธุ์)': 'https://images.unsplash.com/photo-1535930891776-0c2dfb7fda1a?w=400&auto=format&fit=crop&q=80',
+  // Cats - Real breed studio portraits
+  'Persian (เปอร์เซีย)': '/images/breeds/cat_persian.webp',
+  'Scottish Fold (สก็อตติช โฟลด์)': '/images/breeds/cat_scottish_fold.webp',
+  'British Shorthair (บริติช ช็อตแฮร์)': '/images/breeds/cat_british_shorthair.webp',
+  'American Shorthair (อเมริกัน ช็อตแฮร์)': '/images/breeds/cat_american_shorthair.webp',
+  'Siamese (วิเชียรมาศ / แมวไทย)': '/images/breeds/cat_siamese.webp',
+  'Maine Coon (เมนคูน)': '/images/breeds/cat_maine_coon.webp',
+  'Ragdoll (แร็กดอลล์)': '/images/breeds/cat_ragdoll.webp',
+  'Bengal (เบงกอล)': '/images/breeds/cat_bengal.webp',
+  'Sphynx (สฟิงซ์)': '/images/breeds/cat_sphynx.webp',
+  'Russian Blue (รัสเซียน บลู)': '/images/breeds/cat_russian_blue.webp',
+  'Khao Manee (ขาวมณี)': '/images/breeds/cat_khao_manee.webp',
+  'Korat (โคราช / มาเลศ)': '/images/breeds/cat_korat.webp',
+  'Mixed Breed (แมวพันธุ์ผสม)': '/images/breeds/cat_mixed_breed.webp',
+  'Other / Unknown (แมวอื่นๆ / ไม่ทราบพันธุ์)': '/images/breeds/cat_other.webp',
 
-  // Exotic - 100% verified active Unsplash URLs
-  'Holland Lop Rabbit (กระต่าย ฮอลแลนด์ ลอป)': 'https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?w=400&auto=format&fit=crop&q=80',
-  'Netherland Dwarf Rabbit (กระต่าย เนเธอร์แลนด์ ดวอฟ)': 'https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?w=400&auto=format&fit=crop&q=80',
-  'Syrian Hamster (แฮมสเตอร์ ไจแอนท์ / ซีเรียน)': 'https://images.unsplash.com/photo-1548767797-d8c844163c4c?w=400&auto=format&fit=crop&q=80',
-  'Winter White Hamster (แฮมสเตอร์ วินเทอร์ไวท์)': 'https://images.unsplash.com/photo-1425082661705-1834bfd09dca?w=400&auto=format&fit=crop&q=80',
-  'Hedgehog (เม่นแคระ)': 'https://images.unsplash.com/photo-1568644396922-5c3bfae12521?w=400&auto=format&fit=crop&q=80',
-  'Sugar Glider (ชูการ์ไรเดอร์)': 'https://images.unsplash.com/photo-1548767797-d8c844163c4c?w=400&auto=format&fit=crop&q=80',
-  'Ferret (เฟอเรท)': 'https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?w=400&auto=format&fit=crop&q=80',
-  'Chinchilla (ชินชิลล่า)': 'https://images.unsplash.com/photo-1588943211346-0908a1fb0b01?w=400&auto=format&fit=crop&q=80',
-  'Guinea Pig (หนูแกสบี้)': 'https://images.unsplash.com/photo-1533514114760-4389f572ae26?w=400&auto=format&fit=crop&q=80',
-  'Bearded Dragon (มังกรเครา)': 'https://images.unsplash.com/photo-1533514114760-4389f572ae26?w=400&auto=format&fit=crop&q=80',
-  'Leopard Gecko (ตุ๊กแกเสือดาว)': 'https://images.unsplash.com/photo-1533514114760-4389f572ae26?w=400&auto=format&fit=crop&q=80',
-  'Tortoise / Turtle (เต่าบก / เต่าน้ำ)': 'https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?w=400&auto=format&fit=crop&q=80',
-  'Parrot / Cockatiel (นกแก้ว / คอกคาเทล)': 'https://images.unsplash.com/photo-1552728089-57bdde30beb3?w=400&auto=format&fit=crop&q=80',
-  'Mixed / Other Exotic (สัตว์พิเศษอื่นๆ)': 'https://images.unsplash.com/photo-1450778869180-41d0601e046e?w=400&auto=format&fit=crop&q=80',
+  // Exotic - Real species studio portraits
+  'Holland Lop Rabbit (กระต่าย ฮอลแลนด์ ลอป)': '/images/breeds/exotic_holland_lop.webp',
+  'Netherland Dwarf Rabbit (กระต่าย เนเธอร์แลนด์ ดวอฟ)': '/images/breeds/exotic_netherland_dwarf.webp',
+  'Syrian Hamster (แฮมสเตอร์ ไจแอนท์ / ซีเรียน)': '/images/breeds/exotic_syrian_hamster.webp',
+  'Winter White Hamster (แฮมสเตอร์ วินเทอร์ไวท์)': '/images/breeds/exotic_winter_white_hamster.webp',
+  'Hedgehog (เม่นแคระ)': '/images/breeds/exotic_hedgehog.webp',
+  'Sugar Glider (ชูการ์ไรเดอร์)': '/images/breeds/exotic_sugar_glider.webp',
+  'Ferret (เฟอเรท)': '/images/breeds/exotic_ferret.webp',
+  'Chinchilla (ชินชิลล่า)': '/images/breeds/exotic_chinchilla.webp',
+  'Guinea Pig (หนูแกสบี้)': '/images/breeds/exotic_guinea_pig.webp',
+  'Bearded Dragon (มังกรเครา)': '/images/breeds/exotic_bearded_dragon.webp',
+  'Leopard Gecko (ตุ๊กแกเสือดาว)': '/images/breeds/exotic_leopard_gecko.webp',
+  'Tortoise / Turtle (เต่าบก / เต่าน้ำ)': '/images/breeds/exotic_tortoise.webp',
+  'Parrot / Cockatiel (นกแก้ว / คอกคาเทล)': '/images/breeds/exotic_cockatiel.webp',
+  'Mixed / Other Exotic (สัตว์พิเศษอื่นๆ)': '/images/breeds/exotic_mixed_other.webp',
 };
 
 async function seedBreedImages() {
@@ -141,7 +141,7 @@ async function seedBreedImages() {
   ];
 
   for (const b of dogBreeds) {
-    const img = breedImagesMap[b] || 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=400&auto=format&fit=crop&q=80';
+    const img = breedImagesMap[b] || '/images/breeds/dog_other.webp';
     await upsertBreed(dogPet.id, b, img);
   }
 
@@ -164,7 +164,7 @@ async function seedBreedImages() {
   ];
 
   for (const b of catBreeds) {
-    const img = breedImagesMap[b] || 'https://images.unsplash.com/photo-1573865526739-10659fec78a5?w=400&auto=format&fit=crop&q=80';
+    const img = breedImagesMap[b] || '/images/breeds/cat_other.webp';
     await upsertBreed(catPet.id, b, img);
   }
 
@@ -187,11 +187,11 @@ async function seedBreedImages() {
   ];
 
   for (const b of exoticBreeds) {
-    const img = breedImagesMap[b] || 'https://images.unsplash.com/photo-1450778869180-41d0601e046e?w=400&auto=format&fit=crop&q=80';
+    const img = breedImagesMap[b] || '/images/breeds/exotic_mixed_other.webp';
     await upsertBreed(exoticPet.id, b, img);
   }
 
-  console.log('✅ Successfully seeded 100% verified 200 OK CDN images!');
+  console.log('✅ Successfully seeded 100% verified breed studio portrait images!');
 }
 
 seedBreedImages()
