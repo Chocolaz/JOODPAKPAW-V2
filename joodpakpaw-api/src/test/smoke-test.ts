@@ -2643,8 +2643,7 @@ async function main() {
     })
 
     // =========================================================================
-    /* SKIPPED FOR PBI STAGING:
-// PBI-12 QA Audit Tests: Host Room Availability & Price Calendar
+    // PBI-12 QA Audit Tests: Host Room Availability & Price Calendar
     // =========================================================================
     await runTest('PBI-12: Host Room Availability & Price Calendar (GET/PATCH calendars, Booked Guard B-4001, Price Floor T-2007)', async () => {
       // 1. IDOR: User A (guest, not host) attempts to view property 101 calendars -> 403 A-3007
@@ -2754,7 +2753,8 @@ async function main() {
     })
 
     // =========================================================================
-    // PBI-13 QA Audit Tests: Verified-Stay Single Review
+    /* SKIPPED FOR PBI STAGING:
+// PBI-13 QA Audit Tests: Verified-Stay Single Review
     // =========================================================================
     await runTest('PBI-13: Verified-Stay Single Review (Status Guard B-4003, Lock B-4001, Rating Sync)', async () => {
       // 1. IDOR: User B (host) cannot review User A's booking -> 403 A-3007

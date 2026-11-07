@@ -1,6 +1,6 @@
 'use client'
 
-import { BedDouble, PawPrint, Minus, Pencil, ImageOff, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { BedDouble, PawPrint, Minus, Pencil, ImageOff, ChevronLeft, ChevronRight, Loader2, CalendarDays } from 'lucide-react'
 import Image from 'next/image'
 import { RoomCategories } from '@/types'
 import { useState, useMemo, useRef } from 'react'
@@ -22,6 +22,7 @@ interface RoomCategoryCardProps {
   isOnlyRoom?: boolean
   fallbackImageUrl?: string
   onEdit?: (category: RoomCategories) => void
+  onManageCalendar?: (category: RoomCategories) => void
 }
 
 export function RoomCategoryCard({
@@ -33,6 +34,7 @@ export function RoomCategoryCard({
   isOnlyRoom = false,
   fallbackImageUrl,
   onEdit,
+  onManageCalendar,
 }: RoomCategoryCardProps) {
   const [isDeleting, setIsDeleting] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -218,8 +220,22 @@ export function RoomCategoryCard({
         </div>
 
         {/* Action bar */}
-        {(onEdit || canDelete) && (
-          <div className="flex border-t border-neutral-100">
+        {(onEdit || canDelete || onManageCalendar) && (
+          <div className="flex border-t border-neutral-100 divide-x divide-neutral-100">
+            {onManageCalendar && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onManageCalendar(category)
+                }}
+                className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-medium text-warm-gold hover:bg-neutral-50 transition-colors"
+                title="Manage availability & daily pricing"
+              >
+                <CalendarDays className="w-4 h-4 text-warm-gold" />
+                <span>Calendar</span>
+              </button>
+            )}
             {onEdit && (
               <button
                 type="button"
@@ -230,7 +246,7 @@ export function RoomCategoryCard({
                 Edit
               </button>
             )}
-            {onEdit && canDelete && <div className="w-px bg-neutral-100" />}
+
             {canDelete && (
               <button
                 type="button"

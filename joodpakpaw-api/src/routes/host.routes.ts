@@ -10,6 +10,8 @@ import {
   createHostRoomCategory,
   updateHostRoomCategory,
   deleteHostRoomCategory,
+  getRoomCategoryCalendars,
+  updateRoomCategoryCalendars,
 } from '../controllers/hostProperty.controller';
 import {
   getHostBookingsAll,
@@ -53,6 +55,16 @@ hostRouter.get(
 );
 
 // Room categories CRUD under a host property
+hostRouter.get(
+  '/properties/:propertyId/room-categories/:roomId/calendars',
+  authenticateToken,
+  getRoomCategoryCalendars
+);
+hostRouter.patch(
+  '/properties/:propertyId/room-categories/:roomId/calendars',
+  authenticateToken,
+  updateRoomCategoryCalendars
+);
 hostRouter.get(
   '/properties/:propertyId/room-categories/all',
   authenticateToken,

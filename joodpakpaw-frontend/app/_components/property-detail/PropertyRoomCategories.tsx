@@ -8,6 +8,7 @@ interface PropertyRoomCategoriesProps {
   showDeleteButton?: boolean
   fallbackImageUrl?: string
   onEdit?: (category: RoomCategories) => void
+  onManageCalendar?: (category: RoomCategories) => void
 }
 
 export function PropertyRoomCategories({
@@ -17,6 +18,7 @@ export function PropertyRoomCategories({
   showDeleteButton,
   fallbackImageUrl,
   onEdit,
+  onManageCalendar,
 }: PropertyRoomCategoriesProps) {
   if (!roomCategories || roomCategories.length === 0) return null
 
@@ -33,6 +35,7 @@ export function PropertyRoomCategories({
             showDeleteButton={showDeleteButton}
             fallbackImageUrl={fallbackImageUrl}
             onEdit={onEdit}
+            onManageCalendar={onManageCalendar}
           />
         ))}
       </div>

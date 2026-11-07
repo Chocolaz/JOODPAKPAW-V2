@@ -35,6 +35,8 @@ import {
   NotificationsResponse,
   FavoriteFoldersResponse, // Added FavoriteFoldersResponse
   PetBreedsResponse,
+  RoomCategoryCalendarItem,
+  RoomCategoryCalendarsResponse,
 } from '@/types'
 import { FavoriteFolderDetail } from '@/types/favorite'
 import type { PropertiesResponse } from '@/types/property'
@@ -880,6 +882,48 @@ export const searchRoomCategories = async (
     roomCategories,
     data: res?.data ?? { roomCategories },
   }
+}
+
+export const getRoomCategoryCalendars = async (
+  propertyId: number | string,
+  roomId: number | string,
+  startDate?: string,
+  endDate?: string
+): Promise<{ calendars: RoomCategoryCalendarItem[] }> => {
+  const query = new URLSearchParams()
+  if (startDate) query.append('startDate', startDate)
+  if (endDate) query.append('endDate', endDate)
+  const qs = query.toString() ? `?${query.toString()}` : ''
+
+  const res = await request<any>({
+    endpoint: `api/v1/hosts/properties/${propertyId}/room-categories/${roomId}/calendars${qs}`,
+    method: 'GET',
+    requiresAuth: true,
+    errorContext: 'Get Room Category Calendars',
+    cache: 'no-store',
+  })
+
+  const calendars: RoomCategoryCalendarItem[] =
+    res?.data?.calendars ?? res?.calendars ?? []
+
+  return {
+    ...res,
+    calendars,
+  }
+}
+
+export const updateRoomCategoryCalendars = async (
+  propertyId: number | string,
+  roomId: number | string,
+  updates: Array<{ date: string; unavailableRooms?: number; priceAdjustment?: number }>
+): Promise<void> => {
+  await request<void>({
+    endpoint: `api/v1/hosts/properties/${propertyId}/room-categories/${roomId}/calendars`,
+    method: 'PATCH',
+    body: { updates },
+    requiresAuth: true,
+    errorContext: 'Update Room Category Calendars',
+  })
 }
 
 // --- Booking Functions ---

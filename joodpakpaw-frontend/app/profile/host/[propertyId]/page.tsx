@@ -55,6 +55,7 @@ import {
 import { EditPropertyForm } from '../_components/EditPropertyForm'
 import { EditRoomCategoryForm } from '../_components/EditRoomCategoryForm'
 import { UnbanPropertyDrawer } from '../_components/UnbanPropertyDrawer'
+import { RoomCalendarDrawer } from '../_components/RoomCalendarDrawer'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
@@ -80,6 +81,7 @@ export default function HostPropertyDetailPage() {
   const [reportReviewId, setReportReviewId] = useState<number | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingRoom, setEditingRoom] = useState<RoomCategories | null>(null)
+  const [calendarRoom, setCalendarRoom] = useState<RoomCategories | null>(null)
   const [isAppealOpen, setIsAppealOpen] = useState(false)
   const isDesktop = useMediaQuery('(min-width: 1024px)')
 
@@ -205,6 +207,14 @@ export default function HostPropertyDetailPage() {
         onSuccess={refreshProperty}
       />
 
+      <RoomCalendarDrawer
+        propertyId={property.id}
+        room={calendarRoom}
+        isOpen={!!calendarRoom}
+        onOpenChange={(open) => !open && setCalendarRoom(null)}
+        onSuccess={refreshProperty}
+      />
+
       {/* Gallery */}
       <motion.div
         initial={{ opacity: 0, scale: 1.02 }}
@@ -281,6 +291,7 @@ export default function HostPropertyDetailPage() {
                 onDeleteSuccess={refreshProperty}
                 showDeleteButton={true}
                 onEdit={(cat) => setEditingRoom(cat)}
+                onManageCalendar={(cat) => setCalendarRoom(cat)}
               />
             ) : (
               <div className="border-t pt-8 mt-10">
