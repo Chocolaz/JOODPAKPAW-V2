@@ -2437,10 +2437,10 @@ async function main() {
       }
     })
 
-    /* SKIPPED FOR PBI STAGING:
-// Test 36: PBI-10 Multi-Room Booking Engine, Row-Locking & Booking Guards
+    // Test 36: PBI-10 Multi-Room Booking Engine, Row-Locking & Booking Guards
     let createdBookingId = 0
-    let secondBookingId = 0
+    let secondBookingId = 0;
+    void secondBookingId;
     await runTest('PBI-10: Row-Locked Multi-Room Booking Engine & Enterprise Booking Guards (B-4002, B-4003, B-4004)', async () => {
       // Re-create a fresh active pet for User A
       const petRes = await makeRequest(pipePath, '/api/v1/profiles/pet-profiles', 'POST', {
@@ -2523,7 +2523,8 @@ async function main() {
       }
     })
 
-    // Test 37: PBI-11 Payment Slip, Cancel, and Host Booking Workflows
+    /* SKIPPED FOR PBI STAGING:
+// Test 37: PBI-11 Payment Slip, Cancel, and Host Booking Workflows
     await runTest('PBI-11: Payment Slip, Cancel, and Host Booking Workflows', async () => {
       // 1. Payment confirmation IDOR: User B tries to confirm User A's booking -> 403 A-3007
       const idorPayment = await makeRequest(

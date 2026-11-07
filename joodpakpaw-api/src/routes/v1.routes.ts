@@ -5,6 +5,7 @@ import { lookupRouter } from './lookup.routes';
 import { propertyRouter } from './property.routes';
 import { hostRouter } from './host.routes';
 import { petProfileRouter } from './petProfile.routes';
+import { bookingRouter } from './booking.routes';
 
 export const v1Router = Router();
 
@@ -38,3 +39,4 @@ v1Router.use('/profiles/pet-profiles', petProfileRouter);
 v1Router.use('/hosts', hostRouter);
 v1Router.use('/', lookupRouter);
 v1Router.use('/properties', propertyRouter);
+v1Router.use('/bookings', bookingRouter);

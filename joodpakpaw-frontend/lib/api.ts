@@ -883,44 +883,74 @@ export const searchRoomCategories = async (
 }
 
 // --- Booking Functions ---
-export const createBooking = (data: BookingRequestBody): Promise<Booking> => {
-  const payload = { ...data } as any
+export const createBooking = async (
+  data: BookingRequestBody
+): Promise<Booking> => {
+  const payload: any = { ...data }
   if (payload.petProfileIds && !payload.PetProfileIDs) {
     payload.PetProfileIDs = payload.petProfileIds
   } else if (payload.PetProfileIDs && !payload.petProfileIds) {
     payload.petProfileIds = payload.PetProfileIDs
   }
-  return request<Booking>({
+  const res = await request<any>({
     endpoint: 'api/v1/bookings',
     method: 'POST',
     body: payload,
     requiresAuth: true,
     errorContext: 'Create Booking',
   })
+  const booking: Booking = res?.data?.booking ?? res?.data ?? res
+  return booking
 }
 
-export const getBookings = (
+export const getBookings = async (
   page = 1,
   limit = 10
 ): Promise<BookingsPaginatedResponse> => {
-  return request<BookingsPaginatedResponse>({
+  const res = await request<any>({
     endpoint: `api/v1/bookings/paginate?page=${page}&limit=${limit}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Bookings',
     cache: 'no-store',
   })
+  const bookings: Booking[] = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.data?.bookings)
+    ? res.data.bookings
+    : Array.isArray(res?.bookings)
+    ? res.bookings
+    : []
+
+  const pagination = res?.pagination || {
+    page: res?.page || page,
+    limit: res?.limit || limit,
+    totalRows: res?.totalRows ?? bookings.length,
+    totalPages: res?.totalPages ?? (bookings.length > 0 ? 1 : 0),
+  }
+
+  return {
+    ...res,
+    data: bookings,
+    totalRows: pagination.totalRows,
+    totalPages: pagination.totalPages,
+    limit: pagination.limit,
+    page: pagination.page,
+  }
 }
 
-export const getBookingById = (
+export const getBookingById = async (
   bookingId: string
 ): Promise<FullBookingDetail> => {
-  return request<FullBookingDetail>({
+  const res = await request<any>({
     endpoint: `api/v1/bookings/${bookingId}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Booking By Id',
   })
+  const booking: FullBookingDetail =
+    res?.data?.booking ?? res?.data ?? res
+  return booking
 }
 
 export const confirmPayment = async (
@@ -931,15 +961,16 @@ export const confirmPayment = async (
     const compressedSlip = await compressImageToWebP(slipImage)
     const formData = new FormData()
     formData.append('slip', compressedSlip)
-    return request<void>({
+    await request<any>({
       endpoint: `api/v1/bookings/${bookingId}/confirm-payment`,
       method: 'PATCH',
       body: formData,
       requiresAuth: true,
       errorContext: 'Confirm Payment',
     })
+    return
   }
-  return request<void>({
+  await request<any>({
     endpoint: `api/v1/bookings/${bookingId}/confirm-payment`,
     method: 'PATCH',
     requiresAuth: true,
@@ -949,8 +980,8 @@ export const confirmPayment = async (
 
 export const confirmBookingPayment = confirmPayment
 
-export const cancelBooking = (bookingId: string): Promise<void> => {
-  return request<void>({
+export const cancelBooking = async (bookingId: string): Promise<void> => {
+  await request<any>({
     endpoint: `api/v1/bookings/${bookingId}/cancel`,
     method: 'PATCH',
     requiresAuth: true,
@@ -958,28 +989,66 @@ export const cancelBooking = (bookingId: string): Promise<void> => {
   })
 }
 
-export const getHostBookings = (): Promise<BookingsResponse> => {
-  return request<BookingsResponse>({
+export const getHostBookings = async (): Promise<BookingsResponse> => {
+  const res = await request<any>({
     endpoint: `api/v1/hosts/bookings/all`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Host Bookings',
     cache: 'no-store',
   })
+  const bookings: Booking[] = Array.isArray(res?.data?.bookings)
+    ? res.data.bookings
+    : Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.bookings)
+    ? res.bookings
+    : []
+  return {
+    ...res,
+    bookings,
+    data: res?.data ?? { bookings },
+  }
 }
 
-export const getHostBookingsPaginated = (page = 1, limit = 20): Promise<BookingsPaginatedResponse> => {
-  return request<BookingsPaginatedResponse>({
+export const getHostBookingsPaginated = async (
+  page = 1,
+  limit = 20
+): Promise<BookingsPaginatedResponse> => {
+  const res = await request<any>({
     endpoint: `api/v1/hosts/bookings/paginate?page=${page}&limit=${limit}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Host Bookings',
     cache: 'no-store',
   })
+  const bookings: Booking[] = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.data?.bookings)
+    ? res.data.bookings
+    : Array.isArray(res?.bookings)
+    ? res.bookings
+    : []
+
+  const pagination = res?.pagination || {
+    page: res?.page || page,
+    limit: res?.limit || limit,
+    totalRows: res?.totalRows ?? bookings.length,
+    totalPages: res?.totalPages ?? (bookings.length > 0 ? 1 : 0),
+  }
+
+  return {
+    ...res,
+    data: bookings,
+    totalRows: pagination.totalRows,
+    totalPages: pagination.totalPages,
+    limit: pagination.limit,
+    page: pagination.page,
+  }
 }
 
-export const completeBooking = (bookingId: number): Promise<void> => {
-  return request<void>({
+export const completeBooking = async (bookingId: number): Promise<void> => {
+  await request<any>({
     endpoint: `api/v1/hosts/bookings/${bookingId}/success`,
     method: 'PATCH',
     requiresAuth: true,
@@ -987,29 +1056,55 @@ export const completeBooking = (bookingId: number): Promise<void> => {
   })
 }
 
-export const getHostBookingById = (
+export const getHostBookingById = async (
   bookingId: string
 ): Promise<HostBookingDetail> => {
-  return request<HostBookingDetail>({
+  const res = await request<any>({
     endpoint: `api/v1/hosts/bookings/${bookingId}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Host Booking By Id',
   })
+  const booking: HostBookingDetail =
+    res?.data?.booking ?? res?.data ?? res
+  return booking
 }
 
-export const getHostPropertyBookings = (
+export const getHostPropertyBookings = async (
   propertyId: string,
   page = 1,
   limit = 10
 ): Promise<BookingsPaginatedResponse> => {
-  return request<BookingsPaginatedResponse>({
+  const res = await request<any>({
     endpoint: `api/v1/hosts/properties/${propertyId}/bookings/paginate?page=${page}&limit=${limit}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Host Property Bookings',
     cache: 'no-store',
   })
+  const bookings: Booking[] = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.data?.bookings)
+    ? res.data.bookings
+    : Array.isArray(res?.bookings)
+    ? res.bookings
+    : []
+
+  const pagination = res?.pagination || {
+    page: res?.page || page,
+    limit: res?.limit || limit,
+    totalRows: res?.totalRows ?? bookings.length,
+    totalPages: res?.totalPages ?? (bookings.length > 0 ? 1 : 0),
+  }
+
+  return {
+    ...res,
+    data: bookings,
+    totalRows: pagination.totalRows,
+    totalPages: pagination.totalPages,
+    limit: pagination.limit,
+    page: pagination.page,
+  }
 }
 
 // --- Favorite Functions ---
