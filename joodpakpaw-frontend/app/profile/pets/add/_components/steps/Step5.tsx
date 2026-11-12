@@ -1,10 +1,11 @@
 'use client'
 
 import React from 'react'
+import { Phone, User, FileText, AlertCircle } from 'lucide-react'
 import { useAddPet } from '../../_context/AddPetContext'
 import { StepNavigation } from '@/app/profile/host/add-property/_components/StepNavigation'
 import { useAuth } from '@/app/_components/AuthContext'
-import { Phone, User, FileText, Sparkles, AlertCircle } from 'lucide-react'
+import { WizardStepHeader } from '../WizardStepHeader'
 
 export function Step5({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const { formData, updateField } = useAddPet()
@@ -14,44 +15,41 @@ export function Step5({ onBack, onNext }: { onBack: () => void; onNext: () => vo
 
   const handleAutofill = () => {
     if (!user) return
-    const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ') || ''
+    const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ')
     if (fullName) updateField('contactName', fullName)
     if (user.phone) updateField('contactPhone', user.phone)
   }
 
-  const isContactNameValid = Boolean(formData.contactName && formData.contactName.trim().length >= 2)
-  const isPhoneValid = Boolean(formData.contactPhone && formData.contactPhone.trim().length >= 8)
+  const isContactNameValid = Boolean(
+    formData.contactName && formData.contactName.trim().length >= 2
+  )
+  const isPhoneValid = Boolean(
+    formData.contactPhone && formData.contactPhone.trim().length >= 8
+  )
   const isNextDisabled = !isContactNameValid || !isPhoneValid
 
   return (
     <>
-      <div className="w-full mt-4 sm:mt-6">
-        <header className="text-center mb-6 sm:mb-8">
-          <span className="inline-block text-xs font-semibold tracking-wider uppercase text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-full mb-3 border border-amber-200/60 dark:border-amber-900/50">
-            Step 5 of 6
-          </span>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 dark:text-stone-100">
-            Emergency & Care Instructions
-          </h2>
-          <p className="mt-2 text-sm text-stone-500 dark:text-stone-400 max-w-md mx-auto">
-            Provide an emergency contact and any medical or dietary needs for the host while boarding.
-          </p>
-        </header>
+      <div className="w-full mt-6">
+        <WizardStepHeader
+          title="Emergency and care instructions"
+          description="Provide an emergency contact and any medical or dietary notes for the host"
+        />
 
-        <div className="max-w-md mx-auto space-y-6 pb-6">
+        <div className="max-w-lg mx-auto space-y-6 pb-6">
           {/* Quick Autofill Banner */}
           {user && (!formData.contactName || !formData.contactPhone) && (
-            <div className="flex items-center justify-between p-3.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/50">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                <span className="text-xs text-amber-900 dark:text-amber-200 font-medium">
+            <div className="flex items-center justify-between gap-3 p-4 rounded-xl bg-off-white border border-[#323232]/10">
+              <div className="flex items-center gap-2.5 text-deep-teal">
+                <User className="w-4 h-4 shrink-0 text-neutral-gray" strokeWidth={1.5} />
+                <span className="text-xs font-medium">
                   Use my account contact details
                 </span>
               </div>
               <button
                 type="button"
                 onClick={handleAutofill}
-                className="text-xs font-bold text-amber-700 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-100 px-2.5 py-1 rounded-lg bg-amber-200/60 dark:bg-amber-900/60 transition-colors"
+                className="text-xs font-medium text-white bg-deep-teal hover:bg-deep-teal/90 px-3 py-1.5 rounded-lg transition-colors duration-150 cursor-pointer shrink-0"
               >
                 Autofill
               </button>
@@ -59,14 +57,14 @@ export function Step5({ onBack, onNext }: { onBack: () => void; onNext: () => vo
           )}
 
           {/* Contact Name Input */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label
               htmlFor="contact-name-input"
-              className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-stone-600 dark:text-stone-300"
+              className="flex items-center gap-2 text-sm font-medium text-deep-teal"
             >
-              <User className="w-3.5 h-3.5 text-stone-400" />
+              <User className="w-4 h-4 text-neutral-gray shrink-0" strokeWidth={1.5} />
               <span>
-                Emergency Contact Name <span className="text-rose-500">*</span>
+                Emergency contact name <span className="text-accent-orange">*</span>
               </span>
             </label>
             <input
@@ -74,21 +72,21 @@ export function Step5({ onBack, onNext }: { onBack: () => void; onNext: () => vo
               type="text"
               value={formData.contactName || ''}
               onChange={(e) => updateField('contactName', e.target.value)}
-              placeholder="e.g. Alice Smith (Parent / Guardian)"
+              placeholder="e.g. Alice Smith"
               maxLength={70}
-              className="w-full px-4 py-3 text-sm bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all shadow-sm font-medium"
+              className="w-full px-4 py-3 text-sm bg-white border border-[#323232]/15 rounded-xl text-foreground placeholder:text-neutral-gray/60 focus:outline-none focus:ring-2 focus:ring-accent-orange/25 focus:border-accent-orange transition-colors duration-150"
             />
           </div>
 
           {/* Contact Phone Input */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label
               htmlFor="contact-phone-input"
-              className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-stone-600 dark:text-stone-300"
+              className="flex items-center gap-2 text-sm font-medium text-deep-teal"
             >
-              <Phone className="w-3.5 h-3.5 text-stone-400" />
+              <Phone className="w-4 h-4 text-neutral-gray shrink-0" strokeWidth={1.5} />
               <span>
-                Emergency Phone Number <span className="text-rose-500">*</span>
+                Emergency phone number <span className="text-accent-orange">*</span>
               </span>
             </label>
             <input
@@ -98,37 +96,37 @@ export function Step5({ onBack, onNext }: { onBack: () => void; onNext: () => vo
               onChange={(e) => updateField('contactPhone', e.target.value)}
               placeholder="e.g. 0812345678"
               maxLength={20}
-              className="w-full px-4 py-3 text-sm bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all shadow-sm font-medium font-mono"
+              className="w-full px-4 py-3 text-sm bg-white border border-[#323232]/15 rounded-xl text-foreground placeholder:text-neutral-gray/60 focus:outline-none focus:ring-2 focus:ring-accent-orange/25 focus:border-accent-orange transition-colors duration-150 tabular-nums"
             />
           </div>
 
           {/* Special Boarding Notes Textarea */}
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label
                 htmlFor="pet-note-input"
-                className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-stone-600 dark:text-stone-300"
+                className="flex items-center gap-2 text-sm font-medium text-deep-teal"
               >
-                <FileText className="w-3.5 h-3.5 text-stone-400" />
-                <span>Special Care & Boarding Notes</span>
+                <FileText className="w-4 h-4 text-neutral-gray shrink-0" strokeWidth={1.5} />
+                <span>Special care and boarding notes</span>
               </label>
-              <span className="text-[11px] text-stone-400">Optional</span>
+              <span className="text-xs text-neutral-gray">Optional</span>
             </div>
             <textarea
               id="pet-note-input"
               rows={4}
               value={formData.petNote || ''}
               onChange={(e) => updateField('petNote', e.target.value)}
-              placeholder={`Tell the host about ${petName}'s diet, medications, thunderstorm anxiety, or favorite sleeping habits...`}
+              placeholder={`Diet, medications, anxiety triggers, or sleeping habits for ${petName}`}
               maxLength={500}
-              className="w-full px-4 py-3 text-sm bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all shadow-sm resize-none"
+              className="w-full px-4 py-3 text-sm bg-white border border-[#323232]/15 rounded-xl text-foreground placeholder:text-neutral-gray/60 focus:outline-none focus:ring-2 focus:ring-accent-orange/25 focus:border-accent-orange transition-colors duration-150 resize-none"
             />
-            <div className="flex justify-between items-center text-[11px] text-stone-400 pt-0.5">
-              <span className="flex items-center gap-1">
-                <AlertCircle className="w-3 h-3 text-stone-400" />
-                Shared securely with host upon booking
+            <div className="flex justify-between items-center text-xs text-neutral-gray pt-0.5">
+              <span className="flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 shrink-0" strokeWidth={1.5} />
+                <span>Shared with the host upon booking</span>
               </span>
-              <span>{(formData.petNote || '').length}/500</span>
+              <span className="tabular-nums">{(formData.petNote || '').length}/500</span>
             </div>
           </div>
         </div>

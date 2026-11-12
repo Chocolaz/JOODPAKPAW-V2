@@ -21,9 +21,9 @@ export function DesktopPetStepper({ stepId }: { stepId: number }) {
     <nav className="max-w-2xl mx-auto w-full px-12 pt-6 pb-4">
       <Link
         href="/profile/pets"
-        className="inline-flex items-center gap-1.5 text-sm text-neutral-gray hover:text-deep-teal transition-colors mb-5"
+        className="inline-flex items-center gap-1.5 text-sm text-neutral-gray hover:text-deep-teal transition-colors duration-150 mb-5"
       >
-        <ArrowLeft className="w-4 h-4" />
+        <ArrowLeft className="w-4 h-4" strokeWidth={1.5} />
         Back to Pets
       </Link>
 
@@ -38,18 +38,18 @@ export function DesktopPetStepper({ stepId }: { stepId: number }) {
                 disabled={!isDone}
                 onClick={() => isDone && router.push(`/profile/pets/add/${step.id}`)}
                 className={cn(
-                  'w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold transition-all duration-200 shrink-0',
+                  'w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-colors duration-150 shrink-0 tabular-nums',
                   isDone &&
-                    'bg-positive-green text-white cursor-pointer hover:brightness-90',
+                    'bg-positive-green text-white cursor-pointer hover:brightness-95',
                   isActive &&
-                    'bg-accent-orange text-white ring-4 ring-accent-orange/25',
+                    'bg-accent-orange text-white ring-2 ring-accent-orange/20',
                   !isDone &&
                     !isActive &&
-                    'bg-gray-100 text-neutral-gray cursor-default',
+                    'bg-off-white text-neutral-gray cursor-default'
                 )}
               >
                 {isDone ? (
-                  <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
+                  <Check className="w-4 h-4" strokeWidth={2} />
                 ) : (
                   step.id
                 )}
@@ -57,8 +57,8 @@ export function DesktopPetStepper({ stepId }: { stepId: number }) {
               {!isLast && (
                 <div
                   className={cn(
-                    'flex-1 h-px mx-1.5 transition-colors duration-300',
-                    isDone ? 'bg-positive-green/50' : 'bg-gray-200',
+                    'flex-1 h-px mx-1.5 transition-colors duration-200',
+                    isDone ? 'bg-positive-green/50' : 'bg-[#323232]/10'
                   )}
                 />
               )}
@@ -77,10 +77,10 @@ export function DesktopPetStepper({ stepId }: { stepId: number }) {
               <div className="w-7 flex justify-center">
                 <span
                   className={cn(
-                    'text-[10px] font-medium whitespace-nowrap',
+                    'text-xs font-medium whitespace-nowrap',
                     isActive && 'text-accent-orange',
                     isDone && 'text-positive-green',
-                    !isDone && !isActive && 'text-neutral-gray/40',
+                    !isDone && !isActive && 'text-neutral-gray/60'
                   )}
                 >
                   {step.label}

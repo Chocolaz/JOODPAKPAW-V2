@@ -1,55 +1,26 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import Image from 'next/image'
+import { Plus, Minus, Calendar, Zap } from 'lucide-react'
 import { useAddPet } from '../../_context/AddPetContext'
 import { StepNavigation } from '@/app/profile/host/add-property/_components/StepNavigation'
+import { WizardStepHeader } from '../WizardStepHeader'
+import { ENERGY_LEVELS } from '../../_constants/petWizard'
 import { cn } from '@/lib/utils'
-import { Plus, Minus, Calendar, Zap, Sparkles } from 'lucide-react'
-
-const ENERGY_LEVELS = [
-  {
-    rating: 1,
-    emoji: '🛋️',
-    title: 'Couch Potato',
-    desc: 'Sleeps most of the day, gentle strolls, calm temperament',
-  },
-  {
-    rating: 2,
-    emoji: '🚶',
-    title: 'Mellow',
-    desc: 'Low energy, enjoys lounging and brief casual walks',
-  },
-  {
-    rating: 3,
-    emoji: '🐕',
-    title: 'Balanced',
-    desc: 'Moderate energy, loves daily play sessions and walks',
-  },
-  {
-    rating: 4,
-    emoji: '🎾',
-    title: 'High Energy',
-    desc: 'Very active, athletic, loves running and retrieving',
-  },
-  {
-    rating: 5,
-    emoji: '⚡',
-    title: 'Hyperactive',
-    desc: 'Boundless stamina, high endurance, needs intensive exercise',
-  },
-]
 
 export function Step4({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const { formData, updateField } = useAddPet()
-  const [showExactDate, setShowExactDate] = useState(Boolean(formData.isExactBirthDate || formData.petBirthDate))
+  const [showExactDate, setShowExactDate] = useState(
+    Boolean(formData.isExactBirthDate || formData.petBirthDate)
+  )
 
   const years = formData.ageYears ?? 1
   const months = formData.ageMonths ?? 0
   const petName = formData.petName || 'your pet'
 
-  // Sync default age if not yet initialized
   useEffect(() => {
-    if (formData.ageYears === null && formData.ageYears === undefined) {
+    if (formData.ageYears === null || formData.ageYears === undefined) {
       updateField('ageYears', 1)
       updateField('ageMonths', 0)
     }
@@ -58,7 +29,6 @@ export function Step4({ onBack, onNext }: { onBack: () => void; onNext: () => vo
   const handleYearChange = (delta: number) => {
     const nextVal = Math.max(0, Math.min(30, years + delta))
     updateField('ageYears', nextVal)
-    // Clear exact date if manually stepping
     if (!showExactDate) {
       updateField('petBirthDate', null)
     }
@@ -92,7 +62,8 @@ export function Step4({ onBack, onNext }: { onBack: () => void; onNext: () => vo
     if (dateStr) {
       const birth = new Date(dateStr)
       const now = new Date()
-      let totalMonths = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth())
+      let totalMonths =
+        (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth())
       if (now.getDate() < birth.getDate()) totalMonths--
       if (totalMonths >= 0) {
         updateField('ageYears', Math.floor(totalMonths / 12))
@@ -101,52 +72,50 @@ export function Step4({ onBack, onNext }: { onBack: () => void; onNext: () => vo
     }
   }
 
+  const formattedAge =
+    years === 0 && months === 0
+      ? 'Newborn'
+      : [
+          years > 0 ? `${years} yr${years > 1 ? 's' : ''}` : '',
+          months > 0 ? `${months} mo${months > 1 ? 's' : ''}` : '',
+        ]
+          .filter(Boolean)
+          .join(' ')
+
   const hasValidAge = years > 0 || months > 0 || Boolean(formData.petBirthDate)
   const isNextDisabled = !hasValidAge || !formData.petActivityLevel
 
   return (
     <>
-      <div className="w-full mt-4 sm:mt-6">
-        <header className="text-center mb-6 sm:mb-8">
-          <span className="inline-block text-xs font-semibold tracking-wider uppercase text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-full mb-3 border border-amber-200/60 dark:border-amber-900/50">
-            Step 4 of 6
-          </span>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 dark:text-stone-100">
-            Age & Energy Level
-          </h2>
-          <p className="mt-2 text-sm text-stone-500 dark:text-stone-400 max-w-md mx-auto">
-            Help hosts understand {petName}&apos;s life stage and daily exercise requirements.
-          </p>
-        </header>
+      <div className="w-full mt-6">
+        <WizardStepHeader
+          title="Age and energy level"
+          description={`Help hosts understand ${petName}'s life stage and daily exercise needs`}
+        />
 
-        <div className="max-w-md mx-auto space-y-6 pb-6">
-          {/* Estimated Age Box */}
-          <div className="p-5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
+        <div className="max-w-lg mx-auto space-y-6 pb-6">
+          {/* Estimated Age Card */}
+          <div className="p-5 rounded-2xl bg-white border border-[#323232]/10 space-y-4">
+            <div className="flex items-center justify-between gap-4">
               <div>
-                <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100">
-                  Estimated Age
+                <h3 className="text-sm font-medium text-deep-teal">
+                  Estimated age
                 </h3>
-                <p className="text-xs text-stone-500 dark:text-stone-400">
+                <p className="text-xs text-neutral-gray mt-0.5">
                   Approximate years and months
                 </p>
               </div>
 
-              <div className="text-right">
-                <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-full border border-amber-200/60 dark:border-amber-900/40">
-                  <Sparkles className="w-3 h-3" />
-                  {years > 0 ? `${years} yr${years > 1 ? 's' : ''}` : ''}{' '}
-                  {months > 0 ? `${months} mo${months > 1 ? 's' : ''}` : ''}
-                  {years === 0 && months === 0 ? 'Newborn' : ''}
-                </span>
-              </div>
+              <span className="text-xs font-medium text-deep-teal bg-off-white px-3 py-1 rounded-lg border border-[#323232]/10 tabular-nums">
+                {formattedAge}
+              </span>
             </div>
 
             {/* Years & Months Steppers */}
-            <div className="grid grid-cols-2 gap-3 pt-1">
+            <div className="grid grid-cols-2 gap-3">
               {/* Years Stepper */}
-              <div className="flex flex-col p-3 rounded-xl bg-stone-50 dark:bg-stone-850 border border-stone-200/70 dark:border-stone-800">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-2">
+              <div className="flex flex-col p-3.5 rounded-xl bg-off-white/60 border border-[#323232]/10">
+                <span className="text-xs font-medium text-neutral-gray mb-2">
                   Years
                 </span>
                 <div className="flex items-center justify-between">
@@ -154,12 +123,13 @@ export function Step4({ onBack, onNext }: { onBack: () => void; onNext: () => vo
                     type="button"
                     onClick={() => handleYearChange(-1)}
                     disabled={years <= 0}
-                    className="w-8 h-8 rounded-lg bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 flex items-center justify-center text-stone-700 dark:text-stone-300 disabled:opacity-30 hover:border-amber-500 transition-colors shadow-sm"
+                    aria-label="Decrease years"
+                    className="w-8 h-8 rounded-lg bg-white border border-[#323232]/15 flex items-center justify-center text-deep-teal disabled:opacity-30 hover:border-accent-orange transition-colors duration-150 cursor-pointer"
                   >
-                    <Minus className="w-3.5 h-3.5" />
+                    <Minus className="w-4 h-4" strokeWidth={1.5} />
                   </button>
 
-                  <span className="text-lg font-bold font-mono text-stone-900 dark:text-stone-100">
+                  <span className="text-lg font-medium tabular-nums text-deep-teal">
                     {years}
                   </span>
 
@@ -167,16 +137,17 @@ export function Step4({ onBack, onNext }: { onBack: () => void; onNext: () => vo
                     type="button"
                     onClick={() => handleYearChange(1)}
                     disabled={years >= 30}
-                    className="w-8 h-8 rounded-lg bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 flex items-center justify-center text-stone-700 dark:text-stone-300 disabled:opacity-30 hover:border-amber-500 transition-colors shadow-sm"
+                    aria-label="Increase years"
+                    className="w-8 h-8 rounded-lg bg-white border border-[#323232]/15 flex items-center justify-center text-deep-teal disabled:opacity-30 hover:border-accent-orange transition-colors duration-150 cursor-pointer"
                   >
-                    <Plus className="w-3.5 h-3.5" />
+                    <Plus className="w-4 h-4" strokeWidth={1.5} />
                   </button>
                 </div>
               </div>
 
               {/* Months Stepper */}
-              <div className="flex flex-col p-3 rounded-xl bg-stone-50 dark:bg-stone-850 border border-stone-200/70 dark:border-stone-800">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-2">
+              <div className="flex flex-col p-3.5 rounded-xl bg-off-white/60 border border-[#323232]/10">
+                <span className="text-xs font-medium text-neutral-gray mb-2">
                   Months
                 </span>
                 <div className="flex items-center justify-between">
@@ -184,28 +155,30 @@ export function Step4({ onBack, onNext }: { onBack: () => void; onNext: () => vo
                     type="button"
                     onClick={() => handleMonthChange(-1)}
                     disabled={years <= 0 && months <= 0}
-                    className="w-8 h-8 rounded-lg bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 flex items-center justify-center text-stone-700 dark:text-stone-300 disabled:opacity-30 hover:border-amber-500 transition-colors shadow-sm"
+                    aria-label="Decrease months"
+                    className="w-8 h-8 rounded-lg bg-white border border-[#323232]/15 flex items-center justify-center text-deep-teal disabled:opacity-30 hover:border-accent-orange transition-colors duration-150 cursor-pointer"
                   >
-                    <Minus className="w-3.5 h-3.5" />
+                    <Minus className="w-4 h-4" strokeWidth={1.5} />
                   </button>
 
-                  <span className="text-lg font-bold font-mono text-stone-900 dark:text-stone-100">
+                  <span className="text-lg font-medium tabular-nums text-deep-teal">
                     {months}
                   </span>
 
                   <button
                     type="button"
                     onClick={() => handleMonthChange(1)}
-                    className="w-8 h-8 rounded-lg bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 flex items-center justify-center text-stone-700 dark:text-stone-300 hover:border-amber-500 transition-colors shadow-sm"
+                    aria-label="Increase months"
+                    className="w-8 h-8 rounded-lg bg-white border border-[#323232]/15 flex items-center justify-center text-deep-teal hover:border-accent-orange transition-colors duration-150 cursor-pointer"
                   >
-                    <Plus className="w-3.5 h-3.5" />
+                    <Plus className="w-4 h-4" strokeWidth={1.5} />
                   </button>
                 </div>
               </div>
             </div>
 
             {/* Optional Exact Birthdate Toggle */}
-            <div className="pt-2 border-t border-stone-100 dark:border-stone-800">
+            <div className="pt-3 border-t border-[#323232]/10">
               <button
                 type="button"
                 onClick={() => {
@@ -214,22 +187,22 @@ export function Step4({ onBack, onNext }: { onBack: () => void; onNext: () => vo
                   updateField('isExactBirthDate', nextState)
                   if (!nextState) updateField('petBirthDate', null)
                 }}
-                className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                className="flex items-center gap-2 text-xs text-neutral-gray hover:text-deep-teal transition-colors duration-150 cursor-pointer"
               >
-                <Calendar className="w-3.5 h-3.5" />
+                <Calendar className="w-4 h-4" strokeWidth={1.5} />
                 <span>
                   {showExactDate ? 'Hide exact birthdate' : 'I know the exact birthdate'}
                 </span>
               </button>
 
               {showExactDate && (
-                <div className="mt-3 animate-in fade-in duration-150">
+                <div className="mt-3">
                   <input
                     type="date"
                     max={new Date().toISOString().slice(0, 10)}
                     value={formData.petBirthDate || ''}
                     onChange={(e) => handleExactDateChange(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-xl text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                    className="w-full px-3 py-2 text-xs bg-white border border-[#323232]/15 rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-accent-orange/25 focus:border-accent-orange tabular-nums"
                   />
                 </div>
               )}
@@ -238,10 +211,10 @@ export function Step4({ onBack, onNext }: { onBack: () => void; onNext: () => vo
 
           {/* Energy & Activity Level Section */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-500" />
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-600 dark:text-stone-300">
-                Energy & Activity Level <span className="text-rose-500">*</span>
+            <div className="flex items-center gap-2 text-deep-teal">
+              <Zap className="w-4 h-4 text-neutral-gray" strokeWidth={1.5} />
+              <h3 className="text-sm font-medium">
+                Energy and activity level <span className="text-accent-orange">*</span>
               </h3>
             </div>
 
@@ -254,26 +227,38 @@ export function Step4({ onBack, onNext }: { onBack: () => void; onNext: () => vo
                     type="button"
                     onClick={() => updateField('petActivityLevel', level.rating)}
                     className={cn(
-                      'w-full flex items-center gap-3.5 p-3.5 rounded-xl border-2 text-left transition-all duration-200 outline-none shadow-sm',
+                      'w-full flex items-center gap-3.5 p-3.5 rounded-xl border text-left transition-colors duration-150 outline-none cursor-pointer focus-visible:ring-2 focus-visible:ring-accent-orange/40',
                       isSelected
-                        ? 'border-amber-500 dark:border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 shadow-amber-500/10'
-                        : 'border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 hover:border-stone-300 dark:hover:border-stone-700'
+                        ? 'border-accent-orange bg-off-white'
+                        : 'border-[#323232]/10 bg-white hover:border-deep-teal/30'
                     )}
                   >
-                    <span className="text-2xl shrink-0 p-1 rounded-lg bg-stone-100 dark:bg-stone-800">
-                      {level.emoji}
-                    </span>
+                    <div
+                      className={cn(
+                        'w-12 h-12 rounded-lg shrink-0 flex items-center justify-center p-1.5 transition-colors duration-150',
+                        isSelected ? 'bg-white' : 'bg-off-white/70'
+                      )}
+                    >
+                      <Image
+                        src={level.iconSrc}
+                        alt={level.title}
+                        width={40}
+                        height={40}
+                        unoptimized
+                        className="w-9 h-9 object-contain"
+                      />
+                    </div>
 
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-deep-teal">
                           {level.title}
                         </span>
-                        <span className="text-[11px] font-mono text-stone-400">
+                        <span className="text-xs text-neutral-gray tabular-nums">
                           Level {level.rating}/5
                         </span>
                       </div>
-                      <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5 leading-snug">
+                      <p className="text-xs text-neutral-gray mt-0.5 leading-snug">
                         {level.desc}
                       </p>
                     </div>
