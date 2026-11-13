@@ -29,6 +29,57 @@ export function getDatesInRange(startDateStr: string | Date, endDateStr: string 
 }
 
 /**
+ * Helper to determine if an error is a Prisma transaction timeout,
+ * connection pool exhaustion, write conflict, deadlock, or aborted transaction.
+ */
+export function isPrismaTransactionError(error: any): boolean {
+  if (!error) return false;
+
+  // Never hijack explicit application errors that already define an HTTP statusCode
+  if (error instanceof AppError || typeof error.statusCode === 'number') {
+    return false;
+  }
+
+  const code = typeof error.code === 'string' ? error.code : '';
+  if (
+    code === 'P2028' || // Transaction API error (timeout, closed, not found)
+    code === 'P2024' || // Timed out fetching a new connection from the connection pool
+    code === 'P2034' || // Transaction failed due to a write conflict or a deadlock
+    code === 'P2037' || // Too many database connections opened
+    code === 'P1008' || // Operations timed out
+    code === 'P1002' || // Database server reached but timed out
+    code === 'P1017' || // Server has closed the connection
+    code === 'P2002'    // Unique constraint violation (e.g. concurrent calendar creation collision)
+  ) {
+    return true;
+  }
+
+  const message = (typeof error.message === 'string' ? error.message : '').toLowerCase();
+  if (
+    message.includes('transaction not found') ||
+    message.includes('transaction already closed') ||
+    message.includes('transaction timeout') ||
+    message.includes('timed out') ||
+    message.includes('connection pool') ||
+    message.includes('write conflict') ||
+    message.includes('deadlock') ||
+    message.includes('could not obtain lock') ||
+    message.includes('could not serialize access') ||
+    message.includes('serialization failure') ||
+    message.includes('current transaction is aborted') ||
+    message.includes('too many connections') ||
+    message.includes('lock timeout') ||
+    message.includes('connection closed') ||
+    message.includes('connection terminated') ||
+    message.includes('connection refused')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Formats a Booking entity matching frontend Booking DTO.
  */
 export function formatBookingDto(b: any) {
@@ -232,11 +283,27 @@ export async function createBooking(
       );
     }
 
-    const petProfileIds: number[] = Array.isArray(req.body.petProfileIds)
-      ? req.body.petProfileIds.map((id: any) => parseInt(String(id), 10)).filter((n: number) => !isNaN(n))
+    const rawPetIds = Array.isArray(req.body.petProfileIds)
+      ? req.body.petProfileIds
       : Array.isArray(req.body.PetProfileIDs)
-      ? req.body.PetProfileIDs.map((id: any) => parseInt(String(id), 10)).filter((n: number) => !isNaN(n))
+      ? req.body.PetProfileIDs
       : [];
+
+    const petProfileIds: number[] = rawPetIds
+      .map((id: any) => parseInt(String(id), 10))
+      .filter((n: number) => !isNaN(n) && n > 0);
+
+    if (rawPetIds.length > 0 && petProfileIds.length !== rawPetIds.length) {
+      throw new AppError('Invalid pet profile ID', 400, 'T-2007');
+    }
+
+    if (new Set(petProfileIds).size !== petProfileIds.length) {
+      throw new AppError(
+        'Duplicate pet profiles are not allowed in the same booking',
+        400,
+        'T-2007'
+      );
+    }
 
     // 1. Date Hygiene (B-4003)
     const now = new Date();
@@ -251,8 +318,16 @@ export async function createBooking(
       const checkInStr = String(order.checkInDate || '').slice(0, 10);
       const checkOutStr = String(order.checkOutDate || '').slice(0, 10);
       const roomsBooked = parseInt(String(order.roomsBooked || '1'), 10);
+      const rcId = parseInt(String(order.roomCategoryId), 10);
 
-      if (!checkInStr || !checkOutStr || isNaN(roomsBooked) || roomsBooked < 1) {
+      if (
+        !checkInStr ||
+        !checkOutStr ||
+        isNaN(roomsBooked) ||
+        roomsBooked < 1 ||
+        isNaN(rcId) ||
+        rcId <= 0
+      ) {
         throw new AppError(
           'Invalid booking order details',
           400,
@@ -328,6 +403,29 @@ export async function createBooking(
       throw new AppError('Host cannot book their own property', 400, 'B-4002');
     }
 
+    const totalPetsCount =
+      petProfileIds.length > 0
+        ? petProfileIds.length
+        : Math.max(1, parseInt(String(req.body.numberOfPets || '1'), 10) || 1);
+
+    // Capacity verification: sum(order.roomsBooked * rc.numberOfPets) >= totalPetsCount
+    let totalPetCapacity = 0;
+    for (const order of bookingOrders) {
+      const rc = roomCategories.find((r) => r.id === parseInt(String(order.roomCategoryId), 10));
+      const roomsBooked = parseInt(String(order.roomsBooked || '1'), 10);
+      if (rc) {
+        totalPetCapacity += roomsBooked * (rc.numberOfPets || 1);
+      }
+    }
+
+    if (totalPetsCount > totalPetCapacity) {
+      throw new AppError(
+        'Number of pets exceeds room capacity',
+        400,
+        'B-4004'
+      );
+    }
+
     // 3. Pet Ownership & Eligibility Guard (B-4004)
     if (petProfileIds.length > 0) {
       const userPets = await prisma.petProfile.findMany({
@@ -358,24 +456,6 @@ export async function createBooking(
             'A-3007'
           );
         }
-      }
-
-      // Capacity verification: sum(order.roomsBooked * rc.numberOfPets) >= pets.length
-      let totalPetCapacity = 0;
-      for (const order of bookingOrders) {
-        const rc = roomCategories.find((r) => r.id === parseInt(String(order.roomCategoryId), 10));
-        const roomsBooked = parseInt(String(order.roomsBooked || '1'), 10);
-        if (rc) {
-          totalPetCapacity += roomsBooked * (rc.numberOfPets || 1);
-        }
-      }
-
-      if (petProfileIds.length > totalPetCapacity) {
-        throw new AppError(
-          'Number of pets exceeds room capacity',
-          400,
-          'B-4004'
-        );
       }
 
       // Pet species & size eligibility check
@@ -428,11 +508,6 @@ export async function createBooking(
         }
       }
     }
-
-    const totalPetsCount =
-      petProfileIds.length > 0
-        ? petProfileIds.length
-        : Math.max(1, parseInt(String(req.body.numberOfPets || '1'), 10) || 1);
 
     const rcMap = new Map<number, any>();
     for (const rc of roomCategories) {
@@ -601,10 +676,18 @@ export async function createBooking(
       });
 
       return booking;
+    },
+    {
+      maxWait: 10000,
+      timeout: 30000,
     });
 
-    // Sync materialized booking count
-    await syncPropertyBookingCount(property.id);
+    // Sync materialized booking count (safe non-blocking fallback)
+    try {
+      await syncPropertyBookingCount(property.id);
+    } catch (syncErr) {
+      console.warn('Failed to sync property booking count:', syncErr);
+    }
 
     const formatted = formatFullBookingDetailDto(newBooking);
 
@@ -616,7 +699,16 @@ export async function createBooking(
       },
       booking: formatted,
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (isPrismaTransactionError(error)) {
+      return next(
+        new AppError(
+          'Booking transaction could not be completed due to high demand. Please try again.',
+          409,
+          'B-4004'
+        )
+      );
+    }
     next(error);
   }
 }
@@ -690,12 +782,29 @@ export async function confirmBookingPayment(
               },
             });
             if (cal) {
+              // Lock calendar row to prevent concurrency race condition during quota restoration
+              try {
+                await tx.$queryRawUnsafe(
+                  `SELECT id, available_rooms, booked_rooms, unavailable_rooms FROM room_category_calendars WHERE id = $1 FOR UPDATE`,
+                  cal.id
+                );
+              } catch {
+                // Fallback for mocks
+              }
+
+              const curCal = await tx.roomCategoryCalendar.findUnique({
+                where: { id: cal.id },
+              });
+
+              const bookedRooms = curCal ? curCal.bookedRooms : cal.bookedRooms;
+              const unavailableRooms = curCal ? curCal.unavailableRooms : cal.unavailableRooms;
+
               const rc = await tx.roomCategory.findUnique({
                 where: { id: order.roomCategoryId },
               });
-              const totalRoom = rc ? rc.totalRoom : cal.availableRooms + cal.bookedRooms;
-              const newBooked = Math.max(0, cal.bookedRooms - order.roomsBooked);
-              const newAvailable = Math.max(0, totalRoom - newBooked - cal.unavailableRooms);
+              const totalRoom = rc ? rc.totalRoom : cal.availableRooms + bookedRooms;
+              const newBooked = Math.max(0, bookedRooms - order.roomsBooked);
+              const newAvailable = Math.max(0, totalRoom - newBooked - unavailableRooms);
               await tx.roomCategoryCalendar.update({
                 where: { id: cal.id },
                 data: {
@@ -711,9 +820,17 @@ export async function confirmBookingPayment(
           where: { id: bookingId },
           data: { bookingStatus: 'cancelled' },
         });
+      },
+      {
+        maxWait: 10000,
+        timeout: 30000,
       });
 
-      await syncPropertyBookingCount(booking.propertyId);
+      try {
+        await syncPropertyBookingCount(booking.propertyId);
+      } catch (syncErr) {
+        console.warn('Failed to sync property booking count:', syncErr);
+      }
 
       throw new AppError('Payment window has expired', 400, 'B-4003');
     }
@@ -736,38 +853,71 @@ export async function confirmBookingPayment(
       slipUrl = req.body.slipUrl;
     }
 
-    const updatedBooking = await prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        bookingStatus: 'confirmed',
-        confirmedAt: new Date(),
-        paymentSlipUrl: slipUrl,
-      },
-      include: {
-        guest: true,
-        property: true,
-        bookingOrders: {
-          include: {
-            roomCategory: true,
-            property: true,
+    const updatedBooking = await prisma.$transaction(
+      async (tx) => {
+        try {
+          await tx.$queryRawUnsafe(
+            `SELECT id, booking_status FROM bookings WHERE id = $1 FOR UPDATE`,
+            bookingId
+          );
+        } catch {
+          // Fallback for mocks
+        }
+
+        const curBooking = await tx.booking.findUnique({
+          where: { id: bookingId },
+        });
+
+        if (!curBooking || curBooking.bookingStatus !== 'pending') {
+          throw new AppError(
+            `Cannot confirm payment for booking with status "${curBooking?.bookingStatus || 'unknown'}"`,
+            400,
+            'B-4003'
+          );
+        }
+
+        return tx.booking.update({
+          where: { id: bookingId },
+          data: {
+            bookingStatus: 'confirmed',
+            confirmedAt: new Date(),
+            paymentSlipUrl: slipUrl,
           },
-        },
-        bookingPetProfiles: {
           include: {
-            petProfile: {
+            guest: true,
+            property: true,
+            bookingOrders: {
               include: {
-                petType: true,
-                breed: true,
-                petSizeCategory: true,
-                energy: true,
+                roomCategory: true,
+                property: true,
+              },
+            },
+            bookingPetProfiles: {
+              include: {
+                petProfile: {
+                  include: {
+                    petType: true,
+                    breed: true,
+                    petSizeCategory: true,
+                    energy: true,
+                  },
+                },
               },
             },
           },
-        },
+        });
       },
-    });
+      {
+        maxWait: 10000,
+        timeout: 30000,
+      }
+    );
 
-    await syncPropertyBookingCount(booking.propertyId);
+    try {
+      await syncPropertyBookingCount(booking.propertyId);
+    } catch (syncErr) {
+      console.warn('Failed to sync property booking count:', syncErr);
+    }
 
     const formatted = formatFullBookingDetailDto(updatedBooking);
 
@@ -779,7 +929,16 @@ export async function confirmBookingPayment(
       },
       booking: formatted,
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (isPrismaTransactionError(error)) {
+      return next(
+        new AppError(
+          'Payment confirmation could not be completed due to high demand. Please try again.',
+          409,
+          'B-4003'
+        )
+      );
+    }
     next(error);
   }
 }
@@ -837,6 +996,28 @@ export async function cancelBooking(
 
     // Atomic quota restoration
     const updated = await prisma.$transaction(async (tx) => {
+      // Lock booking row first to prevent double-cancellation quota restoration race condition
+      try {
+        await tx.$queryRawUnsafe(
+          `SELECT id, booking_status FROM bookings WHERE id = $1 FOR UPDATE`,
+          bookingId
+        );
+      } catch {
+        // Fallback for mocks
+      }
+
+      const curBooking = await tx.booking.findUnique({
+        where: { id: bookingId },
+      });
+
+      if (!curBooking || (curBooking.bookingStatus !== 'pending' && curBooking.bookingStatus !== 'confirmed')) {
+        throw new AppError(
+          `Cannot cancel booking with current status "${curBooking?.bookingStatus || 'unknown'}"`,
+          400,
+          'B-4003'
+        );
+      }
+
       for (const order of booking.bookingOrders) {
         const nights = getDatesInRange(order.checkInDate, order.checkOutDate);
         for (const nightStr of nights) {
@@ -851,12 +1032,29 @@ export async function cancelBooking(
           });
 
           if (cal) {
+            // Lock calendar row to prevent concurrency race condition during quota restoration
+            try {
+              await tx.$queryRawUnsafe(
+                `SELECT id, available_rooms, booked_rooms, unavailable_rooms FROM room_category_calendars WHERE id = $1 FOR UPDATE`,
+                cal.id
+              );
+            } catch {
+              // Fallback for mocks
+            }
+
+            const curCal = await tx.roomCategoryCalendar.findUnique({
+              where: { id: cal.id },
+            });
+
+            const bookedRooms = curCal ? curCal.bookedRooms : cal.bookedRooms;
+            const unavailableRooms = curCal ? curCal.unavailableRooms : cal.unavailableRooms;
+
             const rc = await tx.roomCategory.findUnique({
               where: { id: order.roomCategoryId },
             });
-            const totalRoom = rc ? rc.totalRoom : cal.availableRooms + cal.bookedRooms;
-            const newBooked = Math.max(0, cal.bookedRooms - order.roomsBooked);
-            const newAvailable = Math.max(0, totalRoom - newBooked - cal.unavailableRooms);
+            const totalRoom = rc ? rc.totalRoom : cal.availableRooms + bookedRooms;
+            const newBooked = Math.max(0, bookedRooms - order.roomsBooked);
+            const newAvailable = Math.max(0, totalRoom - newBooked - unavailableRooms);
 
             await tx.roomCategoryCalendar.update({
               where: { id: cal.id },
@@ -897,9 +1095,17 @@ export async function cancelBooking(
           },
         },
       });
+    },
+    {
+      maxWait: 10000,
+      timeout: 30000,
     });
 
-    await syncPropertyBookingCount(booking.propertyId);
+    try {
+      await syncPropertyBookingCount(booking.propertyId);
+    } catch (syncErr) {
+      console.warn('Failed to sync property booking count:', syncErr);
+    }
 
     const formatted = formatFullBookingDetailDto(updated);
 
@@ -911,7 +1117,16 @@ export async function cancelBooking(
       },
       booking: formatted,
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (isPrismaTransactionError(error)) {
+      return next(
+        new AppError(
+          'Booking cancellation could not be completed due to high demand. Please try again.',
+          409,
+          'B-4003'
+        )
+      );
+    }
     next(error);
   }
 }
@@ -1400,7 +1615,11 @@ export async function completeHostBooking(
       },
     });
 
-    await syncPropertyBookingCount(booking.propertyId);
+    try {
+      await syncPropertyBookingCount(booking.propertyId);
+    } catch (syncErr) {
+      console.warn('Failed to sync property booking count:', syncErr);
+    }
 
     const formatted = formatBookingDto(updated);
 

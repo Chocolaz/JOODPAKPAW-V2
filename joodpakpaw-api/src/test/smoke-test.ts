@@ -9,6 +9,7 @@ import { optionalAuthenticateToken, requireRoles } from '../middlewares/auth.mid
 import { v1Router } from '../routes/v1.routes'
 import { convertBufferToWebp, uploadImageAsWebp } from '../services/storage.service'
 import { cacheService } from '../services/cache.service'
+import { AppError } from '../middlewares/errorHandler'
 
 interface TestResult {
   name: string
@@ -541,11 +542,22 @@ function installPrismaAuthMock() {
   ;(prisma.roomCategoryFacility as any).createMany = async () => ({ count: 1 })
   ;(prisma.roomCategoryImage as any).updateMany = async () => ({ count: 0 })
   ;(prisma.roomCategoryImage as any).createMany = async () => ({ count: 1 })
-  ;(prisma as any).$transaction = async (ops: any) => {
+  ;(prisma as any).$transaction = async (ops: any, options?: any) => {
+    (prisma as any)._lastTransactionOptions = options
     if (Array.isArray(ops)) {
       return Promise.all(ops)
     }
-    return ops(prisma)
+    const calSnap = new Map(Array.from(calendarsMap.entries()).map(([k, v]) => [k, { ...v }]))
+    const bookSnap = new Map(Array.from(bookingsMap.entries()).map(([k, v]) => [k, { ...v }]))
+    try {
+      return await ops(prisma)
+    } catch (txErr) {
+      calendarsMap.clear()
+      for (const [k, v] of calSnap) calendarsMap.set(k, v)
+      bookingsMap.clear()
+      for (const [k, v] of bookSnap) bookingsMap.set(k, v)
+      throw txErr
+    }
   }
 
   const petProfilesMap = new Map<number, any>()
@@ -757,11 +769,17 @@ function installPrismaAuthMock() {
       return { petProfileId: args?.where?.petProfileId || 1, bookingId: 9999 }
     }
     const petId = args?.where?.petProfileId
+    const checkInLt = args?.where?.booking?.checkInDate?.lt ? new Date(args.where.booking.checkInDate.lt).getTime() : Infinity
+    const checkOutGt = args?.where?.booking?.checkOutDate?.gt ? new Date(args.where.booking.checkOutDate.gt).getTime() : 0
     for (const b of bookingsMap.values()) {
       if (b.deletedAt !== null) continue
       if (['pending', 'confirmed'].includes(b.bookingStatus)) {
         if (b.bookingPetProfiles?.some((bpp: any) => bpp.petProfileId === petId)) {
-          return { petProfileId: petId, bookingId: b.id, booking: b }
+          const bCheckIn = new Date(b.checkInDate).getTime()
+          const bCheckOut = new Date(b.checkOutDate).getTime()
+          if (bCheckIn < checkInLt && bCheckOut > checkOutGt) {
+            return { petProfileId: petId, bookingId: b.id, booking: b }
+          }
         }
       }
     }
@@ -2493,6 +2511,39 @@ async function main() {
         throw new Error(`Expected 409 B-4004 on overbooking, got ${overbookRes.statusCode}`)
       }
 
+      // 4b. Duplicate petProfileIds guard: duplicate pet ID -> 400 T-2007
+      const dupPetIdRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+        petProfileIds: [kuroId, kuroId],
+        bookingOrders: [
+          { roomCategoryId: 501, checkInDate: '2026-12-20', checkOutDate: '2026-12-22', roomsBooked: 2 },
+        ],
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      if (dupPetIdRes.statusCode !== 400 || dupPetIdRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on duplicate petProfileIds, got ${dupPetIdRes.statusCode} ${dupPetIdRes.body?.code}`)
+      }
+
+      // 4c. Invalid roomCategoryId guard: non-numeric / missing -> 400 T-2007
+      const invalidRcRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+        petProfileIds: [kuroId],
+        bookingOrders: [
+          { roomCategoryId: 'invalid_id', checkInDate: '2026-12-20', checkOutDate: '2026-12-22', roomsBooked: 1 },
+        ],
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      if (invalidRcRes.statusCode !== 400 || invalidRcRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on invalid roomCategoryId, got ${invalidRcRes.statusCode} ${invalidRcRes.body?.code}`)
+      }
+
+      // 4d. Unenforced pet capacity guard when petProfileIds empty: numberOfPets exceeds room capacity -> 400 B-4004
+      const exceedCapacityRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+        numberOfPets: 99,
+        bookingOrders: [
+          { roomCategoryId: 501, checkInDate: '2026-12-20', checkOutDate: '2026-12-22', roomsBooked: 1 },
+        ],
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      if (exceedCapacityRes.statusCode !== 400 || exceedCapacityRes.body?.code !== 'B-4004') {
+        throw new Error(`Expected 400 B-4004 on exceeded pet capacity, got ${exceedCapacityRes.statusCode} ${exceedCapacityRes.body?.code}`)
+      }
+
       // 5. Valid Multi-Room Booking: User A books 1 room for 2 nights
       const validBookingRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
         petProfileIds: [kuroId],
@@ -2510,6 +2561,12 @@ async function main() {
         throw new Error('Created booking missing ID or not in pending status')
       }
 
+      // Verify transaction options were passed to prevent "Transaction not found" timeouts
+      const txOpts = (prisma as any)._lastTransactionOptions
+      if (!txOpts || txOpts.timeout < 10000 || txOpts.maxWait < 5000) {
+        throw new Error(`Expected transaction options with timeout >= 10000 and maxWait >= 5000, got ${JSON.stringify(txOpts)}`)
+      }
+
       // 6. Pet double-booking guard: same pet on overlapping dates -> 409 B-4004
       const dupPetRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
         petProfileIds: [kuroId],
@@ -2519,6 +2576,169 @@ async function main() {
       }, { Authorization: `Bearer ${userAAccessToken}` })
       if (dupPetRes.statusCode !== 409 || dupPetRes.body?.code !== 'B-4004') {
         throw new Error(`Expected 409 B-4004 on pet double-booking, got ${dupPetRes.statusCode} ${dupPetRes.body?.code}`)
+      }
+
+      // 7. Transaction Timeout / "Transaction not found" (P2028, P2024, P2034) graceful handling (R1 regression)
+      const origTransaction = (prisma as any).$transaction
+      try {
+        // Case 7a: P2028 Transaction not found / closed
+        ;(prisma as any).$transaction = async () => {
+          const err: any = new Error('Transaction not found. Transaction ID is invalid in the engine: tx_123')
+          err.code = 'P2028'
+          throw err
+        }
+
+        const timeoutRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+          petProfileIds: [kuroId],
+          bookingOrders: [
+            { roomCategoryId: 501, checkInDate: '2026-12-28', checkOutDate: '2026-12-30', roomsBooked: 1 },
+          ],
+        }, { Authorization: `Bearer ${userAAccessToken}` })
+
+        if (timeoutRes.statusCode !== 409 || timeoutRes.body?.code !== 'B-4004') {
+          throw new Error(`Expected 409 B-4004 on transaction timeout/not found error, got ${timeoutRes.statusCode} ${timeoutRes.body?.code}: ${JSON.stringify(timeoutRes.body)}`)
+        }
+
+        // Case 7b: P2024 Pool timeout ("Timed out fetching a new connection from the connection pool")
+        ;(prisma as any).$transaction = async () => {
+          const err: any = new Error('Timed out fetching a new connection from the connection pool. More info: http://pris.ly/d/connection-pool')
+          err.code = 'P2024'
+          throw err
+        }
+
+        const poolTimeoutRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+          petProfileIds: [kuroId],
+          bookingOrders: [
+            { roomCategoryId: 501, checkInDate: '2026-12-28', checkOutDate: '2026-12-30', roomsBooked: 1 },
+          ],
+        }, { Authorization: `Bearer ${userAAccessToken}` })
+
+        if (poolTimeoutRes.statusCode !== 409 || poolTimeoutRes.body?.code !== 'B-4004') {
+          throw new Error(`Expected 409 B-4004 on pool connection timeout, got ${poolTimeoutRes.statusCode} ${poolTimeoutRes.body?.code}`)
+        }
+
+        // Case 7c: P2034 Write conflict / transaction deadlock
+        ;(prisma as any).$transaction = async () => {
+          const err: any = new Error('Transaction failed due to a write conflict or a deadlock. Please retry your transaction.')
+          err.code = 'P2034'
+          throw err
+        }
+
+        const deadlockRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+          petProfileIds: [kuroId],
+          bookingOrders: [
+            { roomCategoryId: 501, checkInDate: '2026-12-28', checkOutDate: '2026-12-30', roomsBooked: 1 },
+          ],
+        }, { Authorization: `Bearer ${userAAccessToken}` })
+
+        if (deadlockRes.statusCode !== 409 || deadlockRes.body?.code !== 'B-4004') {
+          throw new Error(`Expected 409 B-4004 on transaction write conflict/deadlock, got ${deadlockRes.statusCode} ${deadlockRes.body?.code}`)
+        }
+
+        // Case 7d: Intentional AppError with 'timed out' message inside transaction must NOT be hijacked
+        ;(prisma as any).$transaction = async () => {
+          throw new AppError('Payment window timed out', 400, 'B-4003')
+        }
+
+        const appErrorRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+          petProfileIds: [kuroId],
+          bookingOrders: [
+            { roomCategoryId: 501, checkInDate: '2026-12-28', checkOutDate: '2026-12-30', roomsBooked: 1 },
+          ],
+        }, { Authorization: `Bearer ${userAAccessToken}` })
+
+        if (appErrorRes.statusCode !== 400 || appErrorRes.body?.code !== 'B-4003') {
+          throw new Error(`Expected 400 B-4003 when AppError thrown inside tx, got ${appErrorRes.statusCode} ${appErrorRes.body?.code}`)
+        }
+
+        // Case 7e: P2037 Too many connections
+        ;(prisma as any).$transaction = async () => {
+          const err: any = new Error('Too many database connections opened')
+          err.code = 'P2037'
+          throw err
+        }
+
+        const connLimitRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+          petProfileIds: [kuroId],
+          bookingOrders: [
+            { roomCategoryId: 501, checkInDate: '2026-12-28', checkOutDate: '2026-12-30', roomsBooked: 1 },
+          ],
+        }, { Authorization: `Bearer ${userAAccessToken}` })
+
+        if (connLimitRes.statusCode !== 409 || connLimitRes.body?.code !== 'B-4004') {
+          throw new Error(`Expected 409 B-4004 on P2037 too many connections, got ${connLimitRes.statusCode} ${connLimitRes.body?.code}`)
+        }
+
+        // Case 7f: Case-insensitive Postgres serialization failure
+        ;(prisma as any).$transaction = async () => {
+          throw new Error('could not serialize access due to concurrent update in PostgreSQL engine')
+        }
+
+        const serializationRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+          petProfileIds: [kuroId],
+          bookingOrders: [
+            { roomCategoryId: 501, checkInDate: '2026-12-28', checkOutDate: '2026-12-30', roomsBooked: 1 },
+          ],
+        }, { Authorization: `Bearer ${userAAccessToken}` })
+
+        if (serializationRes.statusCode !== 409 || serializationRes.body?.code !== 'B-4004') {
+          throw new Error(`Expected 409 B-4004 on serialization conflict, got ${serializationRes.statusCode} ${serializationRes.body?.code}`)
+        }
+
+        // Case 7g: P1002 Database server timed out
+        ;(prisma as any).$transaction = async () => {
+          const err: any = new Error('The database server was reached but timed out')
+          err.code = 'P1002'
+          throw err
+        }
+
+        const p1002Res = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+          petProfileIds: [kuroId],
+          bookingOrders: [
+            { roomCategoryId: 501, checkInDate: '2026-12-28', checkOutDate: '2026-12-30', roomsBooked: 1 },
+          ],
+        }, { Authorization: `Bearer ${userAAccessToken}` })
+
+        if (p1002Res.statusCode !== 409 || p1002Res.body?.code !== 'B-4004') {
+          throw new Error(`Expected 409 B-4004 on P1002 database timeout, got ${p1002Res.statusCode} ${p1002Res.body?.code}`)
+        }
+
+        // Case 7h: P1017 Server has closed the connection
+        ;(prisma as any).$transaction = async () => {
+          const err: any = new Error('Server has closed the connection')
+          err.code = 'P1017'
+          throw err
+        }
+
+        const p1017Res = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+          petProfileIds: [kuroId],
+          bookingOrders: [
+            { roomCategoryId: 501, checkInDate: '2026-12-28', checkOutDate: '2026-12-30', roomsBooked: 1 },
+          ],
+        }, { Authorization: `Bearer ${userAAccessToken}` })
+
+        if (p1017Res.statusCode !== 409 || p1017Res.body?.code !== 'B-4004') {
+          throw new Error(`Expected 409 B-4004 on P1017 closed connection, got ${p1017Res.statusCode} ${p1017Res.body?.code}`)
+        }
+      } finally {
+        ;(prisma as any).$transaction = origTransaction
+      }
+
+      // 8. Transaction Atomicity Test: Ensure failed booking rolls back cleanly without partial writes (R2 regression)
+      const preBookingCount = mockDb.bookingsMap.size
+      const failedAtomicRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+        petProfileIds: [kuroId],
+        bookingOrders: [
+          { roomCategoryId: 501, checkInDate: '2026-12-28', checkOutDate: '2026-12-30', roomsBooked: 99 },
+        ],
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+
+      if (failedAtomicRes.statusCode !== 409) {
+        throw new Error(`Expected 409 on invalid booking, got ${failedAtomicRes.statusCode}`)
+      }
+      const postBookingCount = mockDb.bookingsMap.size
+      if (postBookingCount !== preBookingCount) {
+        throw new Error(`Transaction atomicity violated: booking count changed from ${preBookingCount} to ${postBookingCount}`)
       }
     })
 
@@ -2629,7 +2849,44 @@ async function main() {
       }, { Authorization: `Bearer ${userAAccessToken}` })
       secondBookingId = secondBookingRes.body?.data?.booking?.id
 
-      // User A cancels the booking
+      // 9a. Test cancel booking transaction timeout/failure handling -> returns 409 B-4003
+      const origTransactionInTest37 = (prisma as any).$transaction
+      try {
+        ;(prisma as any).$transaction = async () => {
+          const err: any = new Error('Transaction not found. Transaction ID is invalid in the engine: tx_cancel')
+          err.code = 'P2028'
+          throw err
+        }
+        const cancelTimeoutRes = await makeRequest(
+          pipePath,
+          `/api/v1/bookings/${secondBookingId}/cancel`,
+          'PATCH',
+          undefined,
+          { Authorization: `Bearer ${userAAccessToken}` }
+        )
+        if (cancelTimeoutRes.statusCode !== 409 || cancelTimeoutRes.body?.code !== 'B-4003') {
+          throw new Error(`Expected 409 B-4003 on cancel transaction failure, got ${cancelTimeoutRes.statusCode} ${cancelTimeoutRes.body?.code}`)
+        }
+
+        // Step 9a-2: AppError thrown inside cancel booking transaction is not hijacked
+        ;(prisma as any).$transaction = async () => {
+          throw new AppError('Cancellation quota timed out', 400, 'B-4003')
+        }
+        const cancelAppErrRes = await makeRequest(
+          pipePath,
+          `/api/v1/bookings/${secondBookingId}/cancel`,
+          'PATCH',
+          undefined,
+          { Authorization: `Bearer ${userAAccessToken}` }
+        )
+        if (cancelAppErrRes.statusCode !== 400 || cancelAppErrRes.body?.code !== 'B-4003' || cancelAppErrRes.body?.message !== 'Cancellation quota timed out') {
+          throw new Error(`Expected 400 B-4003 preserving original AppError, got ${cancelAppErrRes.statusCode} ${cancelAppErrRes.body?.code}: ${cancelAppErrRes.body?.message}`)
+        }
+      } finally {
+        ;(prisma as any).$transaction = origTransactionInTest37
+      }
+
+      // 9b. User A cancels the booking successfully
       const cancelRes = await makeRequest(
         pipePath,
         `/api/v1/bookings/${secondBookingId}/cancel`,
@@ -2639,6 +2896,42 @@ async function main() {
       )
       if (cancelRes.statusCode !== 200 || cancelRes.body?.data?.booking?.bookingStatus !== 'cancelled') {
         throw new Error(`Expected 200 with status=cancelled on cancel booking, got ${cancelRes.statusCode}`)
+      }
+
+      // 9c. Double-cancellation guard: cancelling already cancelled booking returns 400 B-4003 without double-restoring quota
+      const calKey = '501:2026-12-25'
+      const calAfterFirstCancel = mockDb.calendarsMap.get(calKey)
+      const bookedRoomsAfterFirstCancel = calAfterFirstCancel ? calAfterFirstCancel.bookedRooms : 0
+
+      const doubleCancelRes = await makeRequest(
+        pipePath,
+        `/api/v1/bookings/${secondBookingId}/cancel`,
+        'PATCH',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (doubleCancelRes.statusCode !== 400 || doubleCancelRes.body?.code !== 'B-4003') {
+        throw new Error(`Expected 400 B-4003 on double-cancellation, got ${doubleCancelRes.statusCode} ${doubleCancelRes.body?.code}`)
+      }
+      const calAfterSecondCancel = mockDb.calendarsMap.get(calKey)
+      if (calAfterSecondCancel && calAfterSecondCancel.bookedRooms !== bookedRoomsAfterFirstCancel) {
+        throw new Error(`Quota double-restoration detected! Booked rooms changed from ${bookedRoomsAfterFirstCancel} to ${calAfterSecondCancel.bookedRooms}`)
+      }
+
+      // 9d. Confirm payment on already cancelled booking fails with 400 B-4003 and does not resurrect
+      const confirmCancelledRes = await makeRequest(
+        pipePath,
+        `/api/v1/bookings/${secondBookingId}/confirm-payment`,
+        'PATCH',
+        { slipUrl: 'http://localhost:9000/slips/test.webp' },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (confirmCancelledRes.statusCode !== 400 || confirmCancelledRes.body?.code !== 'B-4003') {
+        throw new Error(`Expected 400 B-4003 on confirming cancelled booking, got ${confirmCancelledRes.statusCode} ${confirmCancelledRes.body?.code}`)
+      }
+      const finalBookingState = mockDb.bookingsMap.get(secondBookingId)
+      if (finalBookingState?.bookingStatus !== 'cancelled') {
+        throw new Error(`Cancelled booking resurrected to ${finalBookingState?.bookingStatus}`)
       }
     })
 
