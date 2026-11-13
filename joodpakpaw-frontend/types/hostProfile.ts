@@ -36,6 +36,8 @@ export interface HostReview {
   comment: string
   propertyName: string
   reviewedAt: string
+  hostReply?: string | null
+  hostRepliedAt?: string | null
   guestProfile: HostReviewGuest
   reviewImages?: ReviewImage[]
 }

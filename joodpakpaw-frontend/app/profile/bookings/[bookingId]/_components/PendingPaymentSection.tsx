@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
@@ -12,6 +12,7 @@ import { CheckCircle, CreditCard, Clock } from 'lucide-react'
 interface PendingPaymentSectionProps {
   bookingId: number
   createdAt: string
+  paymentDeadlineAt?: string | null
   onPaymentSuccess: () => void
   onExpired: () => void
 }
@@ -43,6 +44,7 @@ function formatCountdown(totalSeconds: number) {
 export default function PendingPaymentSection({
   bookingId,
   createdAt,
+  paymentDeadlineAt,
   onPaymentSuccess,
   onExpired,
 }: PendingPaymentSectionProps) {
@@ -51,25 +53,37 @@ export default function PendingPaymentSection({
     'idle' | 'processing' | 'success'
   >('idle')
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0)
-
-  const calcRemaining = useCallback(() => {
-    const created = new Date(createdAt).getTime()
-    const deadline = created + 24 * 60 * 60 * 1000
-    return Math.max(0, Math.floor((deadline - Date.now()) / 1000))
-  }, [createdAt])
+  const onExpiredRef = useRef(onExpired)
 
   useEffect(() => {
-    setRemainingSeconds(calcRemaining())
+    onExpiredRef.current = onExpired
+  }, [onExpired])
+
+  const calcRemaining = useCallback(() => {
+    const deadline = paymentDeadlineAt
+      ? new Date(paymentDeadlineAt).getTime()
+      : new Date(createdAt).getTime() + 24 * 60 * 60 * 1000
+    if (Number.isNaN(deadline)) return 0
+    return Math.max(0, Math.floor((deadline - Date.now()) / 1000))
+  }, [createdAt, paymentDeadlineAt])
+
+  useEffect(() => {
+    const initialRemaining = calcRemaining()
+    setRemainingSeconds(initialRemaining)
+    if (initialRemaining <= 0) {
+      onExpiredRef.current()
+      return
+    }
     const interval = setInterval(() => {
       const remaining = calcRemaining()
       setRemainingSeconds(remaining)
       if (remaining <= 0) {
         clearInterval(interval)
-        onExpired()
+        onExpiredRef.current()
       }
     }, 1000)
     return () => clearInterval(interval)
-  }, [calcRemaining, onExpired])
+  }, [calcRemaining])
 
   const isUrgent = remainingSeconds < 3600 // less than 1 hour
 
@@ -154,7 +168,7 @@ export default function PendingPaymentSection({
               {formatCountdown(remainingSeconds)} remaining
             </p>
             <p className="text-xs text-neutral-gray">
-              Complete payment within 24 hours or this booking will be automatically cancelled.
+              Complete payment before the deadline or this booking will be automatically cancelled.
             </p>
           </div>
         </div>

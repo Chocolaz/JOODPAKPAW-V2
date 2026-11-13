@@ -23,13 +23,17 @@ import {
   Hourglass,
   CalendarCheck,
   CalendarX,
+  Send,
 } from 'lucide-react'
 import { HostBookingDetail, HostBookingPetProfile } from '@/types'
-import { completeBooking } from '@/lib/api'
+import { completeBooking, replyToBookingReview } from '@/lib/api'
+import { ApiError } from '@/lib/errorHandling'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { ConfirmationModal } from '@/app/_components/ConfirmationModal'
+import { HostReplyBlock } from '@/app/_components/HostReplyBlock'
 import { toast } from 'sonner'
 import { useState, useEffect } from 'react'
 import { Spinner } from '@/components/ui/spinner'
@@ -218,6 +222,8 @@ export default function HostBookingDetailDisplay({
   const { setMenu } = useProfileContext()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isCompleting, setIsCompleting] = useState(false)
+  const [replyText, setReplyText] = useState('')
+  const [isSubmittingReply, setIsSubmittingReply] = useState(false)
 
   const nights = Math.max(
     1,
@@ -308,16 +314,22 @@ export default function HostBookingDetailDisplay({
     if (statusKey !== 'CONFIRMED') {
       return { allowed: false, reason: 'Booking is not confirmed' }
     }
-    const checkOutDate = new Date(bookingDetails.checkOutDate)
-    checkOutDate.setHours(12, 0, 0, 0)
-    if (new Date() < checkOutDate) {
+    const completeCutoff = bookingDetails.canCompleteAt
+      ? new Date(bookingDetails.canCompleteAt)
+      : new Date(`${bookingDetails.checkOutDate.slice(0, 10)}T12:00:00+07:00`)
+    if (new Date() < completeCutoff) {
+      const bkkDateLabel = completeCutoff.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'Asia/Bangkok',
+      })
       return {
         allowed: false,
-        reason: `Available after 12:00 PM on ${format(new Date(bookingDetails.checkOutDate), 'MMM d')}`,
+        reason: `Available after 12:00 PM (UTC+7) on ${bkkDateLabel}`,
       }
     }
     return { allowed: true, reason: '' }
-  }, [bookingDetails, statusKey])
+  }, [bookingDetails.canCompleteAt, bookingDetails.checkOutDate, statusKey])
 
   const handlePropertyClick = () => {
     if (bookingDetails.bookingOrders[0]?.property?.id) {
@@ -336,10 +348,39 @@ export default function HostBookingDetailDisplay({
       refreshBooking()
     } catch (err: unknown) {
       toast.error(
-        err instanceof Error ? err.message : 'Failed to complete booking.'
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Failed to complete booking.'
       )
     } finally {
       setIsCompleting(false)
+    }
+  }
+
+  const handleReplySubmit = async () => {
+    const trimmed = replyText.trim()
+    if (!trimmed) {
+      toast.error('Please enter a reply.')
+      return
+    }
+    setIsSubmittingReply(true)
+    try {
+      await replyToBookingReview(bookingDetails.id, trimmed)
+      toast.success('Reply posted successfully.')
+      setReplyText('')
+      refreshBooking()
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Failed to post reply.'
+      )
+    } finally {
+      setIsSubmittingReply(false)
     }
   }
 
@@ -581,6 +622,68 @@ export default function HostBookingDetailDisplay({
                 &quot;{bookingDetails.comment}&quot;
               </p>
             )}
+
+            {bookingDetails.hostReply ? (
+              <HostReplyBlock
+                hostReply={bookingDetails.hostReply}
+                hostRepliedAt={bookingDetails.hostRepliedAt}
+                className="space-y-1.5"
+                textClassName="text-sm"
+              />
+            ) : (
+              <div className="border-t border-gray-100 pt-3 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label
+                    htmlFor="host-review-reply"
+                    className="text-xs font-semibold text-[#1c4f4a]"
+                  >
+                    Reply to Review
+                  </label>
+                  <span className="text-[11px] text-neutral-gray">
+                    One-time public reply
+                  </span>
+                </div>
+                <Textarea
+                  id="host-review-reply"
+                  placeholder="Write a warm, helpful response to your guest..."
+                  value={replyText}
+                  onChange={(e) => {
+                    if (e.target.value.length <= 500) {
+                      setReplyText(e.target.value)
+                    }
+                  }}
+                  disabled={isSubmittingReply}
+                  rows={3}
+                  className="resize-none border-gray-200 focus-visible:ring-deep-teal text-sm"
+                />
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    className={cn(
+                      'text-[11px]',
+                      replyText.length >= 500
+                        ? 'text-red-500 font-medium'
+                        : 'text-neutral-gray'
+                    )}
+                  >
+                    {replyText.length}/500
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleReplySubmit}
+                    disabled={!replyText.trim() || isSubmittingReply}
+                    className="bg-deep-teal hover:bg-deep-teal/90 text-white rounded-xl h-9 px-4"
+                  >
+                    {isSubmittingReply ? (
+                      <Spinner className="size-3.5 mr-1.5" />
+                    ) : (
+                      <Send className="w-3.5 h-3.5 mr-1.5" />
+                    )}
+                    {isSubmittingReply ? 'Posting...' : 'Post Reply'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -604,6 +707,9 @@ export default function HostBookingDetailDisplay({
                 {canComplete.reason}
               </p>
             )}
+            <p className="text-center text-[11px] text-neutral-gray">
+              If not manually completed, the booking auto-completes after 18:00 (UTC+7) on check-out day.
+            </p>
           </div>
         )}
 

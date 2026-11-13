@@ -82,6 +82,8 @@ export interface PropertyReview {
   avatar?: string | null
   comment: string
   rating: number
+  hostReply?: string | null
+  hostRepliedAt?: string | null
   reviewImages?: ReviewImage[]
 }
 

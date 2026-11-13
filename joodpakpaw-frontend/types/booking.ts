@@ -28,6 +28,14 @@ export interface Booking {
   totalPrice: number
   bookingStatus: string
   rating?: number | null
+  hostReply?: string | null
+  hostRepliedAt?: string | null
+  cancelledBy?: string | null
+  cancellationReason?: string | null
+  paymentDeadlineAt?: string | null
+  canCompleteAt?: string | null
+  autoCompleteAt?: string | null
+  reviewDeadlineAt?: string | null
   property: PropertyBooked
   createdAt: string
 }
@@ -97,6 +105,14 @@ export interface FullBookingDetail {
   totalPrice: number
   bookingStatus: string
   rating?: number | null
+  hostReply?: string | null
+  hostRepliedAt?: string | null
+  cancelledBy?: string | null
+  cancellationReason?: string | null
+  paymentDeadlineAt?: string | null
+  canCompleteAt?: string | null
+  autoCompleteAt?: string | null
+  reviewDeadlineAt?: string | null
   comment?: string | null
   successedAt?: string | null
   confirmedAt?: string | null
@@ -142,9 +158,17 @@ export interface HostBookingDetail {
   totalPrice: number
   bookingStatus: string
   rating?: number | null
+  hostReply?: string | null
+  hostRepliedAt?: string | null
+  cancelledBy?: string | null
+  cancellationReason?: string | null
+  paymentDeadlineAt?: string | null
+  canCompleteAt?: string | null
+  autoCompleteAt?: string | null
+  reviewDeadlineAt?: string | null
   comment?: string | null
   successedAt?: string | null
-  confirmedAt: string
+  confirmedAt?: string | null
   guest: HostGuest
   bookingOrders: BookingOrder[]
   petProfiles?: HostBookingPetProfile[]

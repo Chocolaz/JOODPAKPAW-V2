@@ -1024,9 +1024,13 @@ export const confirmPayment = async (
 
 export const confirmBookingPayment = confirmPayment
 
-export const cancelBooking = async (bookingId: string): Promise<void> => {
+export const cancelBooking = async (
+  bookingId: string | number,
+  reason?: string
+): Promise<void> => {
   await request<any>({
     endpoint: `api/v1/bookings/${bookingId}/cancel`,
+    ...(reason?.trim() ? { body: { reason: reason.trim() } } : {}),
     method: 'PATCH',
     requiresAuth: true,
     errorContext: 'Cancel Booking',
@@ -1349,6 +1353,20 @@ export const submitReview = async (
 }
 
 export const submitBookingReview = submitReview
+
+export const replyToBookingReview = async (
+  bookingId: string | number,
+  reply: string
+): Promise<{ hostReply?: string; hostRepliedAt?: string } | undefined> => {
+  const res = await request<any>({
+    endpoint: `api/v1/hosts/bookings/${bookingId}/review-reply`,
+    method: 'POST',
+    body: { hostReply: reply },
+    requiresAuth: true,
+    errorContext: 'Reply to Booking Review',
+  })
+  return res?.data ?? res
+}
 
 // --- Notification Functions ---
 export const getNotifications = (): Promise<NotificationsResponse> => {

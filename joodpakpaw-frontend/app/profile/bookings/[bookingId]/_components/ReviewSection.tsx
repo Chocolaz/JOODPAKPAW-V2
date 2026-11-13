@@ -1,11 +1,13 @@
 'use client'
 
-import React, { useState, useRef, useEffect } from 'react'
-import { Star, Send, CheckCircle, ImagePlus, X } from 'lucide-react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
+import { HostReplyBlock } from '@/app/_components/HostReplyBlock'
+import { Star, Send, CheckCircle, ImagePlus, X, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
 import { submitReview } from '@/lib/api'
+import { ApiError } from '@/lib/errorHandling'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import Image from 'next/image'
@@ -14,6 +16,11 @@ interface ReviewSectionProps {
   bookingId: string
   existingRating?: number | null
   existingComment?: string | null
+  successedAt?: string | null
+  checkOutDate?: string
+  reviewDeadlineAt?: string | null
+  hostReply?: string | null
+  hostRepliedAt?: string | null
 }
 
 const RATING_LABELS = ['', 'Poor', 'Fair', 'Good', 'Very Good', 'Excellent']
@@ -24,8 +31,37 @@ export default function ReviewSection({
   bookingId,
   existingRating,
   existingComment,
+  successedAt,
+  checkOutDate,
+  reviewDeadlineAt,
+  hostReply,
+  hostRepliedAt,
 }: ReviewSectionProps) {
   const hasExistingReview = existingRating != null && existingRating > 0
+  const [now] = useState<number>(() => Date.now())
+
+  const reviewDeadline = useMemo(() => {
+    if (reviewDeadlineAt) {
+      return new Date(reviewDeadlineAt)
+    }
+    if (successedAt) {
+      return new Date(new Date(successedAt).getTime() + 14 * 24 * 60 * 60 * 1000)
+    }
+    if (checkOutDate) {
+      const checkOutAutoComplete = new Date(
+        `${checkOutDate.slice(0, 10)}T18:00:00+07:00`
+      )
+      return new Date(checkOutAutoComplete.getTime() + 14 * 24 * 60 * 60 * 1000)
+    }
+    return null
+  }, [reviewDeadlineAt, successedAt, checkOutDate])
+
+  const msRemaining = reviewDeadline ? reviewDeadline.getTime() - now : null
+  const isReviewWindowExpired = msRemaining !== null && msRemaining <= 0
+  const remainingDays =
+    msRemaining !== null && msRemaining > 0
+      ? Math.ceil(msRemaining / (1000 * 60 * 60 * 24))
+      : null
 
   const [rating, setRating] = useState(0)
   const [hoveredRating, setHoveredRating] = useState(0)
@@ -77,7 +113,11 @@ export default function ReviewSection({
       toast.success('Review submitted successfully!')
       setIsSubmitted(true)
     } catch (error) {
-      toast.error('Failed to submit review. Please try again.')
+      toast.error(
+        error instanceof ApiError
+          ? error.message
+          : 'Failed to submit review. Please try again.'
+      )
       console.error(error)
     } finally {
       setIsSubmitting(false)
@@ -120,6 +160,30 @@ export default function ReviewSection({
               &quot;{displayComment}&quot;
             </p>
           )}
+          <HostReplyBlock
+            hostReply={hostReply}
+            hostRepliedAt={hostRepliedAt}
+            className="w-full mt-2 p-3.5 space-y-1.5"
+            textClassName="text-sm"
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (isReviewWindowExpired) {
+    return (
+      <div className="bg-white rounded-2xl p-6 shadow-md border border-gray-100">
+        <div className="flex flex-col items-center gap-2.5 py-3 text-center">
+          <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
+            <Clock className="w-6 h-6 text-neutral-gray" />
+          </div>
+          <h4 className="text-base font-semibold text-gray-800">
+            Review Window Closed
+          </h4>
+          <p className="text-xs text-neutral-gray max-w-xs leading-relaxed">
+            Review window closed (14 days after stay completion).
+          </p>
         </div>
       </div>
     )
@@ -128,13 +192,21 @@ export default function ReviewSection({
   return (
     <div className="bg-white rounded-2xl p-6 shadow-md border border-gray-100 space-y-5">
       {/* Header */}
-      <div className="space-y-1">
-        <h4 className="text-sm font-semibold text-deep-teal uppercase tracking-wide">
-          Rate Your Experience
-        </h4>
-        <p className="text-xs text-neutral-gray">
-          How was your stay? Let us know!
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h4 className="text-sm font-semibold text-deep-teal uppercase tracking-wide">
+            Rate Your Experience
+          </h4>
+          <p className="text-xs text-neutral-gray">
+            How was your stay? Let us know!
+          </p>
+        </div>
+        {remainingDays !== null && remainingDays > 0 && (
+          <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-[#f7f2e8] text-[#1c4f4a] border border-[#1c4f4a]/15">
+            <Clock className="w-3 h-3" />
+            {remainingDays} {remainingDays === 1 ? 'day' : 'days'} left to review
+          </span>
+        )}
       </div>
 
       {/* Star Rating */}

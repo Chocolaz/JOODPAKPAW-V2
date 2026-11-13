@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { Star, Flag, X } from 'lucide-react'
 import { PropertyReview } from '@/types/property'
+import { HostReplyBlock } from '@/app/_components/HostReplyBlock'
 import { cn } from '@/lib/utils'
 import Image from 'next/image'
 import {
@@ -192,6 +193,14 @@ function ReviewCard({
         {reviewImages.length > 0 && (
           <ReviewImages images={reviewImages} onOpen={(i) => { setLightboxIndex(i); setLightboxOpen(true) }} />
         )}
+
+        {/* Host Reply */}
+        <HostReplyBlock
+          hostReply={review.hostReply}
+          hostRepliedAt={review.hostRepliedAt}
+          compact
+          onSeeMore={() => setModalOpen(true)}
+        />
       </div>
 
       {/* Full review modal */}
@@ -229,6 +238,10 @@ function ReviewCard({
             {reviewImages.length > 0 && (
               <ReviewImages images={reviewImages} onOpen={(i) => { setLightboxIndex(i); setLightboxOpen(true) }} />
             )}
+            <HostReplyBlock
+              hostReply={review.hostReply}
+              hostRepliedAt={review.hostRepliedAt}
+            />
           </div>
         </DialogContent>
       </Dialog>

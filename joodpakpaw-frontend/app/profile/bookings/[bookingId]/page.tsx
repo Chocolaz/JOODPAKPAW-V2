@@ -1,8 +1,9 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { getBookingById, cancelBooking } from '@/lib/api'
+import { ApiError } from '@/lib/errorHandling'
 import { FullBookingDetail } from '@/types'
 import { Spinner } from '@/components/ui/spinner'
 import { toast } from 'sonner'
@@ -125,7 +126,11 @@ export default function BookingDetailPage() {
         setIsCancelModalOpen(false)
       }
     } catch (error) {
-      toast.error('Failed to cancel booking.')
+      toast.error(
+        error instanceof ApiError
+          ? error.message
+          : 'Failed to cancel booking.'
+      )
       console.error(error)
     } finally {
       setIsCancelling(false)
@@ -153,7 +158,19 @@ export default function BookingDetailPage() {
 
   const status = bookingDetails?.bookingStatus.toUpperCase()
   const isPending = status === 'PENDING'
+  const isConfirmed = status === 'CONFIRMED'
   const isSuccessful = status === 'SUCCESSFUL'
+
+  const canCancelConfirmed = useMemo(() => {
+    if (!bookingDetails || status !== 'CONFIRMED') return false
+    const checkInCutoff = new Date(
+      `${bookingDetails.checkInDate.slice(0, 10)}T14:00:00+07:00`
+    )
+    return new Date() < checkInCutoff
+  }, [bookingDetails, status])
+
+  const showCancelButton = isPending || (isConfirmed && canCancelConfirmed)
+  const isConfirmedPastCutoff = isConfirmed && !canCancelConfirmed
 
   return (
     <AnimatePresence mode="wait">
@@ -201,6 +218,7 @@ export default function BookingDetailPage() {
               <PendingPaymentSection
                 bookingId={bookingDetails.id}
                 createdAt={bookingDetails.createdAt}
+                paymentDeadlineAt={bookingDetails.paymentDeadlineAt}
                 onPaymentSuccess={() => {
                   handleBookingUpdate({ bookingStatus: 'confirmed' })
                 }}
@@ -216,6 +234,11 @@ export default function BookingDetailPage() {
                 bookingId={bookingId as string}
                 existingRating={bookingDetails.rating}
                 existingComment={bookingDetails.comment}
+                successedAt={bookingDetails.successedAt}
+                checkOutDate={bookingDetails.checkOutDate}
+                reviewDeadlineAt={bookingDetails.reviewDeadlineAt}
+                hostReply={bookingDetails.hostReply}
+                hostRepliedAt={bookingDetails.hostRepliedAt}
               />
             )}
 
@@ -229,7 +252,7 @@ export default function BookingDetailPage() {
               </button>
             )}
 
-            {isPending && (
+            {showCancelButton && (
               <Button
                 className="w-full text-base h-12 bg-white text-red-600 border border-red-200 hover:bg-red-50 rounded-xl"
                 onClick={() => setIsCancelModalOpen(true)}
@@ -238,6 +261,12 @@ export default function BookingDetailPage() {
                 {isCancelling ? <Spinner className="size-4 mr-2" /> : null}
                 Cancel Booking
               </Button>
+            )}
+
+            {isConfirmedPastCutoff && (
+              <p className="text-center text-xs text-neutral-gray bg-[#f7f2e8]/70 border border-gray-200 rounded-xl px-4 py-3">
+                Online cancellation is closed after check-in time (14:00 UTC+7).
+              </p>
             )}
           </div>
 
