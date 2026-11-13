@@ -2,6 +2,10 @@ import http from 'http';
 import { createApp } from './app';
 import { config } from './config/env';
 import { prisma } from './database/prisma';
+import {
+  startBookingLifecycleScheduler,
+  stopBookingLifecycleScheduler,
+} from './services/bookingLifecycle.service';
 
 const app = createApp();
 const server = http.createServer(app);
@@ -12,6 +16,7 @@ server.listen(PORT, () => {
   console.log(`[JoodPakPaw API] Server running in ${config.env} mode on http://localhost:${PORT}`);
   console.log(`[JoodPakPaw API] Health endpoint available at http://localhost:${PORT}/health`);
   console.log(`[JoodPakPaw API] API v1 base available at http://localhost:${PORT}/api/v1`);
+  startBookingLifecycleScheduler();
 });
 
 // Graceful shutdown handling
@@ -20,6 +25,7 @@ let isShuttingDown = false;
 async function handleShutdown(signal: string) {
   if (isShuttingDown) return;
   isShuttingDown = true;
+  stopBookingLifecycleScheduler();
   console.log(`\n[JoodPakPaw API] Received ${signal}. Starting graceful shutdown...`);
 
   // Force shutdown after 10 seconds timeout

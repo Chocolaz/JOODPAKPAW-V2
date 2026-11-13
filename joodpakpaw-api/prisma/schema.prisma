@@ -393,6 +393,10 @@ model Booking {
   paymentSlipUrl     String?              @map("payment_slip_url") @db.Text
   rating             Int?
   comment            String?              @db.VarChar(500)
+  hostReply          String?              @map("host_reply") @db.VarChar(500)
+  hostRepliedAt      DateTime?            @map("host_replied_at") @db.Timestamptz
+  cancelledBy        String?              @map("cancelled_by") @db.VarChar(20)
+  cancellationReason String?              @map("cancellation_reason") @db.VarChar(255)
   successedAt        DateTime?            @map("successed_at") @db.Timestamptz
   confirmedAt        DateTime?            @map("confirmed_at") @db.Timestamptz
   reviewedAt         DateTime?            @map("reviewed_at") @db.Timestamptz
@@ -413,6 +417,8 @@ model Booking {
   @@index([guestId])
   @@index([propertyId])
   @@index([bookingStatus])
+  @@index([bookingStatus, checkOutDate])
+  @@index([bookingStatus, createdAt])
   @@index([checkInDate, checkOutDate])
   @@index([deletedAt])
   @@map("bookings")
