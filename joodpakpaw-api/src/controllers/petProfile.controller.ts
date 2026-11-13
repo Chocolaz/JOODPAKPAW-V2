@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../database/prisma';
 import { AppError } from '../middlewares/errorHandler';
 import { uploadImageAsWebp, deleteObjectFromS3 } from '../services/storage.service';
+import { reconcileLifecycleBookings } from '../services/bookingLifecycle.service';
 
 /**
  * Calculates pet age in whole years from birthDate.
@@ -590,6 +591,7 @@ export async function deletePetProfile(
     }
 
     // Active Booking Guard (B-4001):
+    await reconcileLifecycleBookings({ guestId: userId });
     // Check if pet is referenced in booking_pet_profiles with status pending/confirmed and checkOutDate >= now
     const now = new Date();
     const activeBookingOrder = await prisma.bookingPetProfile.findFirst({

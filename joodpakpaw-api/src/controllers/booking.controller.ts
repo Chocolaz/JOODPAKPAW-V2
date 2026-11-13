@@ -2,31 +2,26 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../database/prisma';
 import { AppError } from '../middlewares/errorHandler';
 import { uploadImageAsWebp, deleteObjectFromS3 } from '../services/storage.service';
-import { syncPropertyBookingCount, syncPropertyRating } from './property.controller';
+import { syncPropertyRating } from './property.controller';
 import { cacheService } from '../services/cache.service';
+import { createNotificationSafe } from '../services/notification.service';
+import {
+  REVIEWABLE_STATUSES,
+  REVIEW_WINDOW_DAYS,
+  getDatesInRange,
+  getTodayThaiStr,
+  getCheckInCutoffAt,
+  getCanCompleteAt,
+  getAutoCompleteAt,
+  getPaymentDeadline,
+  getReviewDeadline,
+  restoreCalendarQuotaInTx,
+  autoCancelPendingBookingInTx,
+  reconcileLifecycleBookings,
+  syncPropertyBookingCount,
+} from '../services/bookingLifecycle.service';
 
-/**
- * Returns an array of YYYY-MM-DD date strings for each night in [startDate, endDate).
- */
-export function getDatesInRange(startDateStr: string | Date, endDateStr: string | Date): string[] {
-  const dates: string[] = [];
-  const startRaw = startDateStr instanceof Date ? startDateStr.toISOString().slice(0, 10) : String(startDateStr).slice(0, 10);
-  const endRaw = endDateStr instanceof Date ? endDateStr.toISOString().slice(0, 10) : String(endDateStr).slice(0, 10);
-
-  const start = new Date(`${startRaw}T00:00:00.000Z`);
-  const end = new Date(`${endRaw}T00:00:00.000Z`);
-
-  if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) {
-    return dates;
-  }
-
-  const cursor = new Date(start);
-  while (cursor < end && dates.length < 90) {
-    dates.push(cursor.toISOString().slice(0, 10));
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
-  return dates;
-}
+export { getDatesInRange };
 
 /**
  * Helper to determine if an error is a Prisma transaction timeout,
@@ -110,6 +105,12 @@ export function formatBookingDto(b: any) {
       ? b.checkOutDate.toISOString().slice(0, 10)
       : String(b.checkOutDate || '').slice(0, 10);
 
+  const paymentDeadline =
+    b.createdAt && checkOutStr ? getPaymentDeadline(b.createdAt, checkOutStr) : null;
+  const canComplete = checkOutStr ? getCanCompleteAt(checkOutStr) : null;
+  const autoComplete = checkOutStr ? getAutoCompleteAt(checkOutStr) : null;
+  const reviewDeadline = checkOutStr ? getReviewDeadline(b.successedAt, checkOutStr) : null;
+
   return {
     id: b.id,
     checkInDate: checkInStr,
@@ -120,6 +121,22 @@ export function formatBookingDto(b: any) {
     rating: b.rating ?? null,
     guestNote: b.guestNote || null,
     paymentSlipUrl: b.paymentSlipUrl || null,
+    hostReply: b.hostReply || null,
+    hostRepliedAt: b.hostRepliedAt ? new Date(b.hostRepliedAt).toISOString() : null,
+    cancelledBy: b.cancelledBy || null,
+    cancellationReason: b.cancellationReason || null,
+    paymentDeadlineAt:
+      paymentDeadline && !isNaN(paymentDeadline.getTime())
+        ? paymentDeadline.toISOString()
+        : null,
+    canCompleteAt:
+      canComplete && !isNaN(canComplete.getTime()) ? canComplete.toISOString() : null,
+    autoCompleteAt:
+      autoComplete && !isNaN(autoComplete.getTime()) ? autoComplete.toISOString() : null,
+    reviewDeadlineAt:
+      reviewDeadline && !isNaN(reviewDeadline.getTime())
+        ? reviewDeadline.toISOString()
+        : null,
     confirmedAt: b.confirmedAt ? new Date(b.confirmedAt).toISOString() : null,
     successedAt: b.successedAt ? new Date(b.successedAt).toISOString() : null,
     property: {
@@ -242,6 +259,15 @@ export function formatHostBookingDetailDto(b: any) {
     bookingStatus: full.bookingStatus,
     rating: full.rating,
     comment: full.comment,
+    guestNote: full.guestNote,
+    hostReply: full.hostReply,
+    hostRepliedAt: full.hostRepliedAt,
+    cancelledBy: full.cancelledBy,
+    cancellationReason: full.cancellationReason,
+    paymentDeadlineAt: full.paymentDeadlineAt,
+    canCompleteAt: full.canCompleteAt,
+    autoCompleteAt: full.autoCompleteAt,
+    reviewDeadlineAt: full.reviewDeadlineAt,
     successedAt: full.successedAt,
     confirmedAt: full.confirmedAt,
     paymentSlipUrl: full.paymentSlipUrl,
@@ -259,6 +285,78 @@ export function formatHostBookingDetailDto(b: any) {
   };
 }
 
+function isUserBanned(user: any): boolean {
+  if (!user) return false;
+  return user.isBanned === true || user.bannedAt !== null || user.deletedAt !== null;
+}
+
+function assertCancellationWindow(
+  booking: { bookingStatus: string; checkInDate: Date | string; checkOutDate: Date | string },
+  isGuest: boolean,
+  isHost: boolean,
+  now: Date
+): void {
+  if (booking.bookingStatus !== 'confirmed') return;
+
+  if (isGuest && !isHost) {
+    const checkInCutoff = getCheckInCutoffAt(booking.checkInDate);
+    if (!isNaN(checkInCutoff.getTime()) && now.getTime() >= checkInCutoff.getTime()) {
+      throw new AppError(
+        'Cannot cancel a confirmed booking after check-in time has started.',
+        400,
+        'B-4003'
+      );
+    }
+  } else if (isHost) {
+    const checkOutCutoff = getCanCompleteAt(booking.checkOutDate);
+    if (!isNaN(checkOutCutoff.getTime()) && now.getTime() >= checkOutCutoff.getTime()) {
+      throw new AppError(
+        'Cannot cancel a booking after check-out time. Please complete it instead.',
+        400,
+        'B-4003'
+      );
+    }
+  }
+}
+
+function extractUploadedFiles(req: Request): Express.Multer.File[] {
+  const uploadedFiles: Express.Multer.File[] = [];
+  if (Array.isArray(req.files)) {
+    uploadedFiles.push(...req.files);
+  } else if (req.files && typeof req.files === 'object') {
+    for (const key of Object.keys(req.files)) {
+      const arr = (req.files as Record<string, Express.Multer.File[]>)[key];
+      if (Array.isArray(arr)) uploadedFiles.push(...arr);
+    }
+  } else if (req.file) {
+    uploadedFiles.push(req.file);
+  }
+  return uploadedFiles;
+}
+
+const BOOKING_DETAIL_INCLUDE = {
+  guest: true,
+  property: true,
+  bookingOrders: {
+    include: {
+      roomCategory: true,
+      property: true,
+    },
+  },
+  bookingPetProfiles: {
+    include: {
+      petProfile: {
+        include: {
+          petType: true,
+          breed: true,
+          petSizeCategory: true,
+          energy: true,
+        },
+      },
+    },
+  },
+};
+
 /**
  * POST /api/v1/bookings
  * Concurrency-safe Multi-Room Booking Engine with row-locking on room_category_calendars.
@@ -272,6 +370,14 @@ export async function createBooking(
     const userId = req.user?.id;
     if (!userId) {
       throw new AppError('Authentication required.', 401, 'A-3001');
+    }
+
+    const guestUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, bannedAt: true, deletedAt: true },
+    });
+    if (isUserBanned(guestUser)) {
+      throw new AppError('User account has been banned.', 403, 'A-3002');
     }
 
     const bookingOrders = req.body.bookingOrders;
@@ -307,9 +413,7 @@ export async function createBooking(
 
     // 1. Date Hygiene (B-4003)
     const now = new Date();
-    // Start of today in Thailand (UTC+7)
-    const thaiNow = new Date(now.getTime() + 7 * 60 * 60 * 1000);
-    const todayThaiStr = thaiNow.toISOString().slice(0, 10);
+    const todayThaiStr = getTodayThaiStr(now);
 
     let overallMinCheckIn = '9999-99-99';
     let overallMaxCheckOut = '0000-00-00';
@@ -371,7 +475,9 @@ export async function createBooking(
         deletedAt: null,
       },
       include: {
-        property: true,
+        property: {
+          include: { host: true },
+        },
         pets: { include: { pet: true } },
         petSizeCategory: true,
       },
@@ -382,7 +488,6 @@ export async function createBooking(
     }
 
     const property = roomCategories[0].property;
-    // Verify all room categories belong to the same property
     for (const rc of roomCategories) {
       if (rc.propertyId !== property.id) {
         throw new AppError(
@@ -408,7 +513,6 @@ export async function createBooking(
         ? petProfileIds.length
         : Math.max(1, parseInt(String(req.body.numberOfPets || '1'), 10) || 1);
 
-    // Capacity verification: sum(order.roomsBooked * rc.numberOfPets) >= totalPetsCount
     let totalPetCapacity = 0;
     for (const order of bookingOrders) {
       const rc = roomCategories.find((r) => r.id === parseInt(String(order.roomCategoryId), 10));
@@ -447,7 +551,6 @@ export async function createBooking(
         );
       }
 
-      // IDOR ownership guard
       for (const pet of userPets) {
         if (pet.guestId !== userId) {
           throw new AppError(
@@ -458,14 +561,12 @@ export async function createBooking(
         }
       }
 
-      // Pet species & size eligibility check
       for (const pet of userPets) {
         const isEligibleForAnyRoom = roomCategories.some((rc) => {
           const speciesMatch = rc.pets.some((p) => {
             if (p.petId === pet.petTypeId || p.pet.name.toLowerCase() === pet.petType.name.toLowerCase()) {
               return true;
             }
-            // Small & Exotic pet cross-compatibility (Rabbit: 3, Hamster: 4, Bird: 5, Reptile: 6, Exotic: 7)
             const exoticIds = [3, 4, 5, 6, 7];
             if (exoticIds.includes(pet.petTypeId) && exoticIds.includes(p.petId)) {
               return true;
@@ -485,7 +586,6 @@ export async function createBooking(
         }
       }
 
-      // Double-booking check for each pet
       for (const petId of petProfileIds) {
         const overlappingPetBooking = await prisma.bookingPetProfile.findFirst({
           where: {
@@ -515,179 +615,163 @@ export async function createBooking(
     }
 
     // 4. Concurrency-safe Row-Locking Transaction
-    const newBooking = await prisma.$transaction(async (tx) => {
-      // Lock room categories in ascending ID order to prevent deadlocks
-      const sortedRcIds = [...roomCategoryIds].sort((a, b) => a - b);
-      for (const rcId of sortedRcIds) {
-        try {
-          await tx.$queryRawUnsafe(
-            `SELECT id, total_room, base_price, property_id FROM room_categories WHERE id = $1 FOR UPDATE`,
-            rcId
-          );
-        } catch {
-          // Fallback if running under an in-memory/mock test harness
+    const newBooking = await prisma.$transaction(
+      async (tx) => {
+        const sortedRcIds = [...roomCategoryIds].sort((a, b) => a - b);
+        for (const rcId of sortedRcIds) {
+          try {
+            await tx.$queryRawUnsafe(
+              `SELECT id, total_room, base_price, property_id FROM room_categories WHERE id = $1 FOR UPDATE`,
+              rcId
+            );
+          } catch {
+            // Fallback if running under an in-memory/mock test harness
+          }
         }
-      }
 
-      let grandTotalPrice = 0;
-      const orderRecordsToCreate: any[] = [];
+        let grandTotalPrice = 0;
+        const orderRecordsToCreate: any[] = [];
 
-      for (const order of bookingOrders) {
-        const rcId = parseInt(String(order.roomCategoryId), 10);
-        const roomsBooked = parseInt(String(order.roomsBooked || '1'), 10);
-        const rc = rcMap.get(rcId);
-        const basePrice = Number(rc.basePrice);
+        for (const order of bookingOrders) {
+          const rcId = parseInt(String(order.roomCategoryId), 10);
+          const roomsBooked = parseInt(String(order.roomsBooked || '1'), 10);
+          const rc = rcMap.get(rcId);
+          const basePrice = Number(rc.basePrice);
 
-        const checkInStr = String(order.checkInDate).slice(0, 10);
-        const checkOutStr = String(order.checkOutDate).slice(0, 10);
-        const nights = getDatesInRange(checkInStr, checkOutStr);
+          const checkInStr = String(order.checkInDate).slice(0, 10);
+          const checkOutStr = String(order.checkOutDate).slice(0, 10);
+          const nights = getDatesInRange(checkInStr, checkOutStr);
 
-        let orderNightsTotalPrice = 0;
+          let orderNightsTotalPrice = 0;
 
-        for (const nightStr of nights) {
-          const nightDate = new Date(`${nightStr}T00:00:00.000Z`);
+          for (const nightStr of nights) {
+            const nightDate = new Date(`${nightStr}T00:00:00.000Z`);
 
-          // Ensure calendar row exists
-          let calendar = await tx.roomCategoryCalendar.findUnique({
-            where: {
-              roomCategoryId_date: {
-                roomCategoryId: rcId,
-                date: nightDate,
+            let calendar = await tx.roomCategoryCalendar.findUnique({
+              where: {
+                roomCategoryId_date: {
+                  roomCategoryId: rcId,
+                  date: nightDate,
+                },
               },
-            },
-          });
+            });
 
-          if (!calendar) {
-            calendar = await tx.roomCategoryCalendar.create({
+            if (!calendar) {
+              calendar = await tx.roomCategoryCalendar.create({
+                data: {
+                  roomCategoryId: rcId,
+                  date: nightDate,
+                  availableRooms: rc.totalRoom,
+                  bookedRooms: 0,
+                  unavailableRooms: 0,
+                  priceAdjustment: 0,
+                },
+              });
+            }
+
+            try {
+              await tx.$queryRawUnsafe(
+                `SELECT id, available_rooms, booked_rooms, unavailable_rooms FROM room_category_calendars WHERE id = $1 FOR UPDATE`,
+                calendar.id
+              );
+            } catch {
+              // Fallback for mocks
+            }
+
+            const curCal = await tx.roomCategoryCalendar.findUnique({
+              where: { id: calendar.id },
+            });
+
+            const booked = curCal ? curCal.bookedRooms : calendar.bookedRooms;
+            const unavailable = curCal ? curCal.unavailableRooms : calendar.unavailableRooms;
+            const available = Math.max(0, rc.totalRoom - booked - unavailable);
+
+            if (available < roomsBooked) {
+              throw new AppError(
+                'Selected rooms are no longer available for the requested dates',
+                409,
+                'B-4004'
+              );
+            }
+
+            const priceAdj = curCal ? Number(curCal.priceAdjustment) : 0;
+            const effectivePricePerNight = Math.max(0, basePrice + priceAdj);
+            orderNightsTotalPrice += effectivePricePerNight * roomsBooked;
+
+            const newBooked = booked + roomsBooked;
+            const newAvailable = Math.max(0, rc.totalRoom - newBooked - unavailable);
+
+            await tx.roomCategoryCalendar.update({
+              where: { id: calendar.id },
               data: {
-                roomCategoryId: rcId,
-                date: nightDate,
-                availableRooms: rc.totalRoom,
-                bookedRooms: 0,
-                unavailableRooms: 0,
-                priceAdjustment: 0,
+                bookedRooms: newBooked,
+                availableRooms: newAvailable,
               },
             });
           }
 
-          // Lock calendar row
-          try {
-            await tx.$queryRawUnsafe(
-              `SELECT id, available_rooms, booked_rooms, unavailable_rooms FROM room_category_calendars WHERE id = $1 FOR UPDATE`,
-              calendar.id
-            );
-          } catch {
-            // Fallback for mocks
-          }
+          const avgPricePerRoom =
+            nights.length > 0 ? orderNightsTotalPrice / (roomsBooked * nights.length) : basePrice;
 
-          const curCal = await tx.roomCategoryCalendar.findUnique({
-            where: { id: calendar.id },
-          });
+          grandTotalPrice += orderNightsTotalPrice;
 
-          const booked = curCal ? curCal.bookedRooms : calendar.bookedRooms;
-          const unavailable = curCal ? curCal.unavailableRooms : calendar.unavailableRooms;
-          const available = Math.max(0, rc.totalRoom - booked - unavailable);
-
-          if (available < roomsBooked) {
-            throw new AppError(
-              'Selected rooms are no longer available for the requested dates',
-              409,
-              'B-4004'
-            );
-          }
-
-          const priceAdj = curCal ? Number(curCal.priceAdjustment) : 0;
-          const effectivePricePerNight = Math.max(0, basePrice + priceAdj);
-          orderNightsTotalPrice += effectivePricePerNight * roomsBooked;
-
-          // Update calendar quota
-          const newBooked = booked + roomsBooked;
-          const newAvailable = Math.max(0, rc.totalRoom - newBooked - unavailable);
-
-          await tx.roomCategoryCalendar.update({
-            where: { id: calendar.id },
-            data: {
-              bookedRooms: newBooked,
-              availableRooms: newAvailable,
-            },
+          orderRecordsToCreate.push({
+            checkInDate: new Date(`${checkInStr}T00:00:00.000Z`),
+            checkOutDate: new Date(`${checkOutStr}T00:00:00.000Z`),
+            roomsBooked,
+            pricePerRoom: avgPricePerRoom,
+            totalPrice: orderNightsTotalPrice,
+            roomCategoryId: rcId,
+            propertyId: property.id,
           });
         }
 
-        const avgPricePerRoom =
-          nights.length > 0 ? orderNightsTotalPrice / (roomsBooked * nights.length) : basePrice;
-
-        grandTotalPrice += orderNightsTotalPrice;
-
-        orderRecordsToCreate.push({
-          checkInDate: new Date(`${checkInStr}T00:00:00.000Z`),
-          checkOutDate: new Date(`${checkOutStr}T00:00:00.000Z`),
-          roomsBooked,
-          pricePerRoom: avgPricePerRoom,
-          totalPrice: orderNightsTotalPrice,
-          roomCategoryId: rcId,
-          propertyId: property.id,
+        return tx.booking.create({
+          data: {
+            checkInDate: new Date(`${overallMinCheckIn}T00:00:00.000Z`),
+            checkOutDate: new Date(`${overallMaxCheckOut}T00:00:00.000Z`),
+            numberOfPets: totalPetsCount,
+            totalPrice: grandTotalPrice,
+            bookingStatus: 'pending',
+            guestNote: req.body.guestNote || null,
+            paymentSlipUrl: null,
+            confirmedAt: null,
+            guestId: userId,
+            propertyId: property.id,
+            bookingOrders: {
+              create: orderRecordsToCreate,
+            },
+            bookingPetProfiles: {
+              create: petProfileIds.map((petProfileId) => ({
+                petProfileId,
+              })),
+            },
+          },
+          include: BOOKING_DETAIL_INCLUDE,
         });
+      },
+      {
+        maxWait: 10000,
+        timeout: 30000,
       }
+    );
 
-      // Create Booking
-      const booking = await tx.booking.create({
-        data: {
-          checkInDate: new Date(`${overallMinCheckIn}T00:00:00.000Z`),
-          checkOutDate: new Date(`${overallMaxCheckOut}T00:00:00.000Z`),
-          numberOfPets: totalPetsCount,
-          totalPrice: grandTotalPrice,
-          bookingStatus: 'pending',
-          guestNote: req.body.guestNote || null,
-          paymentSlipUrl: null,
-          confirmedAt: null,
-          guestId: userId,
-          propertyId: property.id,
-          bookingOrders: {
-            create: orderRecordsToCreate,
-          },
-          bookingPetProfiles: {
-            create: petProfileIds.map((petProfileId) => ({
-              petProfileId,
-            })),
-          },
-        },
-        include: {
-          guest: true,
-          property: true,
-          bookingOrders: {
-            include: {
-              roomCategory: true,
-              property: true,
-            },
-          },
-          bookingPetProfiles: {
-            include: {
-              petProfile: {
-                include: {
-                  petType: true,
-                  breed: true,
-                  petSizeCategory: true,
-                  energy: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      return booking;
-    },
-    {
-      maxWait: 10000,
-      timeout: 30000,
-    });
-
-    // Sync materialized booking count (safe non-blocking fallback)
     try {
       await syncPropertyBookingCount(property.id);
     } catch (syncErr) {
       console.warn('Failed to sync property booking count:', syncErr);
     }
+
+    await createNotificationSafe({
+      userId: property.hostId,
+      actionName: 'booking_created',
+      title: 'New booking request',
+      message: `You have a new pending booking #${newBooking.id} for "${property.title}".`,
+      category: 'booking',
+      type: 'info',
+      referenceTable: 'bookings',
+      referenceId: newBooking.id,
+    });
 
     const formatted = formatFullBookingDetailDto(newBooking);
 
@@ -715,7 +799,7 @@ export async function createBooking(
 
 /**
  * PATCH /api/v1/bookings/:bookingId/confirm-payment
- * Uploads slip, verifies 24-hour payment window, and confirms booking.
+ * Uploads slip, verifies payment deadline and property/host availability, and confirms booking.
  */
 export async function confirmBookingPayment(
   req: Request,
@@ -737,6 +821,9 @@ export async function confirmBookingPayment(
       where: { id: bookingId },
       include: {
         bookingOrders: true,
+        property: {
+          include: { host: true },
+        },
       },
     });
 
@@ -744,7 +831,6 @@ export async function confirmBookingPayment(
       throw new AppError('Booking not found.', 404, 'DB-1002');
     }
 
-    // Ownership guard (403 A-3007)
     if (booking.guestId !== userId) {
       throw new AppError(
         'Forbidden. You do not own this booking.',
@@ -761,81 +847,92 @@ export async function confirmBookingPayment(
       );
     }
 
-    // Check 24-hour payment window
-    const now = Date.now();
-    const createdAtTime = new Date(booking.createdAt).getTime();
-    const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+    // 1. Check min(createdAt + 24h, checkOut 12:00 ICT) payment deadline
+    const now = new Date();
+    const paymentDeadline = getPaymentDeadline(booking.createdAt, booking.checkOutDate);
 
-    if (now - createdAtTime > twentyFourHoursMs) {
-      // Auto-cancel and restore calendar quota
-      await prisma.$transaction(async (tx) => {
-        for (const order of booking.bookingOrders) {
-          const nights = getDatesInRange(order.checkInDate, order.checkOutDate);
-          for (const nightStr of nights) {
-            const nightDate = new Date(`${nightStr}T00:00:00.000Z`);
-            const cal = await tx.roomCategoryCalendar.findUnique({
-              where: {
-                roomCategoryId_date: {
-                  roomCategoryId: order.roomCategoryId,
-                  date: nightDate,
-                },
-              },
-            });
-            if (cal) {
-              // Lock calendar row to prevent concurrency race condition during quota restoration
-              try {
-                await tx.$queryRawUnsafe(
-                  `SELECT id, available_rooms, booked_rooms, unavailable_rooms FROM room_category_calendars WHERE id = $1 FOR UPDATE`,
-                  cal.id
-                );
-              } catch {
-                // Fallback for mocks
-              }
+    if (now.getTime() > paymentDeadline.getTime()) {
+      const { cancelled, curStatus } = await prisma.$transaction(
+        (tx) =>
+          autoCancelPendingBookingInTx(tx, bookingId, 'Payment window expired', {
+            fallbackOrders: booking.bookingOrders,
+          }),
+        { maxWait: 10000, timeout: 30000 }
+      );
 
-              const curCal = await tx.roomCategoryCalendar.findUnique({
-                where: { id: cal.id },
-              });
-
-              const bookedRooms = curCal ? curCal.bookedRooms : cal.bookedRooms;
-              const unavailableRooms = curCal ? curCal.unavailableRooms : cal.unavailableRooms;
-
-              const rc = await tx.roomCategory.findUnique({
-                where: { id: order.roomCategoryId },
-              });
-              const totalRoom = rc ? rc.totalRoom : cal.availableRooms + bookedRooms;
-              const newBooked = Math.max(0, bookedRooms - order.roomsBooked);
-              const newAvailable = Math.max(0, totalRoom - newBooked - unavailableRooms);
-              await tx.roomCategoryCalendar.update({
-                where: { id: cal.id },
-                data: {
-                  bookedRooms: newBooked,
-                  availableRooms: newAvailable,
-                },
-              });
-            }
-          }
+      if (cancelled) {
+        try {
+          await syncPropertyBookingCount(booking.propertyId);
+        } catch (syncErr) {
+          console.warn('Failed to sync property booking count:', syncErr);
         }
 
-        await tx.booking.update({
-          where: { id: bookingId },
-          data: { bookingStatus: 'cancelled' },
+        await createNotificationSafe({
+          userId: booking.guestId,
+          actionName: 'booking_cancelled',
+          title: 'Booking expired',
+          message: `Booking #${booking.id} was automatically cancelled because the payment window expired.`,
+          category: 'booking',
+          type: 'warning',
+          referenceTable: 'bookings',
+          referenceId: booking.id,
         });
-      },
-      {
-        maxWait: 10000,
-        timeout: 30000,
-      });
-
-      try {
-        await syncPropertyBookingCount(booking.propertyId);
-      } catch (syncErr) {
-        console.warn('Failed to sync property booking count:', syncErr);
       }
 
+      if (!cancelled && curStatus && curStatus !== 'cancelled') {
+        throw new AppError(
+          `Cannot confirm payment for booking with status "${curStatus}"`,
+          400,
+          'B-4003'
+        );
+      }
       throw new AppError('Payment window has expired', 400, 'B-4003');
     }
 
-    // Handle slip image upload
+    // 2. Verify property is active, not deleted, not admin-banned, and host is not banned
+    const prop =
+      booking.property ??
+      (await prisma.property.findUnique({
+        where: { id: booking.propertyId },
+        include: { host: true },
+      }));
+    const host =
+      prop?.host ??
+      (prop?.hostId ? await prisma.user.findUnique({ where: { id: prop.hostId } }) : null);
+
+    const isPropertyUnavailable =
+      !prop ||
+      !prop.isActive ||
+      prop.deletedAt !== null ||
+      prop.isBannedByAdmin ||
+      isUserBanned(host) ||
+      host?.isBannedAllProperties === true;
+
+    if (isPropertyUnavailable) {
+      const { cancelled } = await prisma.$transaction(
+        (tx) =>
+          autoCancelPendingBookingInTx(tx, bookingId, 'Property or host unavailable', {
+            fallbackOrders: booking.bookingOrders,
+          }),
+        { maxWait: 10000, timeout: 30000 }
+      );
+
+      if (cancelled) {
+        try {
+          await syncPropertyBookingCount(booking.propertyId);
+        } catch (syncErr) {
+          console.warn('Failed to sync property booking count:', syncErr);
+        }
+      }
+
+      throw new AppError(
+        'Property or host is no longer available for booking',
+        409,
+        'B-4004'
+      );
+    }
+
+    // 3. Handle slip image upload (defer old slip deletion until tx commits; GC new slip on tx failure)
     const file =
       req.file ||
       (Array.isArray(req.files) ? req.files[0] : null) ||
@@ -843,80 +940,89 @@ export async function confirmBookingPayment(
         ? (req.files as any).slip[0]
         : null);
 
+    const oldSlipUrl = booking.paymentSlipUrl;
     let slipUrl = booking.paymentSlipUrl;
+    let newlyUploadedSlipUrl: string | null = null;
     if (file && file.buffer) {
-      if (booking.paymentSlipUrl) {
-        await deleteObjectFromS3(booking.paymentSlipUrl);
-      }
-      slipUrl = await uploadImageAsWebp(file.buffer, 'slips', file.originalname);
+      newlyUploadedSlipUrl = await uploadImageAsWebp(file.buffer, 'slips', file.originalname);
+      slipUrl = newlyUploadedSlipUrl;
     } else if (typeof req.body.slipUrl === 'string' && req.body.slipUrl.startsWith('http')) {
       slipUrl = req.body.slipUrl;
     }
 
-    const updatedBooking = await prisma.$transaction(
-      async (tx) => {
+    let updatedBooking;
+    try {
+      updatedBooking = await prisma.$transaction(
+        async (tx) => {
+          try {
+            await tx.$queryRawUnsafe(
+              `SELECT id, booking_status FROM bookings WHERE id = $1 FOR UPDATE`,
+              bookingId
+            );
+          } catch {
+            // Fallback for mocks
+          }
+
+          const curBooking = await tx.booking.findUnique({
+            where: { id: bookingId },
+          });
+
+          if (!curBooking || curBooking.deletedAt !== null || curBooking.bookingStatus !== 'pending') {
+            throw new AppError(
+              `Cannot confirm payment for booking with status "${curBooking?.bookingStatus || 'unknown'}"`,
+              400,
+              'B-4003'
+            );
+          }
+
+          return tx.booking.update({
+            where: { id: bookingId },
+            data: {
+              bookingStatus: 'confirmed',
+              confirmedAt: new Date(),
+              paymentSlipUrl: slipUrl,
+            },
+            include: BOOKING_DETAIL_INCLUDE,
+          });
+        },
+        { maxWait: 10000, timeout: 30000 }
+      );
+    } catch (txErr) {
+      if (newlyUploadedSlipUrl) {
         try {
-          await tx.$queryRawUnsafe(
-            `SELECT id, booking_status FROM bookings WHERE id = $1 FOR UPDATE`,
-            bookingId
-          );
-        } catch {
-          // Fallback for mocks
+          await deleteObjectFromS3(newlyUploadedSlipUrl);
+        } catch (gcErr) {
+          console.warn('Failed to clean up orphaned payment slip from S3:', gcErr);
         }
-
-        const curBooking = await tx.booking.findUnique({
-          where: { id: bookingId },
-        });
-
-        if (!curBooking || curBooking.bookingStatus !== 'pending') {
-          throw new AppError(
-            `Cannot confirm payment for booking with status "${curBooking?.bookingStatus || 'unknown'}"`,
-            400,
-            'B-4003'
-          );
-        }
-
-        return tx.booking.update({
-          where: { id: bookingId },
-          data: {
-            bookingStatus: 'confirmed',
-            confirmedAt: new Date(),
-            paymentSlipUrl: slipUrl,
-          },
-          include: {
-            guest: true,
-            property: true,
-            bookingOrders: {
-              include: {
-                roomCategory: true,
-                property: true,
-              },
-            },
-            bookingPetProfiles: {
-              include: {
-                petProfile: {
-                  include: {
-                    petType: true,
-                    breed: true,
-                    petSizeCategory: true,
-                    energy: true,
-                  },
-                },
-              },
-            },
-          },
-        });
-      },
-      {
-        maxWait: 10000,
-        timeout: 30000,
       }
-    );
+      throw txErr;
+    }
+
+    if (newlyUploadedSlipUrl && oldSlipUrl && oldSlipUrl !== newlyUploadedSlipUrl) {
+      try {
+        await deleteObjectFromS3(oldSlipUrl);
+      } catch (oldErr) {
+        console.warn('Failed to delete superseded payment slip from S3:', oldErr);
+      }
+    }
 
     try {
       await syncPropertyBookingCount(booking.propertyId);
     } catch (syncErr) {
       console.warn('Failed to sync property booking count:', syncErr);
+    }
+
+    if (prop?.hostId) {
+      await createNotificationSafe({
+        userId: prop.hostId,
+        actionName: 'payment_confirmed',
+        title: 'Payment confirmed',
+        message: `Payment slip received for booking #${booking.id} at "${prop.title}".`,
+        category: 'booking',
+        type: 'success',
+        referenceTable: 'bookings',
+        referenceId: booking.id,
+      });
     }
 
     const formatted = formatFullBookingDetailDto(updatedBooking);
@@ -945,7 +1051,7 @@ export async function confirmBookingPayment(
 
 /**
  * PATCH /api/v1/bookings/:bookingId/cancel
- * Cancels a booking and atomically restores room calendar quotas.
+ * Cancels a booking with Guest/Host cutoff guardrails and atomically restores future room calendar quotas.
  */
 export async function cancelBooking(
   req: Request,
@@ -994,117 +1100,78 @@ export async function cancelBooking(
       );
     }
 
-    // Atomic quota restoration
-    const updated = await prisma.$transaction(async (tx) => {
-      // Lock booking row first to prevent double-cancellation quota restoration race condition
-      try {
-        await tx.$queryRawUnsafe(
-          `SELECT id, booking_status FROM bookings WHERE id = $1 FOR UPDATE`,
-          bookingId
-        );
-      } catch {
-        // Fallback for mocks
-      }
+    const now = new Date();
+    assertCancellationWindow(booking, isGuest, isHost, now);
 
-      const curBooking = await tx.booking.findUnique({
-        where: { id: bookingId },
-      });
+    const cancelledBy = isHost && !isGuest ? 'host' : 'guest';
+    const rawReason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    const cancellationReason = rawReason ? rawReason.slice(0, 255) : null;
 
-      if (!curBooking || (curBooking.bookingStatus !== 'pending' && curBooking.bookingStatus !== 'confirmed')) {
-        throw new AppError(
-          `Cannot cancel booking with current status "${curBooking?.bookingStatus || 'unknown'}"`,
-          400,
-          'B-4003'
-        );
-      }
-
-      for (const order of booking.bookingOrders) {
-        const nights = getDatesInRange(order.checkInDate, order.checkOutDate);
-        for (const nightStr of nights) {
-          const nightDate = new Date(`${nightStr}T00:00:00.000Z`);
-          const cal = await tx.roomCategoryCalendar.findUnique({
-            where: {
-              roomCategoryId_date: {
-                roomCategoryId: order.roomCategoryId,
-                date: nightDate,
-              },
-            },
-          });
-
-          if (cal) {
-            // Lock calendar row to prevent concurrency race condition during quota restoration
-            try {
-              await tx.$queryRawUnsafe(
-                `SELECT id, available_rooms, booked_rooms, unavailable_rooms FROM room_category_calendars WHERE id = $1 FOR UPDATE`,
-                cal.id
-              );
-            } catch {
-              // Fallback for mocks
-            }
-
-            const curCal = await tx.roomCategoryCalendar.findUnique({
-              where: { id: cal.id },
-            });
-
-            const bookedRooms = curCal ? curCal.bookedRooms : cal.bookedRooms;
-            const unavailableRooms = curCal ? curCal.unavailableRooms : cal.unavailableRooms;
-
-            const rc = await tx.roomCategory.findUnique({
-              where: { id: order.roomCategoryId },
-            });
-            const totalRoom = rc ? rc.totalRoom : cal.availableRooms + bookedRooms;
-            const newBooked = Math.max(0, bookedRooms - order.roomsBooked);
-            const newAvailable = Math.max(0, totalRoom - newBooked - unavailableRooms);
-
-            await tx.roomCategoryCalendar.update({
-              where: { id: cal.id },
-              data: {
-                bookedRooms: newBooked,
-                availableRooms: newAvailable,
-              },
-            });
-          }
+    // Atomic quota restoration (future/today nights only)
+    const updated = await prisma.$transaction(
+      async (tx) => {
+        try {
+          await tx.$queryRawUnsafe(
+            `SELECT id, booking_status FROM bookings WHERE id = $1 FOR UPDATE`,
+            bookingId
+          );
+        } catch {
+          // Fallback for mocks
         }
-      }
 
-      return tx.booking.update({
-        where: { id: bookingId },
-        data: {
-          bookingStatus: 'cancelled',
-        },
-        include: {
-          guest: true,
-          property: true,
-          bookingOrders: {
-            include: {
-              roomCategory: true,
-              property: true,
-            },
+        const curBooking = await tx.booking.findUnique({
+          where: { id: bookingId },
+        });
+
+        if (
+          !curBooking ||
+          (curBooking.bookingStatus !== 'pending' && curBooking.bookingStatus !== 'confirmed')
+        ) {
+          throw new AppError(
+            `Cannot cancel booking with current status "${curBooking?.bookingStatus || 'unknown'}"`,
+            400,
+            'B-4003'
+          );
+        }
+
+        assertCancellationWindow(curBooking, isGuest, isHost, now);
+
+        await restoreCalendarQuotaInTx(tx, booking.bookingOrders);
+
+        return tx.booking.update({
+          where: { id: bookingId },
+          data: {
+            bookingStatus: 'cancelled',
+            cancelledBy,
+            cancellationReason,
           },
-          bookingPetProfiles: {
-            include: {
-              petProfile: {
-                include: {
-                  petType: true,
-                  breed: true,
-                  petSizeCategory: true,
-                  energy: true,
-                },
-              },
-            },
-          },
-        },
-      });
-    },
-    {
-      maxWait: 10000,
-      timeout: 30000,
-    });
+          include: BOOKING_DETAIL_INCLUDE,
+        });
+      },
+      { maxWait: 10000, timeout: 30000 }
+    );
 
     try {
       await syncPropertyBookingCount(booking.propertyId);
     } catch (syncErr) {
       console.warn('Failed to sync property booking count:', syncErr);
+    }
+
+    const counterpartyId =
+      cancelledBy === 'guest' ? booking.property.hostId : booking.guestId;
+    if (counterpartyId) {
+      await createNotificationSafe({
+        userId: counterpartyId,
+        actionName: 'booking_cancelled',
+        title: 'Booking cancelled',
+        message: `Booking #${booking.id} was cancelled by the ${cancelledBy}.${
+          cancellationReason ? ` Reason: ${cancellationReason}` : ''
+        }`,
+        category: 'booking',
+        type: 'warning',
+        referenceTable: 'bookings',
+        referenceId: booking.id,
+      });
     }
 
     const formatted = formatFullBookingDetailDto(updated);
@@ -1145,6 +1212,8 @@ export async function getBookingsPaginated(
     if (!userId) {
       throw new AppError('Authentication required.', 401, 'A-3001');
     }
+
+    await reconcileLifecycleBookings({ guestId: userId });
 
     const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
     const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit || '10'), 10) || 10));
@@ -1215,30 +1284,11 @@ export async function getBookingById(
       throw new AppError('Invalid booking ID.', 400, 'T-2007');
     }
 
+    await reconcileLifecycleBookings({ bookingId });
+
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
-      include: {
-        guest: true,
-        property: true,
-        bookingOrders: {
-          include: {
-            roomCategory: true,
-            property: true,
-          },
-        },
-        bookingPetProfiles: {
-          include: {
-            petProfile: {
-              include: {
-                petType: true,
-                breed: true,
-                petSizeCategory: true,
-                energy: true,
-              },
-            },
-          },
-        },
-      },
+      include: BOOKING_DETAIL_INCLUDE,
     });
 
     if (!booking || booking.deletedAt !== null) {
@@ -1293,6 +1343,8 @@ export async function getHostBookingsAll(
       throw new AppError('Authentication required.', 401, 'A-3001');
     }
 
+    await reconcileLifecycleBookings({ hostId: userId });
+
     const bookings = await prisma.booking.findMany({
       where: {
         property: {
@@ -1340,6 +1392,8 @@ export async function getHostBookingsPaginated(
     if (!userId) {
       throw new AppError('Authentication required.', 401, 'A-3001');
     }
+
+    await reconcileLifecycleBookings({ hostId: userId });
 
     const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
     const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit || '20'), 10) || 20));
@@ -1412,30 +1466,11 @@ export async function getHostBookingById(
       throw new AppError('Invalid booking ID.', 400, 'T-2007');
     }
 
+    await reconcileLifecycleBookings({ bookingId });
+
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
-      include: {
-        guest: true,
-        property: true,
-        bookingOrders: {
-          include: {
-            roomCategory: true,
-            property: true,
-          },
-        },
-        bookingPetProfiles: {
-          include: {
-            petProfile: {
-              include: {
-                petType: true,
-                breed: true,
-                petSizeCategory: true,
-                energy: true,
-              },
-            },
-          },
-        },
-      },
+      include: BOOKING_DETAIL_INCLUDE,
     });
 
     if (!booking || booking.deletedAt !== null) {
@@ -1501,6 +1536,8 @@ export async function getHostPropertyBookingsPaginated(
       );
     }
 
+    await reconcileLifecycleBookings({ propertyId });
+
     const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
     const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit || '10'), 10) || 10));
 
@@ -1552,7 +1589,7 @@ export async function getHostPropertyBookingsPaginated(
 
 /**
  * PATCH /api/v1/hosts/bookings/:bookingId/success
- * Host marks a confirmed booking as successfully completed.
+ * Host marks a confirmed booking as successfully completed after check-out 12:00 ICT.
  */
 export async function completeHostBooking(
   req: Request,
@@ -1570,56 +1607,89 @@ export async function completeHostBooking(
       throw new AppError('Invalid booking ID.', 400, 'T-2007');
     }
 
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: {
-        property: true,
-      },
-    });
+    const updated = await prisma.$transaction(
+      async (tx) => {
+        try {
+          await tx.$queryRawUnsafe(
+            `SELECT id, booking_status FROM bookings WHERE id = $1 FOR UPDATE`,
+            bookingId
+          );
+        } catch {
+          // Fallback for mocks
+        }
 
-    if (!booking || booking.deletedAt !== null) {
-      throw new AppError('Booking not found.', 404, 'DB-1002');
-    }
-
-    // Host ownership guard (403 A-3007)
-    if (booking.property.hostId !== userId) {
-      throw new AppError(
-        'Forbidden. You do not host this booking.',
-        403,
-        'A-3007'
-      );
-    }
-
-    // Must be in 'confirmed' status
-    if (booking.bookingStatus !== 'confirmed') {
-      throw new AppError(
-        `Cannot mark booking with status "${booking.bookingStatus}" as successful. Must be confirmed.`,
-        400,
-        'B-4003'
-      );
-    }
-
-    const updated = await prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        bookingStatus: 'successful',
-        successedAt: new Date(),
-      },
-      include: {
-        property: true,
-        bookingOrders: {
+        const booking = await tx.booking.findUnique({
+          where: { id: bookingId },
           include: {
-            roomCategory: true,
+            property: true,
           },
-        },
+        });
+
+        if (!booking || booking.deletedAt !== null) {
+          throw new AppError('Booking not found.', 404, 'DB-1002');
+        }
+
+        if (booking.property.hostId !== userId) {
+          throw new AppError(
+            'Forbidden. You do not host this booking.',
+            403,
+            'A-3007'
+          );
+        }
+
+        if (booking.bookingStatus !== 'confirmed') {
+          throw new AppError(
+            `Cannot mark booking with status "${booking.bookingStatus}" as successful. Must be confirmed.`,
+            400,
+            'B-4003'
+          );
+        }
+
+        const now = new Date();
+        const canCompleteAt = getCanCompleteAt(booking.checkOutDate);
+        if (!isNaN(canCompleteAt.getTime()) && now.getTime() < canCompleteAt.getTime()) {
+          throw new AppError(
+            'Cannot complete booking before check-out time (12:00 ICT on check-out date).',
+            400,
+            'B-4003'
+          );
+        }
+
+        return tx.booking.update({
+          where: { id: bookingId },
+          data: {
+            bookingStatus: 'successful',
+            successedAt: now,
+          },
+          include: {
+            property: true,
+            bookingOrders: {
+              include: {
+                roomCategory: true,
+              },
+            },
+          },
+        });
       },
-    });
+      { maxWait: 10000, timeout: 30000 }
+    );
 
     try {
-      await syncPropertyBookingCount(booking.propertyId);
+      await syncPropertyBookingCount(updated.propertyId);
     } catch (syncErr) {
       console.warn('Failed to sync property booking count:', syncErr);
     }
+
+    await createNotificationSafe({
+      userId: updated.guestId,
+      actionName: 'booking_completed',
+      title: 'Stay completed',
+      message: `Your stay for booking #${updated.id} is complete! You have ${REVIEW_WINDOW_DAYS} days to leave a review.`,
+      category: 'booking',
+      type: 'success',
+      referenceTable: 'bookings',
+      referenceId: updated.id,
+    });
 
     const formatted = formatBookingDto(updated);
 
@@ -1638,13 +1708,15 @@ export async function completeHostBooking(
 
 /**
  * POST /api/v1/bookings/:bookingId/review
- * Submits a verified-stay review with optional images and updates property rating aggregates.
+ * Submits a verified-stay review within 14 days with atomic lock and S3 GC on failure.
  */
 export async function submitBookingReview(
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
+  const uploadedUrls: string[] = [];
+
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -1658,23 +1730,31 @@ export async function submitBookingReview(
 
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
+      include: { property: true },
     });
 
     if (!booking || booking.deletedAt) {
       throw new AppError('Booking not found', 404, 'DB-1002');
     }
 
-    // Ownership check: only the guest who booked can submit a review
     if (booking.guestId !== userId) {
       throw new AppError('Forbidden: You can only review your own bookings', 403, 'A-3007');
     }
 
-    // Verified-Stay Status Guard: bookingStatus must be 'successful'
-    if (booking.bookingStatus !== 'successful' && booking.bookingStatus !== 'success' && booking.bookingStatus !== 'completed') {
+    if (!REVIEWABLE_STATUSES.includes(booking.bookingStatus)) {
       throw new AppError('You can only review a completed stay', 400, 'B-4003');
     }
 
-    // Single Review Lock: booking cannot be reviewed more than once
+    const now = new Date();
+    const reviewDeadline = getReviewDeadline(booking.successedAt, booking.checkOutDate);
+    if (!isNaN(reviewDeadline.getTime()) && now.getTime() > reviewDeadline.getTime()) {
+      throw new AppError(
+        `Review window has expired (${REVIEW_WINDOW_DAYS} days after stay completion).`,
+        400,
+        'B-4003'
+      );
+    }
+
     if (booking.reviewedAt != null || booking.rating != null) {
       throw new AppError('This booking has already been reviewed', 409, 'B-4001');
     }
@@ -1685,50 +1765,98 @@ export async function submitBookingReview(
     }
 
     const comment = typeof req.body?.comment === 'string' ? req.body.comment.trim() : '';
-
-    // Handle review images upload (up to 5 images)
-    const uploadedFiles: Express.Multer.File[] = [];
-    if (Array.isArray(req.files)) {
-      uploadedFiles.push(...req.files);
-    } else if (req.files && typeof req.files === 'object') {
-      for (const key of Object.keys(req.files)) {
-        const arr = (req.files as Record<string, Express.Multer.File[]>)[key];
-        if (Array.isArray(arr)) uploadedFiles.push(...arr);
-      }
-    } else if (req.file) {
-      uploadedFiles.push(req.file);
+    if (comment.length > 500) {
+      throw new AppError('Comment cannot exceed 500 characters', 400, 'T-2007');
     }
 
-    for (const file of uploadedFiles.slice(0, 5)) {
-      try {
-        const uploadedUrl = await uploadImageAsWebp(file.buffer, 'reviews', file.originalname);
-        await prisma.bookingReviewImage.create({
-          data: {
-            bookingId: booking.id,
-            filePath: uploadedUrl,
-            fileName: file.originalname || 'review-image',
-            fileContentType: 'image/webp',
-            fileExtensionName: '.webp',
-            fileSize: file.size,
-          },
-        });
-      } catch (uploadErr) {
-        console.error('[BookingReview] Failed to upload review image:', uploadErr);
-      }
+    // All validations passed -> now upload review images (up to 5)
+    const uploadedFiles = extractUploadedFiles(req).slice(0, 5);
+    const preparedImages: Array<{
+      filePath: string;
+      fileName: string;
+      fileSize: number;
+    }> = [];
+
+    for (const file of uploadedFiles) {
+      if (!file?.buffer) continue;
+      const uploadedUrl = await uploadImageAsWebp(file.buffer, 'reviews', file.originalname);
+      uploadedUrls.push(uploadedUrl);
+      preparedImages.push({
+        filePath: uploadedUrl,
+        fileName: file.originalname || 'review-image',
+        fileSize: file.size || 0,
+      });
     }
 
     const reviewedAt = new Date();
-    await prisma.booking.update({
-      where: { id: booking.id },
-      data: {
-        rating: ratingNum,
-        comment,
-        reviewedAt,
+    await prisma.$transaction(
+      async (tx) => {
+        try {
+          await tx.$queryRawUnsafe(
+            `SELECT id, reviewed_at, rating FROM bookings WHERE id = $1 FOR UPDATE`,
+            booking.id
+          );
+        } catch {
+          // Fallback for mocks
+        }
+
+        const cur = await tx.booking.findUnique({
+          where: { id: booking.id },
+        });
+
+        if (!cur || cur.deletedAt) {
+          throw new AppError('Booking not found', 404, 'DB-1002');
+        }
+
+        if (!REVIEWABLE_STATUSES.includes(cur.bookingStatus)) {
+          throw new AppError('You can only review a completed stay', 400, 'B-4003');
+        }
+
+        if (cur.reviewedAt != null || cur.rating != null) {
+          throw new AppError('This booking has already been reviewed', 409, 'B-4001');
+        }
+
+        for (const img of preparedImages) {
+          await tx.bookingReviewImage.create({
+            data: {
+              bookingId: booking.id,
+              filePath: img.filePath,
+              fileName: img.fileName,
+              fileContentType: 'image/webp',
+              fileExtensionName: '.webp',
+              fileSize: img.fileSize,
+            },
+          });
+        }
+
+        await tx.booking.update({
+          where: { id: booking.id },
+          data: {
+            rating: ratingNum,
+            comment,
+            reviewedAt,
+          },
+        });
       },
-    });
+      { maxWait: 10000, timeout: 30000 }
+    );
 
     await syncPropertyRating(booking.propertyId);
     await cacheService.delByPrefix('properties:');
+
+    const hostId = booking.property?.hostId;
+    if (hostId) {
+      await createNotificationSafe({
+        userId: hostId,
+        actionName: 'booking_review_submitted',
+        title: 'New guest review',
+        message: `You received a ${ratingNum}-star review for booking #${booking.id}.`,
+        category: 'booking',
+        type: 'info',
+        referenceTable: 'bookings',
+        referenceId: booking.id,
+      });
+    }
 
     res.status(200).json({
       code: 'S-0000',
@@ -1737,10 +1865,163 @@ export async function submitBookingReview(
         bookingId: booking.id,
         rating: ratingNum,
         comment,
+        reviewedAt: reviewedAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    if (uploadedUrls.length > 0) {
+      await Promise.allSettled(uploadedUrls.map((url) => deleteObjectFromS3(url)));
+    }
+    next(error);
+  }
+}
+
+/**
+ * POST /api/v1/hosts/bookings/:bookingId/review-reply
+ * Allows the property's Host to publish a single public reply (max 500 chars) to a guest's review.
+ */
+export async function replyToBookingReview(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new AppError('Authentication required.', 401, 'A-3001');
+    }
+
+    const bookingId = parseInt(req.params.bookingId, 10);
+    if (isNaN(bookingId) || bookingId <= 0) {
+      throw new AppError('Invalid booking ID.', 400, 'T-2007');
+    }
+
+    const rawReply =
+      typeof req.body?.reply === 'string'
+        ? req.body.reply
+        : typeof req.body?.hostReply === 'string'
+        ? req.body.hostReply
+        : '';
+    const trimmedReply = rawReply.trim();
+
+    if (!trimmedReply || trimmedReply.length > 500) {
+      throw new AppError(
+        'Reply must be between 1 and 500 characters.',
+        400,
+        'T-2007'
+      );
+    }
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { property: true },
+    });
+
+    if (!booking || booking.deletedAt !== null) {
+      throw new AppError('Booking not found.', 404, 'DB-1002');
+    }
+
+    if (booking.property.hostId !== userId) {
+      throw new AppError(
+        'Forbidden. You do not host the property for this booking.',
+        403,
+        'A-3007'
+      );
+    }
+
+    if (booking.reviewedAt == null && booking.rating == null) {
+      throw new AppError(
+        'Cannot reply before the guest submits a review.',
+        400,
+        'B-4003'
+      );
+    }
+
+    const updated = await prisma.$transaction(
+      async (tx) => {
+        try {
+          await tx.$queryRawUnsafe(
+            `SELECT id, host_replied_at FROM bookings WHERE id = $1 FOR UPDATE`,
+            bookingId
+          );
+        } catch {
+          // Fallback for mocks
+        }
+
+        const cur = await tx.booking.findUnique({
+          where: { id: bookingId },
+        });
+
+        if (!cur || cur.deletedAt !== null) {
+          throw new AppError('Booking not found.', 404, 'DB-1002');
+        }
+
+        if (cur.reviewedAt == null && cur.rating == null) {
+          throw new AppError(
+            'Cannot reply before the guest submits a review.',
+            400,
+            'B-4003'
+          );
+        }
+
+        if (
+          cur.hostRepliedAt != null ||
+          (typeof cur.hostReply === 'string' && cur.hostReply.trim().length > 0)
+        ) {
+          throw new AppError(
+            'You have already replied to this review.',
+            409,
+            'B-4001'
+          );
+        }
+
+        return tx.booking.update({
+          where: { id: bookingId },
+          data: {
+            hostReply: trimmedReply,
+            hostRepliedAt: new Date(),
+          },
+          include: {
+            property: true,
+            bookingOrders: {
+              include: {
+                roomCategory: true,
+              },
+            },
+          },
+        });
+      },
+      { maxWait: 10000, timeout: 30000 }
+    );
+
+    await cacheService.delByPrefix('properties:');
+
+    await createNotificationSafe({
+      userId: booking.guestId,
+      actionName: 'booking_review_replied',
+      title: 'Host replied to your review',
+      message: `The host replied to your review on booking #${booking.id}.`,
+      category: 'booking',
+      type: 'info',
+      referenceTable: 'bookings',
+      referenceId: booking.id,
+    });
+
+    const formatted = formatBookingDto(updated);
+
+    res.status(200).json({
+      code: 'S-0000',
+      message: 'Review reply submitted successfully',
+      data: {
+        bookingId: updated.id,
+        hostReply: updated.hostReply,
+        hostRepliedAt: updated.hostRepliedAt
+          ? new Date(updated.hostRepliedAt).toISOString()
+          : null,
+        booking: formatted,
       },
     });
   } catch (error) {
     next(error);
   }
 }
-

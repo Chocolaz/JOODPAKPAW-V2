@@ -4,6 +4,9 @@ import { prisma } from '../database/prisma';
 import { AppError } from '../middlewares/errorHandler';
 import { normalizePetName } from './lookup.controller';
 import { cacheService } from '../services/cache.service';
+import {
+  syncPropertyBookingCount as syncPropertyBookingCountCanonical,
+} from '../services/bookingLifecycle.service';
 /**
  * Safely converts any Date object, ISO string, or timestamp into an ISO string.
  * Falls back to current date or custom fallback if input is null or undefined.
@@ -202,6 +205,8 @@ export function formatPropertyDto(
           comment: b.comment || '',
           rating: b.rating || 0,
           reviewedAt: toSafeIsoString(b.reviewedAt || b.updatedAt || b.createdAt),
+          hostReply: b.hostReply || null,
+          hostRepliedAt: b.hostRepliedAt ? toSafeIsoString(b.hostRepliedAt) : null,
           reviewImages: Array.isArray(b.reviewImages)
             ? b.reviewImages.map((img: any) => ({
                 id: img.id,
@@ -324,17 +329,7 @@ export async function syncPropertyRating(propertyId: number): Promise<void> {
  * Synchronizes the materialized booking_count column for a given property.
  */
 export async function syncPropertyBookingCount(propertyId: number): Promise<void> {
-  const bookingCount = await prisma.booking.count({
-    where: {
-      propertyId,
-      deletedAt: null,
-    },
-  });
-  await prisma.property.update({
-    where: { id: propertyId },
-    data: { bookingCount },
-  });
-  await invalidatePropertyCaches();
+  return syncPropertyBookingCountCanonical(propertyId);
 }
 
 export async function getProperties(
@@ -1186,13 +1181,15 @@ export async function getHostReviews(
       propertyId: b.property.id,
       propertyName: b.property.title,
       reviewedAt: toSafeIsoString(b.reviewedAt || b.updatedAt || b.createdAt),
+      hostReply: b.hostReply || null,
+      hostRepliedAt: b.hostRepliedAt ? toSafeIsoString(b.hostRepliedAt) : null,
       guestProfile: {
         id: b.guest.id,
         firstName: b.guest.firstName || 'Guest',
         lastName: b.guest.lastName || '',
         avatar: b.guest.avatar || '',
       },
-      reviewImages: b.reviewImages.map((img) => ({
+      reviewImages: (Array.isArray(b.reviewImages) ? b.reviewImages : []).map((img) => ({
         id: img.id,
         fileName: img.fileName || '',
         filePath: img.filePath,

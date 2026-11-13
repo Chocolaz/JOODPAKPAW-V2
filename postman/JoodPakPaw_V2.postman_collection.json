@@ -1684,6 +1684,254 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "05 - Bookings & Reviews Lifecycle (Enterprise V2)",
+      "description": "Booking creation, payment confirmation, Guest/Host cancellation cutoffs, Host completion, Guest 14-day review, and Host one-time public reply.",
+      "item": [
+        {
+          "name": "Create Booking",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingOrders\": [\n    {\n      \"roomCategoryId\": 1,\n      \"checkInDate\": \"2026-12-10\",\n      \"checkOutDate\": \"2026-12-12\",\n      \"roomsBooked\": 1\n    }\n  ],\n  \"petProfileIds\": [\n    1\n  ],\n  \"guestNote\": \"Please feed twice daily\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm Booking Payment",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slipUrl\": \"https://example.com/mock-slip.webp\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings/1/confirm-payment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "1",
+                "confirm-payment"
+              ]
+            },
+            "description": "Enforces min(createdAt + 24h, checkOut 12:00 ICT) payment deadline and verifies property/host are active and unbanned."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Booking (Guest/Host Cutoffs)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Change of travel plans\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings/1/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "1",
+                "cancel"
+              ]
+            },
+            "description": "Blocks Guest cancel on confirmed bookings at/after Check-in 14:00 ICT (400 B-4003) and Host cancel at/after Check-out 12:00 ICT (400 B-4003)."
+          },
+          "response": []
+        },
+        {
+          "name": "Host Complete Booking (After Check-out 12:00 ICT)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/hosts/bookings/1/success",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hosts",
+                "bookings",
+                "1",
+                "success"
+              ]
+            },
+            "description": "Host marks confirmed booking as successful (blocked with 400 B-4003 before Check-out 12:00 ICT; auto-completes after 18:00 ICT)."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Verified-Stay Review (14-Day Window)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "rating",
+                  "value": "5",
+                  "type": "text"
+                },
+                {
+                  "key": "comment",
+                  "value": "Great care and daily updates!",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bookings/1/review",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "1",
+                "review"
+              ]
+            },
+            "description": "Guest submits 1 verified-stay review within 14 days of stay completion."
+          },
+          "response": []
+        },
+        {
+          "name": "Host Reply to Guest Review (One-Time)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hostReply\": \"Thank you so much! Your pup was a joy to host.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/hosts/bookings/1/review-reply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hosts",
+                "bookings",
+                "1",
+                "review-reply"
+              ]
+            },
+            "description": "Host submits a single public reply (max 500 chars) to a reviewed booking (409 B-4001 if already replied)."
+          },
+          "response": []
+        }
+      ]
     }
   ]
 }

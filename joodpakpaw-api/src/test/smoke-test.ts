@@ -7,7 +7,8 @@ import { createApp } from '../app'
 import { prisma, checkDatabaseHealth } from '../database/prisma'
 import { optionalAuthenticateToken, requireRoles } from '../middlewares/auth.middleware'
 import { v1Router } from '../routes/v1.routes'
-import { convertBufferToWebp, uploadImageAsWebp } from '../services/storage.service'
+import { convertBufferToWebp, uploadImageAsWebp, s3Client } from '../services/storage.service'
+import { reconcileLifecycleBookings, syncPropertyBookingCount } from '../services/bookingLifecycle.service'
 import { cacheService } from '../services/cache.service'
 import { AppError } from '../middlewares/errorHandler'
 
@@ -132,6 +133,11 @@ function installPrismaAuthMock() {
     favoritePropertyDeleteMany: prisma.favoriteProperty.deleteMany,
     roomCategoryCalendarFindMany: prisma.roomCategoryCalendar.findMany,
     bookingReviewImageCreate: prisma.bookingReviewImage.create,
+    notificationActionUpsert: (prisma.notificationAction as any).upsert,
+    notificationActionFindUnique: (prisma.notificationAction as any).findUnique,
+    notificationActionCreate: (prisma.notificationAction as any).create,
+    notificationCreate: (prisma.notification as any).create,
+    notificationFindMany: (prisma.notification as any).findMany,
   }
 
   ;(prisma.role as any).upsert = async (args: any) => {
@@ -653,19 +659,27 @@ function installPrismaAuthMock() {
 
   ;(prisma.booking as any).findUnique = async (args: any) => {
     const id = args?.where?.id
-    return bookingsMap.get(id) || null
+    const b = bookingsMap.get(id)
+    if (!b) return null
+    const prop = propertiesMap.get(b.propertyId) || b.property
+    return { ...b, property: prop }
   }
 
   ;(prisma.booking as any).findMany = async (args: any) => {
+    const idFilter = args?.where?.id
     const guestId = args?.where?.guestId
     const hostId = args?.where?.property?.hostId
     const propId = args?.where?.propertyId
+    const statusFilter = args?.where?.bookingStatus
 
     let list = Array.from(bookingsMap.values()).filter((b) => {
       if (b.deletedAt !== null && args?.where?.deletedAt === null) return false
+      if (typeof idFilter === 'number' && b.id !== idFilter) return false
       if (guestId !== undefined && b.guestId !== guestId) return false
       if (hostId !== undefined && b.property?.hostId !== hostId) return false
       if (propId !== undefined && b.propertyId !== propId) return false
+      if (typeof statusFilter === 'string' && b.bookingStatus !== statusFilter) return false
+      if (Array.isArray(statusFilter?.in) && !statusFilter.in.includes(b.bookingStatus)) return false
       if (args?.where?.rating?.not !== undefined && (b.rating === null || b.rating === undefined)) return false
       if (args?.where?.rating?.gt !== undefined && (b.rating === null || b.rating <= args.where.rating.gt)) return false
       return true
@@ -681,11 +695,37 @@ function installPrismaAuthMock() {
     return list
   }
 
+  const matchesBookingOrGuard = (b: any, orClauses: any[]): boolean => {
+    return orClauses.some((clause: any) => {
+      if (Array.isArray(clause?.bookingStatus?.in)) {
+        return clause.bookingStatus.in.includes(b.bookingStatus)
+      }
+      if (Array.isArray(clause?.bookingStatus?.notIn)) {
+        const notTerminal = !clause.bookingStatus.notIn.includes(b.bookingStatus)
+        if (!notTerminal) return false
+        if (clause.checkOutDate?.gte) {
+          const bOut = b.checkOutDate ? new Date(b.checkOutDate).getTime() : 0
+          return bOut >= new Date(clause.checkOutDate.gte).getTime()
+        }
+        return true
+      }
+      return false
+    })
+  }
+
   ;(prisma.booking as any).count = async (args: any) => {
     const guestId = args?.where?.guestId
     const hostId = args?.where?.property?.hostId
     const propId = args?.where?.propertyId
-    if (propId !== undefined && !args?.where?.property && !args?.where?.guestId) {
+    if (Array.isArray(args?.where?.OR) && propId !== undefined) {
+      if (mockActiveBookingCount > 0) return mockActiveBookingCount
+      return Array.from(bookingsMap.values()).filter((b) => {
+        if (b.deletedAt !== null) return false
+        if (b.propertyId !== propId) return false
+        return matchesBookingOrGuard(b, args.where.OR)
+      }).length
+    }
+    if (propId !== undefined && !args?.where?.property && !args?.where?.guestId && !args?.where?.bookingStatus) {
       return mockActiveBookingCount
     }
     return Array.from(bookingsMap.values()).filter((b) => {
@@ -693,8 +733,27 @@ function installPrismaAuthMock() {
       if (guestId !== undefined && b.guestId !== guestId) return false
       if (hostId !== undefined && b.property?.hostId !== hostId) return false
       if (propId !== undefined && b.propertyId !== propId) return false
+      if (Array.isArray(args?.where?.bookingStatus?.in) && !args.where.bookingStatus.in.includes(b.bookingStatus)) return false
+      if (args?.where?.rating?.not !== undefined && (b.rating === null || b.rating === undefined)) return false
       return true
     }).length
+  }
+
+  ;(prisma.bookingOrder as any).count = async (args: any) => {
+    if (mockActiveOrderCount > 0) return mockActiveOrderCount
+    const rcId = args?.where?.roomCategoryId
+    const orClauses = args?.where?.booking?.OR
+    if (rcId !== undefined && Array.isArray(orClauses)) {
+      let count = 0
+      for (const b of bookingsMap.values()) {
+        if (b.deletedAt !== null) continue
+        if (!matchesBookingOrGuard(b, orClauses)) continue
+        const hasRc = (b.bookingOrders || []).some((o: any) => o.roomCategoryId === rcId)
+        if (hasRc) count++
+      }
+      return count
+    }
+    return mockActiveOrderCount
   }
 
   ;(prisma.booking as any).create = async (args: any) => {
@@ -739,6 +798,11 @@ function installPrismaAuthMock() {
       rating: null,
       comment: null,
       reviewedAt: null,
+      reviewImages: [],
+      hostReply: null,
+      hostRepliedAt: null,
+      cancelledBy: data.cancelledBy || null,
+      cancellationReason: data.cancellationReason || null,
       confirmedAt: data.confirmedAt || null,
       successedAt: data.successedAt || null,
       guestId: data.guestId,
@@ -844,11 +908,49 @@ function installPrismaAuthMock() {
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
   }
 
+  let nextReviewImgId = 1
   ;(prisma.bookingReviewImage as any).create = async (args: any) => {
-    return {
-      id: 1,
+    const rec = {
+      id: nextReviewImgId++,
       ...args?.data,
     }
+    const b = args?.data?.bookingId ? bookingsMap.get(args.data.bookingId) : undefined
+    if (b) {
+      if (!Array.isArray(b.reviewImages)) b.reviewImages = []
+      b.reviewImages.push(rec)
+    }
+    return rec
+  }
+
+  const notificationActionsMap = new Map<string, { id: number; name: string }>()
+  let nextNotifActionId = 1
+  const notificationsList: any[] = []
+  let nextNotifId = 1
+
+  ;(prisma.notificationAction as any).upsert = async (args: any) => {
+    const name = args?.where?.name
+    if (notificationActionsMap.has(name)) return notificationActionsMap.get(name)
+    const rec = { id: nextNotifActionId++, name }
+    notificationActionsMap.set(name, rec)
+    return rec
+  }
+  ;(prisma.notificationAction as any).findUnique = async (args: any) => {
+    return notificationActionsMap.get(args?.where?.name) || null
+  }
+  ;(prisma.notificationAction as any).create = async (args: any) => {
+    const name = args?.data?.name
+    const rec = { id: nextNotifActionId++, name }
+    notificationActionsMap.set(name, rec)
+    return rec
+  }
+  ;(prisma.notification as any).create = async (args: any) => {
+    const rec = { id: nextNotifId++, ...args?.data, createdAt: new Date(), updatedAt: new Date(), deletedAt: null }
+    notificationsList.push(rec)
+    return rec
+  }
+  ;(prisma.notification as any).findMany = async (args: any) => {
+    const userId = args?.where?.userId
+    return notificationsList.filter((n) => (userId === undefined || n.userId === userId) && n.deletedAt === null)
   }
 
   const favoriteFoldersMap = new Map<number, any>()
@@ -998,6 +1100,8 @@ function installPrismaAuthMock() {
     calendarsMap,
     favoriteFoldersMap,
     favoritePropertiesList,
+    notificationsList,
+    notificationActionsMap,
     setMockActivePetBooking(val: boolean) {
       mockActivePetBooking = val
     },
@@ -1036,6 +1140,11 @@ function installPrismaAuthMock() {
       prisma.favoriteProperty.deleteMany = originals.favoritePropertyDeleteMany
       ;(prisma.roomCategoryCalendar as any).findMany = originals.roomCategoryCalendarFindMany
       ;(prisma.bookingReviewImage as any).create = originals.bookingReviewImageCreate
+      ;(prisma.notificationAction as any).upsert = originals.notificationActionUpsert
+      ;(prisma.notificationAction as any).findUnique = originals.notificationActionFindUnique
+      ;(prisma.notificationAction as any).create = originals.notificationActionCreate
+      ;(prisma.notification as any).create = originals.notificationCreate
+      ;(prisma.notification as any).findMany = originals.notificationFindMany
     },
   }
 }
@@ -2828,7 +2937,22 @@ async function main() {
         throw new Error(`Expected 200 with HostBookingDetail DTO, got ${hostDetailRes.statusCode}`)
       }
 
-      // 8. Host marks booking as successful: PATCH /api/v1/hosts/bookings/:id/success
+      // 8a. Early completion guard: Host cannot mark booking successful before Check-out 12:00 ICT -> 400 B-4003
+      const earlyCompleteRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/bookings/${createdBookingId}/success`,
+        'PATCH',
+        undefined,
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (earlyCompleteRes.statusCode !== 400 || earlyCompleteRes.body?.code !== 'B-4003') {
+        throw new Error(`Expected 400 B-4003 on early completeHostBooking, got ${earlyCompleteRes.statusCode} ${earlyCompleteRes.body?.code}`)
+      }
+
+      // 8b. Advance booking dates into past check-out (>= 12:00 ICT) and mark successful
+      const targetBooking = mockDb.bookingsMap.get(createdBookingId)
+      targetBooking.checkInDate = new Date('2026-11-10T00:00:00.000Z')
+      targetBooking.checkOutDate = new Date('2026-11-12T00:00:00.000Z')
       const completeRes = await makeRequest(
         pipePath,
         `/api/v1/hosts/bookings/${createdBookingId}/success`,
@@ -2837,7 +2961,7 @@ async function main() {
         { Authorization: `Bearer ${userBAccessToken}` }
       )
       if (completeRes.statusCode !== 200 || completeRes.body?.data?.booking?.bookingStatus !== 'successful') {
-        throw new Error(`Expected 200 with status=successful, got ${completeRes.statusCode}`)
+        throw new Error(`Expected 200 with status=successful, got ${completeRes.statusCode}: ${JSON.stringify(completeRes.body)}`)
       }
 
       // 9. Booking cancellation and quota restoration workflow:
@@ -3249,6 +3373,668 @@ async function main() {
       if (afterDeleteRes.statusCode !== 404 || afterDeleteRes.body?.code !== 'DB-1002') {
         throw new Error(`Expected 404 DB-1002 on deleted folder query, got ${afterDeleteRes.statusCode}`)
       }
+    })
+
+    // =========================================================================
+    // Booking Lifecycle, Guardrails, Auto-Expire/Auto-Complete & Host Reply
+    // =========================================================================
+    await runTest('Booking Lifecycle: Guest/Host Cancel Cutoffs, Historical Quota Safety & Cancellation Reasons', async () => {
+      // Create a booking in future first, then set checkInDate to past ('2026-11-10') and confirm it
+      const bRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+        bookingOrders: [
+          { roomCategoryId: 501, checkInDate: '2026-12-26', checkOutDate: '2026-12-28', roomsBooked: 1 },
+        ],
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      const bId = bRes.body?.data?.booking?.id
+      if (bRes.statusCode !== 201 || !bId) {
+        throw new Error(`Failed to create booking for cancel cutoff test: ${bRes.statusCode}`)
+      }
+
+      const bRec = mockDb.bookingsMap.get(bId)
+      bRec.bookingStatus = 'confirmed'
+      bRec.confirmedAt = new Date()
+      bRec.checkInDate = new Date('2026-11-10T00:00:00.000Z')
+      bRec.checkOutDate = new Date('2026-12-28T00:00:00.000Z')
+      bRec.bookingOrders[0].checkInDate = new Date('2026-11-10T00:00:00.000Z')
+      bRec.bookingOrders[0].checkOutDate = new Date('2026-12-28T00:00:00.000Z')
+
+      // Seed a past-night calendar row ('2026-11-10') to ensure historical stats are NEVER mutated on cancel
+      mockDb.calendarsMap.set('501:2026-11-10', {
+        id: 8801,
+        roomCategoryId: 501,
+        date: new Date('2026-11-10T00:00:00.000Z'),
+        availableRooms: 1,
+        bookedRooms: 2,
+        unavailableRooms: 0,
+        priceAdjustment: 0,
+      })
+
+      // 1. Guest cannot cancel confirmed booking after Check-in 14:00 ICT -> 400 B-4003
+      const guestLateCancel = await makeRequest(
+        pipePath,
+        `/api/v1/bookings/${bId}/cancel`,
+        'PATCH',
+        { reason: 'Changed my mind after check-in' },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (guestLateCancel.statusCode !== 400 || guestLateCancel.body?.code !== 'B-4003') {
+        throw new Error(`Expected 400 B-4003 on guest cancel after check-in, got ${guestLateCancel.statusCode} ${guestLateCancel.body?.code}`)
+      }
+
+      // 2. Host CAN cancel before Check-out 12:00 ICT, recording cancelledBy & cancellationReason, preserving past-night calendar
+      const notifBefore = mockDb.notificationsList.length
+      const hostCancel = await makeRequest(
+        pipePath,
+        `/api/v1/bookings/${bId}/cancel`,
+        'PATCH',
+        { reason: 'Emergency facility repair' },
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (
+        hostCancel.statusCode !== 200 ||
+        hostCancel.body?.data?.booking?.cancelledBy !== 'host' ||
+        hostCancel.body?.data?.booking?.cancellationReason !== 'Emergency facility repair'
+      ) {
+        throw new Error(`Expected 200 with cancelledBy=host & reason, got ${hostCancel.statusCode}: ${JSON.stringify(hostCancel.body)}`)
+      }
+      if (mockDb.calendarsMap.get('501:2026-11-10')?.bookedRooms !== 2) {
+        throw new Error('Historical past-night calendar bookedRooms was mutated during cancel!')
+      }
+      if (mockDb.notificationsList.length <= notifBefore) {
+        throw new Error('Expected counterparty notification on host cancel')
+      }
+
+      // 3. Host cannot cancel confirmed booking after Check-out 12:00 ICT -> 400 B-4003
+      const bPastOutId = 9802
+      mockDb.bookingsMap.set(bPastOutId, {
+        id: bPastOutId,
+        checkInDate: new Date('2026-11-10T00:00:00.000Z'),
+        checkOutDate: new Date('2026-11-12T00:00:00.000Z'),
+        numberOfPets: 1,
+        totalPrice: 1600,
+        bookingStatus: 'confirmed',
+        confirmedAt: new Date('2026-11-09T00:00:00.000Z'),
+        guestId: userAId,
+        propertyId: 101,
+        property: mockDb.propertiesMap.get(101),
+        bookingOrders: [],
+        bookingPetProfiles: [],
+        createdAt: new Date('2026-11-08T00:00:00.000Z'),
+        updatedAt: new Date(),
+        deletedAt: null,
+      })
+      const hostPostCheckoutCancel = await makeRequest(
+        pipePath,
+        `/api/v1/bookings/${bPastOutId}/cancel`,
+        'PATCH',
+        undefined,
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (hostPostCheckoutCancel.statusCode !== 400 || hostPostCheckoutCancel.body?.code !== 'B-4003') {
+        throw new Error(`Expected 400 B-4003 on host cancel after check-out, got ${hostPostCheckoutCancel.statusCode}`)
+      }
+      mockDb.bookingsMap.delete(bPastOutId)
+    })
+
+    await runTest('Booking Lifecycle: Payment Confirmation Deadline & Property Ban Guards (B-4003 / B-4004)', async () => {
+      // 1. Expired payment window (> 24h) -> 400 B-4003 & auto-cancelled with quota restored
+      const pRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+        bookingOrders: [
+          { roomCategoryId: 501, checkInDate: '2026-12-28', checkOutDate: '2026-12-29', roomsBooked: 1 },
+        ],
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      const expId = pRes.body?.data?.booking?.id
+      const bookedBefore = mockDb.calendarsMap.get('501:2026-12-28')?.bookedRooms || 0
+      const expRec = mockDb.bookingsMap.get(expId)
+      expRec.createdAt = new Date(Date.now() - 26 * 60 * 60 * 1000)
+
+      const expConfirmRes = await makeRequest(
+        pipePath,
+        `/api/v1/bookings/${expId}/confirm-payment`,
+        'PATCH',
+        { slipUrl: 'http://localhost:9000/slips/late.webp' },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (expConfirmRes.statusCode !== 400 || expConfirmRes.body?.code !== 'B-4003') {
+        throw new Error(`Expected 400 B-4003 on expired payment confirm, got ${expConfirmRes.statusCode}`)
+      }
+      if (mockDb.bookingsMap.get(expId)?.bookingStatus !== 'cancelled' || mockDb.bookingsMap.get(expId)?.cancelledBy !== 'system') {
+        throw new Error('Expired pending booking was not auto-cancelled by system')
+      }
+      if ((mockDb.calendarsMap.get('501:2026-12-28')?.bookedRooms || 0) !== bookedBefore - 1) {
+        throw new Error('Calendar quota was not restored after expired payment confirm')
+      }
+
+      // 2. Property admin-banned while booking pending -> 409 B-4004 & restores quota
+      const pRes2 = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+        bookingOrders: [
+          { roomCategoryId: 501, checkInDate: '2026-12-28', checkOutDate: '2026-12-29', roomsBooked: 1 },
+        ],
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      const banId = pRes2.body?.data?.booking?.id
+      const prop101 = mockDb.propertiesMap.get(101)
+      prop101.isBannedByAdmin = true
+      try {
+        const banConfirmRes = await makeRequest(
+          pipePath,
+          `/api/v1/bookings/${banId}/confirm-payment`,
+          'PATCH',
+          { slipUrl: 'http://localhost:9000/slips/ban.webp' },
+          { Authorization: `Bearer ${userAAccessToken}` }
+        )
+        if (banConfirmRes.statusCode !== 409 || banConfirmRes.body?.code !== 'B-4004') {
+          throw new Error(`Expected 409 B-4004 when property banned before payment confirm, got ${banConfirmRes.statusCode}`)
+        }
+        if (mockDb.bookingsMap.get(banId)?.bookingStatus !== 'cancelled') {
+          throw new Error('Booking was not cancelled when property became unavailable')
+        }
+      } finally {
+        prop101.isBannedByAdmin = false
+      }
+
+      // 3. Concurrent/idempotent expired confirmBookingPayment does NOT double-restore calendar quota
+      const pRes3 = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+        bookingOrders: [
+          { roomCategoryId: 501, checkInDate: '2026-12-28', checkOutDate: '2026-12-29', roomsBooked: 1 },
+        ],
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      const concExpId = pRes3.body?.data?.booking?.id
+      const concExpRec = mockDb.bookingsMap.get(concExpId)
+      concExpRec.createdAt = new Date(Date.now() - 26 * 60 * 60 * 1000)
+      const calDec28 = mockDb.calendarsMap.get('501:2026-12-28')
+      const bookedWhileActive = calDec28?.bookedRooms || 0
+      const origTx3 = (prisma as any).$transaction
+      try {
+        let simulatedConcurrentCancel = false
+        ;(prisma as any).$transaction = async (fn: any, opts: any) => {
+          if (!simulatedConcurrentCancel) {
+            simulatedConcurrentCancel = true
+            // Simulate concurrent sweeper already cancelling & restoring 1 room before tx acquires FOR UPDATE
+            concExpRec.bookingStatus = 'cancelled'
+            concExpRec.cancelledBy = 'system'
+            calDec28.bookedRooms = Math.max(0, calDec28.bookedRooms - 1)
+            calDec28.availableRooms = Math.min(calDec28.availableRooms + 1, 5)
+          }
+          return origTx3(fn, opts)
+        }
+
+        const concExpConfirmRes = await makeRequest(
+          pipePath,
+          `/api/v1/bookings/${concExpId}/confirm-payment`,
+          'PATCH',
+          { slipUrl: 'http://localhost:9000/slips/conc-late.webp' },
+          { Authorization: `Bearer ${userAAccessToken}` }
+        )
+        if (concExpConfirmRes.statusCode !== 400 || concExpConfirmRes.body?.code !== 'B-4003') {
+          throw new Error(`Expected 400 B-4003 on concurrent expired confirm, got ${concExpConfirmRes.statusCode}`)
+        }
+        if (calDec28.bookedRooms !== bookedWhileActive - 1) {
+          throw new Error(`Expected bookedRooms to stay ${bookedWhileActive - 1} (no double restore), got ${calDec28.bookedRooms}`)
+        }
+      } finally {
+        ;(prisma as any).$transaction = origTx3
+      }
+
+      // 4. S3 orphan slip GC when confirmBookingPayment tx fails (and old slip preserved)
+      const pRes4 = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+        bookingOrders: [
+          { roomCategoryId: 501, checkInDate: '2026-12-28', checkOutDate: '2026-12-29', roomsBooked: 1 },
+        ],
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      const gcSlipId = pRes4.body?.data?.booking?.id
+      const gcSlipRec = mockDb.bookingsMap.get(gcSlipId)
+      gcSlipRec.paymentSlipUrl = 'https://example.com/slips/existing-old-slip.webp'
+
+      const origS3Send4 = (s3Client as any).send
+      const origFetch4 = globalThis.fetch
+      const origTx4 = (prisma as any).$transaction
+      const slipOps: string[] = []
+      try {
+        ;(s3Client as any).send = async (cmd: any) => {
+          const name = cmd?.constructor?.name || ''
+          if (name === 'PutObjectCommand') slipOps.push('UPLOAD')
+          if (name === 'DeleteObjectCommand') slipOps.push(`DELETE:${cmd?.input?.Key || ''}`)
+          return {}
+        }
+        globalThis.fetch = (async (url: any, init?: any) => {
+          const urlStr = String(url || '')
+          if (urlStr.includes('/storage/v1/object/')) {
+            const method = String(init?.method || 'GET').toUpperCase()
+            if (method === 'POST') slipOps.push('UPLOAD')
+            if (method === 'DELETE') slipOps.push(`DELETE:${urlStr}`)
+            return new Response('', { status: 200 })
+          }
+          return origFetch4(url, init)
+        }) as typeof fetch
+
+        ;(prisma as any).$transaction = async (fn: any, opts: any) => {
+          gcSlipRec.bookingStatus = 'cancelled'
+          return origTx4(fn, opts)
+        }
+
+        const boundary = '----JoodPakPawSlipBoundary'
+        const slipBody = Buffer.concat([
+          Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="slip"; filename="slip.png"\r\nContent-Type: image/png\r\n\r\n`),
+          Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+          Buffer.from(`\r\n--${boundary}--\r\n`),
+        ])
+
+        const slipGcRes = await new Promise<{ statusCode: number; body: any }>((resolve, reject) => {
+          const req = http.request(
+            {
+              socketPath: pipePath,
+              path: `/api/v1/bookings/${gcSlipId}/confirm-payment`,
+              method: 'PATCH',
+              headers: {
+                Authorization: `Bearer ${userAAccessToken}`,
+                "Content-Type": `multipart/form-data; boundary=${boundary}`,
+                "Content-Length": String(slipBody.length),
+              },
+            },
+            (res) => {
+              let data = ''
+              res.on('data', (c) => (data += c))
+              res.on('end', () => {
+                let parsed = data
+                try { parsed = JSON.parse(data) } catch {}
+                resolve({ statusCode: res.statusCode || 0, body: parsed })
+              })
+            }
+          )
+          req.on('error', reject)
+          req.write(slipBody)
+          req.end()
+        })
+
+        if (slipGcRes.statusCode !== 400 || slipGcRes.body?.code !== 'B-4003') {
+          throw new Error(`Expected 400 B-4003 on concurrent confirm slip race, got ${slipGcRes.statusCode}`)
+        }
+        const deletedOps = slipOps.filter((op) => op.startsWith('DELETE:'))
+        if (!slipOps.includes('UPLOAD') || deletedOps.length !== 1) {
+          throw new Error(`Expected 1 UPLOAD and 1 new-slip DELETE on failed confirm tx, got ${JSON.stringify(slipOps)}`)
+        }
+        if (deletedOps[0].includes('existing-old-slip')) {
+          throw new Error(`Existing old slip should NOT be deleted when confirm tx fails: ${deletedOps[0]}`)
+        }
+      } finally {
+        ;(s3Client as any).send = origS3Send4
+        globalThis.fetch = origFetch4
+        ;(prisma as any).$transaction = origTx4
+      }
+    })
+
+    await runTest('Booking Lifecycle: Lazy Reconciliation Auto-Expires Pending & Auto-Completes Confirmed Bookings', async () => {
+      // 1. Overdue pending booking lazily auto-expires via GET /api/v1/bookings/paginate
+      const pRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+        bookingOrders: [
+          { roomCategoryId: 501, checkInDate: '2026-12-29', checkOutDate: '2026-12-30', roomsBooked: 1 },
+        ],
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      const lazyExpId = pRes.body?.data?.booking?.id
+      const lazyExpRec = mockDb.bookingsMap.get(lazyExpId)
+      lazyExpRec.createdAt = new Date(Date.now() - 25 * 60 * 60 * 1000)
+
+      // 2. Overdue confirmed booking (> checkOut 18:00 ICT) lazily auto-completes via GET /api/v1/hosts/bookings/paginate
+      const lazyCompId = 9803
+      mockDb.bookingsMap.set(lazyCompId, {
+        id: lazyCompId,
+        checkInDate: new Date('2026-11-10T00:00:00.000Z'),
+        checkOutDate: new Date('2026-11-12T00:00:00.000Z'),
+        numberOfPets: 1,
+        totalPrice: 1600,
+        bookingStatus: 'confirmed',
+        confirmedAt: new Date('2026-11-09T00:00:00.000Z'),
+        successedAt: null,
+        guestId: userAId,
+        propertyId: 101,
+        property: mockDb.propertiesMap.get(101),
+        bookingOrders: [],
+        bookingPetProfiles: [],
+        createdAt: new Date('2026-11-08T00:00:00.000Z'),
+        updatedAt: new Date(),
+        deletedAt: null,
+      })
+
+      const guestListRes = await makeRequest(
+        pipePath,
+        '/api/v1/bookings/paginate?page=1&limit=20',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (guestListRes.statusCode !== 200) {
+        throw new Error(`Expected 200 on guest paginate, got ${guestListRes.statusCode}`)
+      }
+      if (
+        mockDb.bookingsMap.get(lazyExpId)?.bookingStatus !== 'cancelled' ||
+        mockDb.bookingsMap.get(lazyExpId)?.cancelledBy !== 'system'
+      ) {
+        throw new Error('Lazy reconcile did not auto-expire overdue pending booking')
+      }
+      if (
+        mockDb.bookingsMap.get(lazyCompId)?.bookingStatus !== 'successful' ||
+        new Date(mockDb.bookingsMap.get(lazyCompId)?.successedAt).toISOString() !== '2026-11-12T11:00:00.000Z'
+      ) {
+        throw new Error(`Lazy reconcile did not auto-complete overdue confirmed booking at 18:00 ICT: ${JSON.stringify(mockDb.bookingsMap.get(lazyCompId))}`)
+      }
+
+      // Clean up test synthetic booking
+      mockDb.bookingsMap.delete(lazyCompId)
+      const sweepRes = await reconcileLifecycleBookings()
+      if (typeof sweepRes.expiredCount !== 'number' || typeof sweepRes.completedCount !== 'number') {
+        throw new Error('Expected reconcileLifecycleBookings to return { expiredCount, completedCount }')
+      }
+    })
+
+    await runTest('Booking Lifecycle: 14-Day Review Window, Concurrent Duplicate Lock, S3 GC & Host Public Reply', async () => {
+      // 1. Expired 14-day review window -> 400 B-4003 (and S3 upload is NOT invoked)
+      const oldCompId = 9804
+      mockDb.bookingsMap.set(oldCompId, {
+        id: oldCompId,
+        checkInDate: new Date('2026-10-10T00:00:00.000Z'),
+        checkOutDate: new Date('2026-10-12T00:00:00.000Z'),
+        numberOfPets: 1,
+        totalPrice: 1600,
+        bookingStatus: 'successful',
+        successedAt: new Date('2026-10-12T11:00:00.000Z'),
+        rating: null,
+        comment: null,
+        reviewedAt: null,
+        hostReply: null,
+        hostRepliedAt: null,
+        guestId: userAId,
+        propertyId: 101,
+        property: mockDb.propertiesMap.get(101),
+        bookingOrders: [],
+        bookingPetProfiles: [],
+        createdAt: new Date('2026-10-08T00:00:00.000Z'),
+        updatedAt: new Date(),
+        deletedAt: null,
+      })
+
+      const expiredRevRes = await makeRequest(
+        pipePath,
+        `/api/v1/bookings/${oldCompId}/review`,
+        'POST',
+        { rating: 5, comment: 'Way too late' },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (expiredRevRes.statusCode !== 400 || expiredRevRes.body?.code !== 'B-4003') {
+        throw new Error(`Expected 400 B-4003 on expired 14-day review window, got ${expiredRevRes.statusCode}`)
+      }
+      mockDb.bookingsMap.delete(oldCompId)
+
+      // 2. Concurrent review lock inside tx + S3 GC cleanup on failure
+      const raceBookingId = 9805
+      mockDb.bookingsMap.set(raceBookingId, {
+        id: raceBookingId,
+        checkInDate: new Date('2026-11-10T00:00:00.000Z'),
+        checkOutDate: new Date('2026-11-12T00:00:00.000Z'),
+        numberOfPets: 1,
+        totalPrice: 1600,
+        bookingStatus: 'successful',
+        successedAt: new Date(),
+        rating: null,
+        comment: null,
+        reviewedAt: null,
+        hostReply: null,
+        hostRepliedAt: null,
+        guestId: userAId,
+        propertyId: 101,
+        property: mockDb.propertiesMap.get(101),
+        bookingOrders: [],
+        bookingPetProfiles: [],
+        createdAt: new Date('2026-11-08T00:00:00.000Z'),
+        updatedAt: new Date(),
+        deletedAt: null,
+      })
+
+      const origS3Send = (s3Client as any).send
+      const origFetch = globalThis.fetch
+      const origTx = (prisma as any).$transaction
+      const storageOps: string[] = []
+      try {
+        ;(s3Client as any).send = async (cmd: any) => {
+          const name = cmd?.constructor?.name || ''
+          if (name === 'PutObjectCommand') storageOps.push('UPLOAD')
+          if (name === 'DeleteObjectCommand') storageOps.push('DELETE')
+          return {}
+        }
+        globalThis.fetch = (async (url: any, init?: any) => {
+          const urlStr = String(url || '')
+          if (urlStr.includes('/storage/v1/object/')) {
+            const method = String(init?.method || 'GET').toUpperCase()
+            if (method === 'POST') storageOps.push('UPLOAD')
+            if (method === 'DELETE') storageOps.push('DELETE')
+            return new Response('', { status: 200 })
+          }
+          return origFetch(url, init)
+        }) as typeof fetch
+        // Simulate another concurrent request winning the lock right before our tx reads curBooking
+        let txEntered = false
+        ;(prisma as any).$transaction = async (fn: any, opts: any) => {
+          if (!txEntered) {
+            txEntered = true
+            const b = mockDb.bookingsMap.get(raceBookingId)
+            b.reviewedAt = new Date()
+            b.rating = 5
+          }
+          return origTx(fn, opts)
+        }
+
+        // Send multipart/form-data review with 1 tiny synthetic image buffer
+        const boundary = '----JoodPakPawTestBoundary'
+        const bodyBuf = Buffer.concat([
+          Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="rating"\r\n\r\n5\r\n`),
+          Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="comment"\r\n\r\nGreat!\r\n`),
+          Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="images"; filename="cat.png"\r\nContent-Type: image/png\r\n\r\n`),
+          Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+          Buffer.from(`\r\n--${boundary}--\r\n`),
+        ])
+
+        const raceRes = await new Promise<{ statusCode: number; body: any }>((resolve, reject) => {
+          const req = http.request(
+            {
+              socketPath: pipePath,
+              path: `/api/v1/bookings/${raceBookingId}/review`,
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${userAAccessToken}`,
+                'Content-Type': `multipart/form-data; boundary=${boundary}`,
+                'Content-Length': String(bodyBuf.length),
+              },
+            },
+            (res) => {
+              let data = ''
+              res.on('data', (c) => (data += c))
+              res.on('end', () => {
+                let parsed = data
+                try { parsed = JSON.parse(data) } catch {}
+                resolve({ statusCode: res.statusCode || 0, body: parsed })
+              })
+            }
+          )
+          req.on('error', reject)
+          req.write(bodyBuf)
+          req.end()
+        })
+
+        if (raceRes.statusCode !== 409 || raceRes.body?.code !== 'B-4001') {
+          throw new Error(`Expected 409 B-4001 on concurrent review race, got ${raceRes.statusCode} ${raceRes.body?.code}`)
+        }
+        if (!storageOps.includes('UPLOAD') || !storageOps.includes('DELETE')) {
+          throw new Error(`Expected UPLOAD + DELETE storage GC on failed review tx, got ${JSON.stringify(storageOps)}`)
+        }
+      } finally {
+        ;(s3Client as any).send = origS3Send
+        globalThis.fetch = origFetch
+        ;(prisma as any).$transaction = origTx
+        mockDb.bookingsMap.delete(raceBookingId)
+      }
+
+      // 3. Host Public Reply (POST /api/v1/hosts/bookings/:bookingId/review-reply) on createdBookingId (already reviewed in PBI-13)
+      // 3a. IDOR: User A (guest) cannot reply -> 403 A-3007
+      const idorReplyRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/bookings/${createdBookingId}/review-reply`,
+        'POST',
+        { reply: 'Unauthorized reply' },
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (idorReplyRes.statusCode !== 403 || idorReplyRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on IDOR host reply, got ${idorReplyRes.statusCode}`)
+      }
+
+      // 3b. Empty reply -> 400 T-2007
+      const emptyReplyRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/bookings/${createdBookingId}/review-reply`,
+        'POST',
+        { reply: '   ' },
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (emptyReplyRes.statusCode !== 400 || emptyReplyRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on empty host reply, got ${emptyReplyRes.statusCode}`)
+      }
+
+      // 3c. Valid host reply -> 200 & surfaces in GET booking + GET property reviews
+      const validReplyRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/bookings/${createdBookingId}/review-reply`,
+        'POST',
+        { reply: 'Thank you so much for trusting us with Kuro!' },
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (
+        validReplyRes.statusCode !== 200 ||
+        validReplyRes.body?.data?.hostReply !== 'Thank you so much for trusting us with Kuro!' ||
+        !validReplyRes.body?.data?.hostRepliedAt
+      ) {
+        throw new Error(`Expected 200 with hostReply, got ${validReplyRes.statusCode}: ${JSON.stringify(validReplyRes.body)}`)
+      }
+
+      // 3d. Duplicate reply -> 409 B-4001
+      const dupReplyRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/bookings/${createdBookingId}/review-reply`,
+        'POST',
+        { reply: 'Second reply attempt' },
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (dupReplyRes.statusCode !== 409 || dupReplyRes.body?.code !== 'B-4001') {
+        throw new Error(`Expected 409 B-4001 on duplicate host reply, got ${dupReplyRes.statusCode}`)
+      }
+
+      // 3e. Verify hostReply appears in host reviews endpoint & booking detail
+      const bDetailAfterReply = await makeRequest(
+        pipePath,
+        `/api/v1/bookings/${createdBookingId}`,
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (bDetailAfterReply.body?.data?.booking?.hostReply !== 'Thank you so much for trusting us with Kuro!') {
+        throw new Error('hostReply missing from GET /bookings/:id DTO')
+      }
+
+      const hostRevsAfter = await makeRequest(
+        pipePath,
+        `/api/v1/properties/hosts/${userBId}/reviews?page=1&limit=10`,
+        'GET'
+      )
+      if (hostRevsAfter.statusCode !== 200) {
+        throw new Error(`Expected 200 from GET /properties/hosts/:hostId/reviews, got ${hostRevsAfter.statusCode}`)
+      }
+      const matchedRev = (hostRevsAfter.body?.data || []).find((r: any) => r.bookingId === createdBookingId)
+      if (!matchedRev || matchedRev.hostReply !== 'Thank you so much for trusting us with Kuro!') {
+        throw new Error('hostReply missing from GET /properties/hosts/:hostId/reviews')
+      }
+    })
+
+    await runTest('Booking Lifecycle: Deletion Guard Allows Deleting Property/Room with "successful" Bookings & syncPropertyBookingCount Excludes Cancelled', async () => {
+      // Create a fresh property & room category owned by User B
+      const propRes = await makeRequest(pipePath, '/api/v1/hosts/properties', 'POST', {
+        title: 'Successful Stay Deletable Hotel',
+        description: 'Testing terminal successful guard',
+        address: '99 Rama 9',
+        province: 'Bangkok',
+        propertyTypeId: 1,
+      }, { Authorization: `Bearer ${userBAccessToken}` })
+      const pId = propRes.body?.data?.property?.id
+
+      const rcRes = await makeRequest(pipePath, `/api/v1/hosts/properties/${pId}/room-categories`, 'POST', {
+        name: 'Cozy Cat Pod',
+        totalRoom: 2,
+        numberOfPets: 1,
+        basePrice: 500,
+        petTypes: JSON.stringify([1, 2]),
+      }, { Authorization: `Bearer ${userBAccessToken}` })
+      const rcId = rcRes.body?.data?.roomCategory?.id
+
+      // Add bookings: 1 'successful' (even with future checkOutDate), 1 'cancelled', 1 'pending'
+      mockDb.bookingsMap.set(9810, {
+        id: 9810,
+        bookingStatus: 'successful',
+        checkOutDate: new Date('2026-12-30T00:00:00.000Z'),
+        propertyId: pId,
+        property: mockDb.propertiesMap.get(pId),
+        bookingOrders: [{ roomCategoryId: rcId }],
+        deletedAt: null,
+      })
+      mockDb.bookingsMap.set(9811, {
+        id: 9811,
+        bookingStatus: 'cancelled',
+        checkOutDate: new Date('2026-12-30T00:00:00.000Z'),
+        propertyId: pId,
+        property: mockDb.propertiesMap.get(pId),
+        bookingOrders: [{ roomCategoryId: rcId }],
+        deletedAt: null,
+      })
+      mockDb.bookingsMap.set(9812, {
+        id: 9812,
+        bookingStatus: 'confirmed',
+        checkOutDate: new Date('2026-12-30T00:00:00.000Z'),
+        propertyId: pId,
+        property: mockDb.propertiesMap.get(pId),
+        bookingOrders: [],
+        deletedAt: null,
+      })
+
+      // 1. syncPropertyBookingCount should count only REAL_STAY_STATUSES (successful + confirmed = 2, NOT cancelled)
+      await syncPropertyBookingCount(pId)
+      if (mockDb.propertiesMap.get(pId)?.bookingCount !== 2) {
+        throw new Error(`Expected bookingCount=2 (excluding cancelled), got ${mockDb.propertiesMap.get(pId)?.bookingCount}`)
+      }
+
+      // Remove the confirmed booking so only 'successful' + 'cancelled' remain
+      mockDb.bookingsMap.delete(9812)
+
+      // 2. Deleting room category with only 'successful' + 'cancelled' bookings -> 200
+      const delRcRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/properties/${pId}/room-categories/${rcId}`,
+        'DELETE',
+        undefined,
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (delRcRes.statusCode !== 200) {
+        throw new Error(`Expected 200 deleting room category with only successful bookings, got ${delRcRes.statusCode}: ${JSON.stringify(delRcRes.body)}`)
+      }
+
+      // 3. Deleting property with only 'successful' + 'cancelled' bookings -> 200
+      const delPropRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/properties/${pId}`,
+        'DELETE',
+        undefined,
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (delPropRes.statusCode !== 200) {
+        throw new Error(`Expected 200 deleting property with only successful bookings, got ${delPropRes.statusCode}: ${JSON.stringify(delPropRes.body)}`)
+      }
+
+      mockDb.bookingsMap.delete(9810)
+      mockDb.bookingsMap.delete(9811)
     })
   } finally {
     mockDb.restore()

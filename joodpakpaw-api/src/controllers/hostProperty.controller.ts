@@ -6,6 +6,10 @@ import { uploadMultipleImagesAsWebp, deleteObjectFromS3 } from '../services/stor
 import { formatPropertyDto, syncPropertyMinPrice } from './property.controller';
 import { normalizePetName } from './lookup.controller';
 import { cacheService } from '../services/cache.service';
+import {
+  TERMINAL_BOOKING_STATUSES,
+  reconcileLifecycleBookings,
+} from '../services/bookingLifecycle.service';
 
 function isAdminUser(req: Request): boolean {
   return Boolean(
@@ -832,6 +836,7 @@ export async function deleteHostProperty(
     }
 
     // Active Booking Guard: block deletion if active/upcoming bookings exist
+    await reconcileLifecycleBookings({ propertyId });
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
 
@@ -847,7 +852,7 @@ export async function deleteHostProperty(
           },
           {
             bookingStatus: {
-              notIn: ['cancelled', 'rejected', 'completed', 'success', 'expired'],
+              notIn: TERMINAL_BOOKING_STATUSES,
             },
             checkOutDate: { gte: today },
           },
@@ -1665,6 +1670,7 @@ export async function deleteHostRoomCategory(
     }
 
     // Active Booking Guard: block deletion if active/upcoming booking_orders exist for this room category
+    await reconcileLifecycleBookings({ propertyId });
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
 
@@ -1682,13 +1688,7 @@ export async function deleteHostRoomCategory(
             },
             {
               bookingStatus: {
-                notIn: [
-                  'cancelled',
-                  'rejected',
-                  'completed',
-                  'success',
-                  'expired',
-                ],
+                notIn: TERMINAL_BOOKING_STATUSES,
               },
               checkOutDate: { gte: today },
             },

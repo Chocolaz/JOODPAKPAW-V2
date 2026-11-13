@@ -19,6 +19,7 @@ import {
   getHostBookingById,
   getHostPropertyBookingsPaginated,
   completeHostBooking,
+  replyToBookingReview,
 } from '../controllers/booking.controller';
 import { getAllFacilities } from '../controllers/lookup.controller';
 import {
@@ -37,6 +38,7 @@ hostRouter.get('/bookings/all', authenticateToken, getHostBookingsAll);
 hostRouter.get('/bookings/paginate', authenticateToken, getHostBookingsPaginated);
 hostRouter.get('/bookings/:bookingId', authenticateToken, getHostBookingById);
 hostRouter.patch('/bookings/:bookingId/success', authenticateToken, completeHostBooking);
+hostRouter.post('/bookings/:bookingId/review-reply', authenticateToken, replyToBookingReview);
 
 // Host properties CRUD
 hostRouter.get('/properties/all', authenticateToken, getHostProperties);
