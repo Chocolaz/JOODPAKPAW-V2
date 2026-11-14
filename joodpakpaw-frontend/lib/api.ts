@@ -37,7 +37,20 @@ import {
   PetBreedsResponse,
   RoomCategoryCalendarItem,
   RoomCategoryCalendarsResponse,
+  ApiResponse,
+  BookingStatus,
+  BookingErrorCode,
 } from '@/types'
+export type { ApiResponse, BookingStatus, BookingErrorCode }
+export const BOOKING_ERROR_CODES = {
+  ALREADY_EXISTS_OR_CONFLICT: 'B-4001',
+  SELF_BOOKING_PROHIBITED: 'B-4002',
+  WINDOW_EXPIRED_OR_INVALID_DATES: 'B-4003',
+  CAPACITY_OR_ELIGIBILITY_ERROR: 'B-4004',
+  FORBIDDEN_IDOR: 'A-3007',
+  VALIDATION_ERROR: 'T-2007',
+  NOT_FOUND: 'DB-1002',
+} as const
 import { FavoriteFolderDetail } from '@/types/favorite'
 import type { PropertiesResponse } from '@/types/property'
 import type { HostProfileResponse, HostReviewsResponse } from '@/types/hostProfile'
@@ -999,27 +1012,34 @@ export const getBookingById = async (
 
 export const confirmPayment = async (
   bookingId: number,
-  slipImage?: File
-): Promise<void> => {
+  slipImage?: File | Blob
+): Promise<ApiResponse<FullBookingDetail>> => {
   if (slipImage) {
-    const compressedSlip = await compressImageToWebP(slipImage)
+    const fileToCompress =
+      slipImage instanceof File
+        ? slipImage
+        : new File([slipImage], 'payment-slip.png', {
+            type: slipImage.type || 'image/png',
+          })
+    const compressedSlip = await compressImageToWebP(fileToCompress)
     const formData = new FormData()
-    formData.append('slip', compressedSlip)
-    await request<any>({
+    formData.append('slip', compressedSlip, compressedSlip.name)
+    const res = await request<ApiResponse<FullBookingDetail>>({
       endpoint: `api/v1/bookings/${bookingId}/confirm-payment`,
       method: 'PATCH',
       body: formData,
       requiresAuth: true,
       errorContext: 'Confirm Payment',
     })
-    return
+    return res
   }
-  await request<any>({
+  const res = await request<ApiResponse<FullBookingDetail>>({
     endpoint: `api/v1/bookings/${bookingId}/confirm-payment`,
     method: 'PATCH',
     requiresAuth: true,
     errorContext: 'Confirm Payment',
   })
+  return res
 }
 
 export const confirmBookingPayment = confirmPayment
@@ -1027,14 +1047,47 @@ export const confirmBookingPayment = confirmPayment
 export const cancelBooking = async (
   bookingId: string | number,
   reason?: string
-): Promise<void> => {
-  await request<any>({
+): Promise<ApiResponse<FullBookingDetail>> => {
+  const res = await request<ApiResponse<FullBookingDetail>>({
     endpoint: `api/v1/bookings/${bookingId}/cancel`,
     ...(reason?.trim() ? { body: { reason: reason.trim() } } : {}),
     method: 'PATCH',
     requiresAuth: true,
     errorContext: 'Cancel Booking',
   })
+  return res
+}
+
+export const hostCancelBooking = async (
+  bookingId: number,
+  reason: string
+): Promise<ApiResponse<FullBookingDetail>> => {
+  const res = await request<ApiResponse<FullBookingDetail>>({
+    endpoint: `api/v1/bookings/${bookingId}/cancel`,
+    method: 'PATCH',
+    body: { reason: reason?.trim() || '' },
+    requiresAuth: true,
+    errorContext: 'Host Cancel Booking',
+  })
+  return res
+}
+
+export const hostAcceptBooking = async (
+  bookingId: number
+): Promise<ApiResponse<HostBookingDetail>> => {
+  const res = await request<ApiResponse<HostBookingDetail>>({
+    endpoint: `api/v1/hosts/bookings/${bookingId}/accept`,
+    method: 'PATCH',
+    requiresAuth: true,
+    errorContext: 'Host Accept Booking',
+  })
+  return res
+}
+
+export const hostConfirmBooking = async (
+  bookingId: number
+): Promise<ApiResponse<HostBookingDetail>> => {
+  return hostAcceptBooking(bookingId)
 }
 
 export const getHostBookings = async (): Promise<BookingsResponse> => {

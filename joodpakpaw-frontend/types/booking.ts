@@ -1,3 +1,30 @@
+export type BookingStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'cancelled'
+  | 'successful'
+  | 'rejected'
+
+/**
+ * Standard Booking domain error codes per JoodPakPaw API Contract specification
+ */
+export type BookingErrorCode =
+  | 'B-4001'
+  | 'B-4002'
+  | 'B-4003'
+  | 'B-4004'
+  | 'A-3007'
+  | 'T-2007'
+  | 'DB-1002'
+
+export interface ApiResponse<T = unknown> {
+  code?: string | number
+  message?: string
+  data?: T
+  booking?: T
+  [key: string]: unknown
+}
+
 export interface BookingDetail {
   propertyId: number
   checkInDate: string
@@ -6,6 +33,10 @@ export interface BookingDetail {
   petCount: number
   selectedRooms: { [key: string]: number }
   roomNames: { [key: string]: string }
+  guestNote?: string | null
+  totalPrice?: number
+  finalPrice?: number
+  amount?: number
 }
 
 export interface RoomCategoryBooked {
@@ -26,18 +57,26 @@ export interface Booking {
   checkOutDate: string
   numberOfPets: number
   totalPrice: number
-  bookingStatus: string
+  bookingStatus: BookingStatus
   rating?: number | null
+  guestNote?: string | null
+  paymentSlipUrl?: string | null
   hostReply?: string | null
   hostRepliedAt?: string | null
-  cancelledBy?: string | null
+  cancelledBy?: 'guest' | 'host' | 'system' | string | null
   cancellationReason?: string | null
   paymentDeadlineAt?: string | null
+  paymentDeadline?: string | null
+  checkInCutoffAt?: string | null
   canCompleteAt?: string | null
   autoCompleteAt?: string | null
   reviewDeadlineAt?: string | null
+  reviewDeadline?: string | null
+  confirmedAt?: string | null
+  successedAt?: string | null
   property: PropertyBooked
   createdAt: string
+  updatedAt?: string
 }
 
 export interface BookingsResponse {
@@ -62,6 +101,7 @@ export interface Guest {
   firstName: string
   lastName: string
   email: string
+  phone?: string
 }
 
 export interface BookingOrderProperty {
@@ -95,6 +135,9 @@ export interface BookingPetProfile {
   name: string
   image: string | null
   petTypeName?: string
+  breedName?: string
+  sex?: string
+  weight?: number | null
 }
 
 export interface FullBookingDetail {
@@ -103,16 +146,21 @@ export interface FullBookingDetail {
   checkOutDate: string
   numberOfPets: number
   totalPrice: number
-  bookingStatus: string
+  bookingStatus: BookingStatus
   rating?: number | null
+  guestNote?: string | null
+  paymentSlipUrl?: string | null
   hostReply?: string | null
   hostRepliedAt?: string | null
-  cancelledBy?: string | null
+  cancelledBy?: 'guest' | 'host' | 'system' | string | null
   cancellationReason?: string | null
   paymentDeadlineAt?: string | null
+  paymentDeadline?: string | null
+  checkInCutoffAt?: string | null
   canCompleteAt?: string | null
   autoCompleteAt?: string | null
   reviewDeadlineAt?: string | null
+  reviewDeadline?: string | null
   comment?: string | null
   successedAt?: string | null
   confirmedAt?: string | null
@@ -120,6 +168,7 @@ export interface FullBookingDetail {
   guest: Guest
   bookingOrders: BookingOrder[]
   petProfiles?: BookingPetProfile[]
+  property?: PropertyBooked
   createdAt: string
   updatedAt: string
 }
@@ -156,16 +205,21 @@ export interface HostBookingDetail {
   checkOutDate: string
   numberOfPets: number
   totalPrice: number
-  bookingStatus: string
+  bookingStatus: BookingStatus
   rating?: number | null
+  guestNote?: string | null
+  paymentSlipUrl?: string | null
   hostReply?: string | null
   hostRepliedAt?: string | null
-  cancelledBy?: string | null
+  cancelledBy?: 'guest' | 'host' | 'system' | string | null
   cancellationReason?: string | null
   paymentDeadlineAt?: string | null
+  paymentDeadline?: string | null
+  checkInCutoffAt?: string | null
   canCompleteAt?: string | null
   autoCompleteAt?: string | null
   reviewDeadlineAt?: string | null
+  reviewDeadline?: string | null
   comment?: string | null
   successedAt?: string | null
   confirmedAt?: string | null
