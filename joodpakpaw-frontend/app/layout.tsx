@@ -70,7 +70,7 @@ export default function RootLayout({
               <ChatProvider>
               <BookingProvider>
                 <DesktopNav />
-                <div className={`flex flex-col min-h-screen w-full${isAdmin ? '' : ` max-w-[1440px] mx-auto${pathname.startsWith('/authen') ? '' : ' lg:pt-16 xl:pt-[72px]'}`}`}>
+                <div className={`flex flex-col min-h-screen w-full${isAdmin ? '' : ` max-w-[1440px] mx-auto${pathname.startsWith('/authen') || pathname.startsWith('/booking') ? '' : ' lg:pt-16 xl:pt-[72px]'}`}`}>
                   <main className="flex-1">{children}</main>
                   {showBottomNav && <BottomNav />}
                 </div>

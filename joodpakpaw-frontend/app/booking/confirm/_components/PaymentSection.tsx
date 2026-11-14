@@ -1,10 +1,11 @@
 'use client'
 
-import React, { useState, useRef, useEffect, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
+import { PromptPaySlipDropzone } from '@/components/booking/PromptPaySlipDropzone'
 import { createBooking, confirmPayment } from '@/lib/api'
 import { ApiError } from '@/lib/errorHandling'
 import { BookingDetail } from '@/types'
@@ -14,12 +15,8 @@ import {
   Clock,
   ShieldCheck,
   QrCode,
-  UploadCloud,
-  FileImage,
   Copy,
   Check,
-  Trash2,
-  AlertCircle,
   Building2,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -251,6 +248,8 @@ interface PaymentSectionProps {
   setIsBookingLoading: (loading: boolean) => void
   onCancel: () => void
   guestNote?: string | null
+  stayDetailsNode?: React.ReactNode
+  priceSummaryNode?: React.ReactNode
 }
 
 type PaymentMode = 'now' | 'later'
@@ -261,27 +260,25 @@ export default function PaymentSection({
   setIsBookingLoading,
   onCancel,
   guestNote: propGuestNote,
+  stayDetailsNode,
+  priceSummaryNode,
 }: PaymentSectionProps) {
   const router = useRouter()
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('now')
   const [slipFile, setSlipFile] = useState<File | null>(null)
-  const [slipPreviewUrl, setSlipPreviewUrl] = useState<string | null>(null)
-  const [isDragging, setIsDragging] = useState<boolean>(false)
-  const [fileError, setFileError] = useState<string | null>(null)
   const [isCopied, setIsCopied] = useState<boolean>(false)
 
   const [paymentState, setPaymentState] = useState<
     'idle' | 'booking' | 'processing' | 'success'
   >('idle')
 
-  // Clean up object URL when component unmounts or preview changes
-  useEffect(() => {
-    return () => {
-      if (slipPreviewUrl) URL.revokeObjectURL(slipPreviewUrl)
-    }
-  }, [slipPreviewUrl])
+  const isPayLaterAllowed = useMemo(() => {
+    const dateStr = String(bookingDetails.checkInDate || '').slice(0, 10)
+    const checkInCutoffMs = Date.parse(`${dateStr}T07:00:00.000Z`)
+    if (Number.isNaN(checkInCutoffMs)) return true
+    return checkInCutoffMs - Date.now() > 2 * 60 * 60 * 1000
+  }, [bookingDetails.checkInDate])
 
   // Total amount from bookingDetails
   const totalAmount = useMemo(() => {
@@ -350,68 +347,6 @@ export default function PaymentSection({
     return payload
   }
 
-  // Validate and assign uploaded payment slip
-  const validateAndSetFile = (file: File) => {
-    setFileError(null)
-    const validMimes = ['image/jpeg', 'image/png', 'image/webp']
-    if (!validMimes.includes(file.type)) {
-      const err = 'Only image files (JPG, PNG, WebP) are allowed.'
-      setFileError(err)
-      toast.error(err)
-      return
-    }
-    if (file.size === 0) {
-      const err = 'Selected file is empty.'
-      setFileError(err)
-      toast.error(err)
-      return
-    }
-    const maxLimit = 10 * 1024 * 1024 // 10MB limit
-    if (file.size > maxLimit) {
-      const err = 'File size exceeds the 10MB limit.'
-      setFileError(err)
-      toast.error(err)
-      return
-    }
-
-    if (slipPreviewUrl) URL.revokeObjectURL(slipPreviewUrl)
-    setSlipFile(file)
-    setSlipPreviewUrl(URL.createObjectURL(file))
-    toast.success('Payment slip attached successfully')
-  }
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      validateAndSetFile(e.target.files[0])
-    }
-  }
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-  }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      validateAndSetFile(e.dataTransfer.files[0])
-    }
-  }
-
-  const handleRemoveFile = () => {
-    if (slipPreviewUrl) URL.revokeObjectURL(slipPreviewUrl)
-    setSlipFile(null)
-    setSlipPreviewUrl(null)
-    setFileError(null)
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }
-
   // Submission handlers
   const handlePayLater = async () => {
     setIsBookingLoading(true)
@@ -420,7 +355,7 @@ export default function PaymentSection({
     try {
       await createBooking(buildBookingBody())
       setPaymentState('success')
-      toast.success('Booking created! You can pay later at check-in.')
+      toast.success('Booking created! Please complete payment before the deadline.')
       setTimeout(() => router.push('/profile/bookings'), 1500)
     } catch (err) {
       console.error('Booking failed:', err)
@@ -455,6 +390,68 @@ export default function PaymentSection({
       if (paymentState !== 'success') setIsBookingLoading(false)
     }
   }
+
+  const confirmationActions = (
+    <>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="p-1.5 rounded-lg bg-deep-teal/10 text-deep-teal shrink-0">
+            {paymentMode === 'now' ? (
+              <QrCode className="w-4 h-4" />
+            ) : (
+              <Clock className="w-4 h-4 text-accent-orange" />
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] text-neutral-gray leading-none">
+              Selected payment
+            </p>
+            <p className="text-xs font-semibold text-foreground mt-0.5 truncate">
+              {paymentMode === 'now'
+                ? slipFile
+                  ? `PromptPay (Slip attached: ${slipFile.name})`
+                  : 'PromptPay QR & Bank Transfer'
+                : 'Pay later (before check-in)'}
+            </p>
+          </div>
+        </div>
+
+        {totalAmount > 0 && (
+          <div className="text-right shrink-0">
+            <span className="text-[11px] text-neutral-gray block leading-none">
+              Total
+            </span>
+            <span className="text-sm font-bold text-deep-teal tabular-nums">
+              ฿{totalAmount.toLocaleString()}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <Button
+        onClick={paymentMode === 'now' ? handlePayNow : handlePayLater}
+        disabled={isBookingLoading || (paymentMode === 'now' && !slipFile)}
+        className="w-full h-12 bg-accent-orange hover:bg-accent-orange/90 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors cursor-pointer"
+      >
+        {isBookingLoading ? (
+          <Spinner className="w-4 h-4" />
+        ) : paymentMode === 'now' ? (
+          slipFile ? 'Upload Slip & Confirm Booking' : 'Attach payment slip to confirm'
+        ) : (
+          'Confirm Booking (Pay Later)'
+        )}
+      </Button>
+
+      <Button
+        onClick={onCancel}
+        disabled={isBookingLoading}
+        variant="ghost"
+        className="w-full h-9 text-xs text-neutral-gray hover:text-foreground rounded-lg cursor-pointer"
+      >
+        Cancel
+      </Button>
+    </>
+  )
 
   return (
     <div className="relative">
@@ -501,8 +498,13 @@ export default function PaymentSection({
         </div>
       )}
 
-      <div className="space-y-4">
-        {/* Section header */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-5 lg:gap-6 items-start">
+        {/* Left column: Stay Details + Payment Method */}
+        <div className="space-y-4 min-w-0">
+          {stayDetailsNode}
+
+          <div className="space-y-4">
+            {/* Section header */}
         <div className="flex items-center justify-between">
           <h4 className="text-xs font-semibold text-neutral-gray">
             Payment method
@@ -636,123 +638,32 @@ export default function PaymentSection({
                 </div>
 
                 {/* Bank Transfer Payment Slip Dropzone */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-foreground">
-                      Payment transfer slip
-                    </label>
-                    <span className="text-[11px] text-neutral-gray">
-                      JPG, PNG, WebP up to 10MB
-                    </span>
-                  </div>
-
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    className="hidden"
-                    onChange={handleFileChange}
-                  />
-
-                  {!slipFile ? (
-                    <div
-                      onDragOver={handleDragOver}
-                      onDragLeave={handleDragLeave}
-                      onDrop={handleDrop}
-                      onClick={() => fileInputRef.current?.click()}
-                      className={cn(
-                        'border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-2 bg-white',
-                        isDragging
-                          ? 'border-accent-orange bg-accent-orange/5'
-                          : 'border-border hover:border-accent-orange/50'
-                      )}
-                    >
-                      <div className="w-10 h-10 rounded-full bg-off-white flex items-center justify-center text-accent-orange">
-                        <UploadCloud className="w-5 h-5" />
-                      </div>
-                      <div className="space-y-0.5">
-                        <p className="text-xs font-medium text-foreground">
-                          Click to upload or drag & drop slip
-                        </p>
-                        <p className="text-[11px] text-neutral-gray">
-                          Bank transfer confirmation receipt
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-white rounded-xl border border-border p-3 flex items-center justify-between gap-3 shadow-sm">
-                      <div className="flex items-center gap-3 min-w-0">
-                        {slipPreviewUrl ? (
-                          <div className="w-12 h-12 rounded-lg overflow-hidden border border-border shrink-0 bg-off-white">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={slipPreviewUrl}
-                              alt="Slip preview"
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                        ) : (
-                          <div className="w-12 h-12 rounded-lg bg-off-white flex items-center justify-center shrink-0 text-deep-teal">
-                            <FileImage className="w-6 h-6" />
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <p className="text-xs font-medium text-foreground truncate">
-                            {slipFile.name}
-                          </p>
-                          <p className="text-[11px] text-neutral-gray mt-0.5">
-                            {(slipFile.size / 1024).toFixed(1)} KB · Ready to submit
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="text-xs text-deep-teal h-8 px-2 hover:bg-deep-teal/5"
-                        >
-                          Change
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={handleRemoveFile}
-                          className="text-xs text-red-600 h-8 px-2 hover:bg-red-50 hover:text-red-700"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  {fileError && (
-                    <div className="flex items-center gap-1.5 text-xs text-red-600 mt-1">
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                      <span>{fileError}</span>
-                    </div>
-                  )}
-                </div>
+                <PromptPaySlipDropzone
+                  slipFile={slipFile}
+                  onSlipChange={setSlipFile}
+                  amount={totalAmount}
+                />
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
-        {/* Option 2: Pay Later (Pay at Check-in) */}
+        {/* Option 2: Pay Later (Before Check-in) */}
         <button
           type="button"
+          disabled={!isPayLaterAllowed}
           onClick={() => {
+            if (!isPayLaterAllowed) return
             setPaymentMode('later')
-            handleRemoveFile()
+            setSlipFile(null)
           }}
           className={cn(
-            'w-full flex items-center justify-between p-4 rounded-2xl border transition-colors duration-150 cursor-pointer bg-white text-left',
-            paymentMode === 'later'
-              ? 'border-accent-orange bg-accent-orange/5 shadow-sm'
-              : 'border-border hover:border-neutral-gray/40'
+            'w-full flex items-center justify-between p-4 rounded-2xl border transition-colors duration-150 bg-white text-left',
+            !isPayLaterAllowed
+              ? 'border-border bg-off-white/60 opacity-60 cursor-not-allowed'
+              : paymentMode === 'later'
+                ? 'border-accent-orange bg-accent-orange/5 shadow-sm cursor-pointer'
+                : 'border-border hover:border-neutral-gray/40 cursor-pointer'
           )}
         >
           <div className="flex items-center gap-3">
@@ -773,10 +684,12 @@ export default function PaymentSection({
                   paymentMode === 'later' ? 'text-accent-orange' : 'text-foreground'
                 )}
               >
-                Pay at Check-in (Pay Later)
+                Pay Later (Before Check-in)
               </p>
               <p className="text-xs text-neutral-gray mt-0.5">
-                No transfer slip required now — pay upon arrival
+                {isPayLaterAllowed
+                  ? 'Complete PromptPay transfer before check-in (14:00) or within 24 hours'
+                  : 'Unavailable within 2 hours of check-in — please pay now'}
               </p>
             </div>
           </div>
@@ -794,68 +707,23 @@ export default function PaymentSection({
             )}
           </div>
         </button>
+          </div>
+        </div>
+
+        {/* Right column: Price Summary + Desktop Sticky Confirmation CTA */}
+        <div className="space-y-4 lg:sticky lg:top-6 min-w-0">
+          {priceSummaryNode}
+
+          <div className="hidden lg:block bg-white rounded-2xl p-5 shadow-sm border border-border space-y-3.5">
+            {confirmationActions}
+          </div>
+        </div>
       </div>
 
-      {/* Slide-up Bottom Confirmation Footer */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-border shadow-sm z-40">
+      {/* Mobile Slide-up Bottom Confirmation Footer */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-border shadow-sm z-40">
         <div className="max-w-[560px] mx-auto px-4 sm:px-6 py-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-deep-teal/10 text-deep-teal">
-                {paymentMode === 'now' ? (
-                  <QrCode className="w-4 h-4" />
-                ) : (
-                  <Clock className="w-4 h-4 text-accent-orange" />
-                )}
-              </div>
-              <div>
-                <p className="text-[11px] text-neutral-gray leading-none">
-                  Selected payment
-                </p>
-                <p className="text-xs font-semibold text-foreground mt-0.5">
-                  {paymentMode === 'now'
-                    ? slipFile
-                      ? `PromptPay (Slip attached: ${slipFile.name})`
-                      : 'PromptPay QR & Bank Transfer'
-                    : 'Pay at check-in'}
-                </p>
-              </div>
-            </div>
-
-            {totalAmount > 0 && (
-              <div className="text-right">
-                <span className="text-[11px] text-neutral-gray block leading-none">
-                  Total
-                </span>
-                <span className="text-sm font-bold text-deep-teal tabular-nums">
-                  ฿{totalAmount.toLocaleString()}
-                </span>
-              </div>
-            )}
-          </div>
-
-          <Button
-            onClick={paymentMode === 'now' ? handlePayNow : handlePayLater}
-            disabled={isBookingLoading}
-            className="w-full h-12 bg-accent-orange hover:bg-accent-orange/90 text-white font-semibold text-sm rounded-xl transition-colors cursor-pointer"
-          >
-            {isBookingLoading ? (
-              <Spinner className="w-4 h-4" />
-            ) : paymentMode === 'now' ? (
-              slipFile ? 'Upload Slip & Confirm Booking' : 'Confirm with PromptPay'
-            ) : (
-              'Confirm Booking (Pay Later)'
-            )}
-          </Button>
-
-          <Button
-            onClick={onCancel}
-            disabled={isBookingLoading}
-            variant="ghost"
-            className="w-full h-9 text-xs text-neutral-gray hover:text-foreground rounded-lg cursor-pointer"
-          >
-            Cancel
-          </Button>
+          {confirmationActions}
         </div>
       </div>
     </div>

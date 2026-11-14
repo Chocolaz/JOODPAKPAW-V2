@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/drawer'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
-import { BookingRoomCard } from './BookingRoomCard'
+import { BookingRoomCard, getRoomIneligibilityReason } from './BookingRoomCard'
 import { BookingSearchBar, SearchParams } from './BookingSearchBar'
 import { useBooking } from '@/app/_context/BookingContext'
 import { useAuth } from '@/app/_components/AuthContext'
@@ -185,6 +185,21 @@ export function BookingDrawer({
     )
   }
 
+  const selectedPets = React.useMemo(
+    () => petProfiles.filter((p) => selectedPetIds.includes(p.id)),
+    [petProfiles, selectedPetIds]
+  )
+
+  React.useEffect(() => {
+    Object.entries(selectedRooms).forEach(([id, count]) => {
+      if (count <= 0) return
+      const cat = roomCategories.find((c) => c.id === Number(id))
+      if (cat && getRoomIneligibilityReason(cat, selectedPets, petSizeId) !== null) {
+        handleSelectChange(cat.id, 0)
+      }
+    })
+  }, [selectedPets, petSizeId, roomCategories, selectedRooms, handleSelectChange])
+
   const petCountText = React.useMemo(() => {
     if (selectedPetIds.length > 0) {
       const names = petProfiles.filter((p) => selectedPetIds.includes(p.id)).map((p) => p.name)
@@ -291,6 +306,8 @@ export function BookingDrawer({
               categories={roomCategories}
               selectedRooms={selectedRooms}
               onSelectChange={handleSelectChange}
+              selectedPets={selectedPets}
+              petSizeId={petSizeId}
             />
           )}
         </>

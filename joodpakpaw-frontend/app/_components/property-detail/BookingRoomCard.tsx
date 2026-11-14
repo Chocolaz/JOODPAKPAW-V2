@@ -1,8 +1,9 @@
 'use client'
 
-import { RoomCategories } from '@/types'
-import { getPetPolicy, assetPath, formatPetSizeRange } from '@/lib/utils'
+import { PetProfile, RoomCategories } from '@/types'
+import { getPetPolicy, assetPath, formatPetSizeRange, cn } from '@/lib/utils'
 import Image from 'next/image'
+import { AlertCircle } from 'lucide-react'
 import {
   Select,
   SelectTrigger,
@@ -11,10 +12,85 @@ import {
   SelectItem,
 } from '@/components/ui/select'
 
+const EXOTIC_SPECIES = new Set(['rabbit', 'hamster', 'bird', 'reptile', 'exotic'])
+
+function normalizeSpecies(raw?: string | null): string {
+  const value = (raw || '').trim().toLowerCase()
+  if (!value) return ''
+
+  const parenMatch = value.match(/\(([^)]+)\)/)
+  if (parenMatch?.[1]) {
+    return parenMatch[1].trim().toLowerCase()
+  }
+
+  if (value.includes('dog') || value.includes('สุนัข') || value.includes('หมา')) return 'dog'
+  if (value.includes('cat') || value.includes('แมว')) return 'cat'
+  if (value.includes('rabbit') || value.includes('กระต่าย')) return 'rabbit'
+  if (value.includes('hamster') || value.includes('แฮมสเตอร์')) return 'hamster'
+  if (value.includes('bird') || value.includes('นก')) return 'bird'
+  if (value.includes('reptile') || value.includes('เลื้อยคลาน')) return 'reptile'
+  if (value.includes('exotic') || value.includes('พิเศษ')) return 'exotic'
+
+  return value
+}
+
+export function getRoomIneligibilityReason(
+  cat: RoomCategories,
+  selectedPets: PetProfile[] = [],
+  petSizeId?: number | null
+): string | null {
+  if (!cat.isAvailable) {
+    if (cat.isBooked || cat.availability.availableRooms === 0) {
+      return 'Sold out for selected dates'
+    }
+    if (cat.isCapacityInsufficient) {
+      return 'Not enough room capacity for your selected pets'
+    }
+    return 'Unavailable for selected dates'
+  }
+
+  for (const pet of selectedPets) {
+    const petSpecies = normalizeSpecies(pet.petTypeName)
+    const speciesMatch =
+      petSpecies.length > 0 &&
+      (cat.pets || []).some((rp) => {
+        const roomSpecies = normalizeSpecies(rp.name)
+        if (roomSpecies === petSpecies) return true
+        return EXOTIC_SPECIES.has(petSpecies) && EXOTIC_SPECIES.has(roomSpecies)
+      })
+
+    if (!speciesMatch) {
+      const accepted =
+        cat.pets && cat.pets.length > 0
+          ? cat.pets.map((p) => p.name).join(', ')
+          : 'no pet types configured'
+      return `Does not accept ${pet.name} (${pet.petTypeName || 'Unknown type'}) · Accepts: ${accepted}`
+    }
+
+    const maxSizeId = cat.petSizeCategory?.id
+    if (maxSizeId && pet.petSizeCategoryId && pet.petSizeCategoryId > maxSizeId) {
+      return `${pet.name} exceeds room max size (${cat.petSizeCategory?.name})`
+    }
+  }
+
+  if (
+    selectedPets.length === 0 &&
+    petSizeId &&
+    cat.petSizeCategory?.id &&
+    petSizeId > cat.petSizeCategory.id
+  ) {
+    return `Selected pet size exceeds room limit (${cat.petSizeCategory.name})`
+  }
+
+  return null
+}
+
 interface BookingRoomCardProps {
   categories: RoomCategories[]
   selectedRooms: Record<number, number>
   onSelectChange: (categoryId: number, value: number) => void
+  selectedPets?: PetProfile[]
+  petSizeId?: number | null
   isSummary?: boolean
 }
 
@@ -22,10 +98,10 @@ export function BookingRoomCard({
   categories,
   selectedRooms,
   onSelectChange,
+  selectedPets = [],
+  petSizeId = null,
   isSummary = false,
 }: BookingRoomCardProps) {
-  const availableCategories = categories.filter((cat) => cat.isAvailable)
-
   if (categories.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-10">
@@ -37,30 +113,28 @@ export function BookingRoomCard({
     )
   }
 
-  if (availableCategories.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-10">
-        <Image src={assetPath("/graphics/no-room.png")} alt="No Rooms" width={200} height={200} />{' '}
-        <p className="text-neutral-500 mt-4">
-          No rooms are available for the selected dates and pets
-        </p>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-3">
-      {availableCategories.map((cat) => {
+      {categories.map((cat) => {
         const totalNights = cat.availability.dates.length
         const averagePricePerNight =
           totalNights > 0
             ? Math.round(cat.availability.totalPrice / totalNights)
             : 0
+        const ineligibilityReason = isSummary
+          ? null
+          : getRoomIneligibilityReason(cat, selectedPets, petSizeId)
+        const isRoomDisabled = Boolean(ineligibilityReason)
 
         return (
           <div
             key={cat.id}
-            className="border border-border rounded-2xl p-4 shadow-sm bg-white mb-4"
+            className={cn(
+              'border rounded-2xl p-4 shadow-sm mb-4 transition-colors',
+              isRoomDisabled
+                ? 'border-border/70 bg-off-white/70 opacity-80'
+                : 'border-border bg-white'
+            )}
           >
             <div className="flex gap-3">
               {/* Left: Details */}
@@ -118,11 +192,12 @@ export function BookingRoomCard({
                 ) : (
                   <>
                     <Select
-                      value={String(selectedRooms[cat.id] ?? 0)}
+                      disabled={isRoomDisabled}
+                      value={isRoomDisabled ? '0' : String(selectedRooms[cat.id] ?? 0)}
                       onValueChange={(v) => onSelectChange(cat.id, Number(v))}
                     >
-                      <SelectTrigger className="w-20 h-10 text-sm font-medium hover:bg-off-white">
-                        <SelectValue>{selectedRooms[cat.id] ?? 0}</SelectValue>
+                      <SelectTrigger className="w-20 h-10 text-sm font-medium hover:bg-off-white disabled:opacity-50 disabled:cursor-not-allowed">
+                        <SelectValue>{isRoomDisabled ? 0 : (selectedRooms[cat.id] ?? 0)}</SelectValue>
                       </SelectTrigger>
 
                       <SelectContent>
@@ -150,7 +225,9 @@ export function BookingRoomCard({
                     </Select>
 
                     {/* Total Price or Available Count */}
-                    {selectedRooms[cat.id] && selectedRooms[cat.id] > 0 ? (
+                    {!isRoomDisabled &&
+                    selectedRooms[cat.id] &&
+                    selectedRooms[cat.id] > 0 ? (
                       <span className="text-sm font-medium text-foreground tabular-nums">
                         ฿
                         {(
@@ -166,6 +243,13 @@ export function BookingRoomCard({
                 )}
               </div>
             </div>
+
+            {ineligibilityReason && (
+              <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-200/80 bg-red-50 px-3 py-2 text-xs text-red-700">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>{ineligibilityReason}</span>
+              </div>
+            )}
           </div>
         )
       })}

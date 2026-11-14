@@ -7,16 +7,13 @@ import { Spinner } from '@/components/ui/spinner'
 import { confirmPayment } from '@/lib/api'
 import { ApiError } from '@/lib/errorHandling'
 import { cn } from '@/lib/utils'
+import { PromptPaySlipDropzone } from '@/components/booking/PromptPaySlipDropzone'
 import {
   CheckCircle2,
   Clock,
   QrCode,
-  UploadCloud,
-  FileImage,
   Copy,
   Check,
-  Trash2,
-  AlertCircle,
   Building2,
   ShieldCheck,
 } from 'lucide-react'
@@ -266,8 +263,6 @@ export default function PendingPaymentSection({
   onPaymentSuccess,
   onExpired,
 }: PendingPaymentSectionProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
   const [paymentState, setPaymentState] = useState<
     'idle' | 'processing' | 'success'
   >('idle')
@@ -288,20 +283,11 @@ function computeRemainingSeconds(
   const onExpiredRef = useRef(onExpired)
 
   const [slipFile, setSlipFile] = useState<File | null>(null)
-  const [slipPreviewUrl, setSlipPreviewUrl] = useState<string | null>(null)
-  const [isDragging, setIsDragging] = useState<boolean>(false)
-  const [fileError, setFileError] = useState<string | null>(null)
   const [isCopied, setIsCopied] = useState<boolean>(false)
 
   useEffect(() => {
     onExpiredRef.current = onExpired
   }, [onExpired])
-
-  useEffect(() => {
-    return () => {
-      if (slipPreviewUrl) URL.revokeObjectURL(slipPreviewUrl)
-    }
-  }, [slipPreviewUrl])
 
   useEffect(() => {
     const initialRemaining = computeRemainingSeconds(createdAt, paymentDeadlineAt)
@@ -346,68 +332,6 @@ function computeRemainingSeconds(
     setIsCopied(true)
     toast.success('PromptPay ID copied to clipboard')
     setTimeout(() => setIsCopied(false), 2000)
-  }
-
-  // Validate and set payment slip file
-  const validateAndSetFile = (file: File) => {
-    setFileError(null)
-    const validMimes = ['image/jpeg', 'image/png', 'image/webp']
-    if (!validMimes.includes(file.type)) {
-      const err = 'Only image files (JPG, PNG, WebP) are allowed.'
-      setFileError(err)
-      toast.error(err)
-      return
-    }
-    if (file.size === 0) {
-      const err = 'Selected file is empty.'
-      setFileError(err)
-      toast.error(err)
-      return
-    }
-    const maxLimit = 10 * 1024 * 1024 // 10MB
-    if (file.size > maxLimit) {
-      const err = 'File size exceeds the 10MB limit.'
-      setFileError(err)
-      toast.error(err)
-      return
-    }
-
-    if (slipPreviewUrl) URL.revokeObjectURL(slipPreviewUrl)
-    setSlipFile(file)
-    setSlipPreviewUrl(URL.createObjectURL(file))
-    toast.success('Payment slip attached successfully')
-  }
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      validateAndSetFile(e.target.files[0])
-    }
-  }
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-  }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      validateAndSetFile(e.dataTransfer.files[0])
-    }
-  }
-
-  const handleRemoveFile = () => {
-    if (slipPreviewUrl) URL.revokeObjectURL(slipPreviewUrl)
-    setSlipFile(null)
-    setSlipPreviewUrl(null)
-    setFileError(null)
-    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   // Submit payment confirmation
@@ -576,119 +500,24 @@ function computeRemainingSeconds(
         </div>
 
         {/* Payment Slip Upload Dropzone */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-foreground">
-              Upload transfer slip
-            </label>
-            <span className="text-[11px] text-neutral-gray">
-              JPG, PNG, WebP up to 10MB
-            </span>
-          </div>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            className="hidden"
-            onChange={handleFileChange}
-          />
-
-          {!slipFile ? (
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={cn(
-                'border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-2 bg-off-white/20',
-                isDragging
-                  ? 'border-accent-orange bg-accent-orange/5'
-                  : 'border-border hover:border-accent-orange/50'
-              )}
-            >
-              <div className="w-9 h-9 rounded-full bg-off-white flex items-center justify-center text-accent-orange">
-                <UploadCloud className="w-4 h-4" />
-              </div>
-              <div className="space-y-0.5">
-                <p className="text-xs font-medium text-foreground">
-                  Click to select or drag & drop slip
-                </p>
-                <p className="text-[11px] text-neutral-gray">
-                  Proof of bank payment
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl border border-border p-3 flex items-center justify-between gap-3 shadow-sm">
-              <div className="flex items-center gap-3 min-w-0">
-                {slipPreviewUrl ? (
-                  <div className="w-12 h-12 rounded-lg overflow-hidden border border-border shrink-0 bg-off-white">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={slipPreviewUrl}
-                      alt="Slip preview"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-12 h-12 rounded-lg bg-off-white flex items-center justify-center shrink-0 text-deep-teal">
-                    <FileImage className="w-6 h-6" />
-                  </div>
-                )}
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-foreground truncate">
-                    {slipFile.name}
-                  </p>
-                  <p className="text-[11px] text-neutral-gray mt-0.5">
-                    {(slipFile.size / 1024).toFixed(1)} KB · Ready to submit
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1.5 shrink-0">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="text-xs text-deep-teal h-8 px-2 hover:bg-deep-teal/5"
-                >
-                  Change
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleRemoveFile}
-                  className="text-xs text-red-600 h-8 px-2 hover:bg-red-50 hover:text-red-700"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {fileError && (
-            <div className="flex items-center gap-1.5 text-xs text-red-600 mt-1">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-              <span>{fileError}</span>
-            </div>
-          )}
-        </div>
+        <PromptPaySlipDropzone
+          slipFile={slipFile}
+          onSlipChange={setSlipFile}
+          amount={totalPrice}
+        />
 
         {/* Action Button */}
         <Button
           onClick={handlePayment}
-          disabled={paymentState !== 'idle'}
-          className="w-full h-12 bg-accent-orange hover:bg-accent-orange/90 text-white font-semibold text-sm rounded-xl transition-colors cursor-pointer"
+          disabled={paymentState !== 'idle' || !slipFile}
+          className="w-full h-12 bg-accent-orange hover:bg-accent-orange/90 text-white font-semibold text-sm rounded-xl transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {paymentState === 'processing' ? (
             <Spinner className="w-4 h-4" />
           ) : slipFile ? (
             'Upload Slip & Confirm Payment'
           ) : (
-            'Confirm Payment'
+            'Attach payment slip to confirm'
           )}
         </Button>
       </div>
