@@ -7,7 +7,9 @@ import { formatPropertyDto, syncPropertyMinPrice } from './property.controller';
 import { normalizePetName } from './lookup.controller';
 import { cacheService } from '../services/cache.service';
 import {
+  MAX_ADVANCE_BOOKING_DAYS,
   TERMINAL_BOOKING_STATUSES,
+  getBookingDateBounds,
   reconcileLifecycleBookings,
 } from '../services/bookingLifecycle.service';
 
@@ -1922,10 +1924,19 @@ export async function updateRoomCategoryCalendars(
     const basePrice = Number(room.basePrice);
     const totalRoom = room.totalRoom;
 
+    const { todayThaiStr, maxAdvanceStr } = getBookingDateBounds();
     // Pre-validate all updates before modifying database
     for (const update of updates) {
       if (!update.date || typeof update.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(update.date)) {
         throw new AppError('Invalid date format (must be YYYY-MM-DD)', 400, 'T-2007');
+      }
+
+      if (update.date < todayThaiStr || update.date > maxAdvanceStr) {
+        throw new AppError(
+          `Calendar updates must be between ${todayThaiStr} and ${maxAdvanceStr} (${MAX_ADVANCE_BOOKING_DAYS} days)`,
+          400,
+          'T-2007'
+        );
       }
 
       if (update.unavailableRooms !== undefined) {

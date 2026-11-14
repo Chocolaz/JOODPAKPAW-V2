@@ -9,7 +9,7 @@ import {
   REVIEWABLE_STATUSES,
   REVIEW_WINDOW_DAYS,
   getDatesInRange,
-  getTodayThaiStr,
+  getBookingDateBounds,
   getCheckInCutoffAt,
   getCanCompleteAt,
   getAutoCompleteAt,
@@ -106,7 +106,7 @@ export function formatBookingDto(b: any) {
       : String(b.checkOutDate || '').slice(0, 10);
 
   const paymentDeadline =
-    b.createdAt && checkOutStr ? getPaymentDeadline(b.createdAt, checkOutStr) : null;
+    b.createdAt && checkInStr ? getPaymentDeadline(b.createdAt, checkInStr, checkOutStr) : null;
   const canComplete = checkOutStr ? getCanCompleteAt(checkOutStr) : null;
   const autoComplete = checkOutStr ? getAutoCompleteAt(checkOutStr) : null;
   const reviewDeadline = checkOutStr ? getReviewDeadline(b.successedAt, checkOutStr) : null;
@@ -413,7 +413,7 @@ export async function createBooking(
 
     // 1. Date Hygiene (B-4003)
     const now = new Date();
-    const todayThaiStr = getTodayThaiStr(now);
+    const { todayThaiStr, isPastSameDayCutoff, maxAdvanceStr } = getBookingDateBounds(now);
 
     let overallMinCheckIn = '9999-99-99';
     let overallMaxCheckOut = '0000-00-00';
@@ -447,9 +447,25 @@ export async function createBooking(
         );
       }
 
+      if (checkInStr === todayThaiStr && isPastSameDayCutoff) {
+        throw new AppError(
+          'Same-day check-in is closed after 18:00 ICT. Please select tomorrow or later.',
+          400,
+          'B-4003'
+        );
+      }
+
       if (checkOutStr <= checkInStr) {
         throw new AppError(
           'Check-out date must be after check-in date',
+          400,
+          'B-4003'
+        );
+      }
+
+      if (checkOutStr > maxAdvanceStr) {
+        throw new AppError(
+          'Bookings cannot be made more than 180 days in advance',
           400,
           'B-4003'
         );
@@ -850,9 +866,13 @@ export async function confirmBookingPayment(
       );
     }
 
-    // 1. Check min(createdAt + 24h, checkOut 12:00 ICT) payment deadline
+    // 1. Check payment deadline (capped before check-in 14:00 ICT)
     const now = new Date();
-    const paymentDeadline = getPaymentDeadline(booking.createdAt, booking.checkOutDate);
+    const paymentDeadline = getPaymentDeadline(
+      booking.createdAt,
+      booking.checkInDate,
+      booking.checkOutDate
+    );
 
     if (now.getTime() > paymentDeadline.getTime()) {
       const { cancelled, curStatus } = await prisma.$transaction(
@@ -1791,7 +1811,11 @@ export async function acceptHostBooking(
           );
         }
 
-        const paymentDeadline = getPaymentDeadline(booking.createdAt, booking.checkOutDate);
+        const paymentDeadline = getPaymentDeadline(
+          booking.createdAt,
+          booking.checkInDate,
+          booking.checkOutDate
+        );
         if (Date.now() > paymentDeadline.getTime()) {
           const { cancelled } = await autoCancelPendingBookingInTx(
             tx,

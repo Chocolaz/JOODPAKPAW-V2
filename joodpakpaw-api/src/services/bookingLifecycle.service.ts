@@ -73,6 +73,41 @@ export function getDatesInRange(startDateStr: string | Date, endDateStr: string 
   return dates;
 }
 
+export const MAX_ADVANCE_BOOKING_DAYS = 180;
+export const SAME_DAY_CUTOFF_HOUR_ICT = 18;
+
+/**
+ * Returns deterministic Bangkok (UTC+7) booking window bounds:
+ * - isPastSameDayCutoff: true when current ICT hour >= 18:00
+ * - minCheckInStr: tomorrow if past 18:00 ICT, otherwise today
+ * - maxAdvanceStr: today + MAX_ADVANCE_BOOKING_DAYS (180 days)
+ */
+export function getBookingDateBounds(now: Date = new Date()): {
+  todayThaiStr: string;
+  isPastSameDayCutoff: boolean;
+  minCheckInStr: string;
+  maxAdvanceStr: string;
+} {
+  const todayThaiStr = getTodayThaiStr(now);
+  const bangkokNow = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  const isPastSameDayCutoff = bangkokNow.getUTCHours() >= SAME_DAY_CUTOFF_HOUR_ICT;
+
+  const todayMidnight = new Date(`${todayThaiStr}T00:00:00.000Z`);
+  const minDate = new Date(todayMidnight);
+  if (isPastSameDayCutoff) {
+    minDate.setUTCDate(minDate.getUTCDate() + 1);
+  }
+  const maxDate = new Date(todayMidnight);
+  maxDate.setUTCDate(maxDate.getUTCDate() + MAX_ADVANCE_BOOKING_DAYS);
+
+  return {
+    todayThaiStr,
+    isPastSameDayCutoff,
+    minCheckInStr: minDate.toISOString().slice(0, 10),
+    maxAdvanceStr: maxDate.toISOString().slice(0, 10),
+  };
+}
+
 /**
  * Converts a YYYY-MM-DD date + hour in Asia/Bangkok (UTC+7) to a deterministic UTC Date.
  * Example: hourICT = 14 -> T07:00:00.000Z, 12 -> T05:00:00.000Z, 18 -> T11:00:00.000Z.
@@ -111,16 +146,33 @@ export function getAutoCompleteAt(checkOutDate: Date | string): Date {
 }
 
 /**
- * Payment window deadline: min(createdAt + 24h, checkOut 12:00 ICT).
+ * Payment window deadline:
+ * - If booked before check-in (14:00 ICT): min(createdAt + 24h, checkIn 14:00 ICT)
+ * - If booked same-day at or after check-in (14:00 ICT): min(createdAt + 15m, checkOut 12:00 ICT)
  */
-export function getPaymentDeadline(createdAt: Date | string, checkOutDate: Date | string): Date {
+export function getPaymentDeadline(
+  createdAt: Date | string,
+  checkInDate: Date | string,
+  checkOutDate?: Date | string
+): Date {
   const created = createdAt instanceof Date ? createdAt : new Date(createdAt);
   const plus24h = new Date(created.getTime() + DAY_MS);
-  const checkOutCutoff = getCanCompleteAt(checkOutDate);
+  const checkInCutoff = getCheckInCutoffAt(checkInDate);
 
-  if (isNaN(checkOutCutoff.getTime())) return plus24h;
-  if (isNaN(plus24h.getTime())) return checkOutCutoff;
-  return plus24h.getTime() <= checkOutCutoff.getTime() ? plus24h : checkOutCutoff;
+  if (!isNaN(checkInCutoff.getTime())) {
+    if (created.getTime() < checkInCutoff.getTime()) {
+      return plus24h.getTime() <= checkInCutoff.getTime() ? plus24h : checkInCutoff;
+    }
+
+    const immediateWindow = new Date(created.getTime() + 15 * 60 * 1000);
+    const checkOutCutoff = checkOutDate ? getCanCompleteAt(checkOutDate) : new Date(NaN);
+    if (!isNaN(checkOutCutoff.getTime()) && checkOutCutoff.getTime() < immediateWindow.getTime()) {
+      return checkOutCutoff;
+    }
+    return immediateWindow;
+  }
+
+  return plus24h;
 }
 
 /**
@@ -320,7 +372,7 @@ async function expireOverduePendingBooking(
       autoCancelPendingBookingInTx(tx, booking.id, 'Payment window expired', {
         todayThaiStr,
         shouldCancel: (cur) => {
-          const deadline = getPaymentDeadline(cur.createdAt, cur.checkOutDate);
+          const deadline = getPaymentDeadline(cur.createdAt, cur.checkInDate, cur.checkOutDate);
           return !isNaN(deadline.getTime()) && now.getTime() > deadline.getTime();
         },
       }),
@@ -464,7 +516,7 @@ export async function reconcileLifecycleBookings(
         if (!b.createdAt || !b.checkOutDate) continue;
         if (!matchesScope(b, scope)) continue;
 
-        const deadline = getPaymentDeadline(b.createdAt, b.checkOutDate);
+        const deadline = getPaymentDeadline(b.createdAt, b.checkInDate, b.checkOutDate);
         if (isNaN(deadline.getTime()) || now.getTime() <= deadline.getTime()) continue;
 
         const expired = await expireOverduePendingBooking(b, now, todayThaiStr);

@@ -42,6 +42,7 @@ interface PendingDayUpdate {
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const PRICE_PRESETS = [0, 50, 100, 200, 300, 500, -50, -100]
+const MAX_ADVANCE_BOOKING_DAYS = 180
 
 function CalendarContent({
   propertyId,
@@ -65,6 +66,19 @@ function CalendarContent({
     const d = String(today.getDate()).padStart(2, '0')
     return `${y}-${m}-${d}`
   }, [today])
+
+  const maxAdvanceDate = useMemo(() => {
+    const d = new Date(today)
+    d.setDate(d.getDate() + MAX_ADVANCE_BOOKING_DAYS)
+    return d
+  }, [today])
+
+  const maxAdvanceDateStr = useMemo(() => {
+    const y = maxAdvanceDate.getFullYear()
+    const m = String(maxAdvanceDate.getMonth() + 1).padStart(2, '0')
+    const d = String(maxAdvanceDate.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }, [maxAdvanceDate])
 
   // Current viewed month (first day of month)
   const [currentMonth, setCurrentMonth] = useState<Date>(() => {
@@ -99,6 +113,12 @@ function CalendarContent({
     const currentMonthFirst = new Date(today.getFullYear(), today.getMonth(), 1)
     return prev >= currentMonthFirst
   }, [currentMonth, today])
+
+  const canGoNextMonth = useMemo(() => {
+    const next = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1)
+    const maxMonthFirst = new Date(maxAdvanceDate.getFullYear(), maxAdvanceDate.getMonth(), 1)
+    return next <= maxMonthFirst
+  }, [currentMonth, maxAdvanceDate])
 
   const { startDateStr, endDateStr, daysInMonth, firstDayOfWeek } = useMemo(() => {
     const year = currentMonth.getFullYear()
@@ -203,6 +223,7 @@ function CalendarContent({
   }
 
   const handleNextMonth = () => {
+    if (!canGoNextMonth) return
     setCurrentMonth(
       (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
     )
@@ -212,6 +233,10 @@ function CalendarContent({
   const handleDayClick = (dateStr: string) => {
     if (dateStr < todayStr) {
       toast.info('Past dates cannot be modified.')
+      return
+    }
+    if (dateStr > maxAdvanceDateStr) {
+      toast.info(`Dates beyond the ${MAX_ADVANCE_BOOKING_DAYS}-day booking window cannot be modified.`)
       return
     }
     setSelectedDate(dateStr)
@@ -250,7 +275,7 @@ function CalendarContent({
           currentMonth.getMonth() + 1
         ).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 
-        if (dStr >= todayStr) {
+        if (dStr >= todayStr && dStr <= maxAdvanceDateStr) {
           const item = calendarMap.get(dStr)
           const booked = item?.bookedRooms ?? 0
           const maxUnavailForDay = Math.max(0, room.totalRoom - booked)
@@ -381,7 +406,8 @@ function CalendarContent({
               <button
                 type="button"
                 onClick={handleNextMonth}
-                className="p-1.5 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-50 transition"
+                disabled={!canGoNextMonth}
+                className="p-1.5 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-50 disabled:opacity-30 disabled:cursor-not-allowed transition"
                 title="Next Month"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -442,6 +468,8 @@ function CalendarContent({
                   ).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`
 
                   const isPast = dateStr < todayStr
+                  const isBeyondWindow = dateStr > maxAdvanceDateStr
+                  const isDisabledDay = isPast || isBeyondWindow
                   const isToday = dateStr === todayStr
                   const isSelected = selectedDate === dateStr
                   const dayVals = getDayValues(dateStr)
@@ -451,10 +479,10 @@ function CalendarContent({
                       key={dateStr}
                       type="button"
                       onClick={() => handleDayClick(dateStr)}
-                      disabled={isPast}
+                      disabled={isDisabledDay}
                       className={cn(
                         'relative flex flex-col justify-between p-1.5 sm:p-2 rounded-xl text-left border transition-colors h-20 sm:h-24 min-w-0',
-                        isPast
+                        isDisabledDay
                           ? 'bg-neutral-50/70 border-neutral-100 opacity-40 cursor-not-allowed'
                           : isSelected
                           ? 'bg-deep-teal/5 border-deep-teal ring-2 ring-deep-teal/20 shadow-xs'
@@ -484,27 +512,39 @@ function CalendarContent({
                       </div>
 
                       {/* Middle: Effective Price */}
-                      <div className="my-0.5 truncate">
-                        <div className="text-[11px] sm:text-xs font-bold text-deep-teal tabular-nums leading-tight">
-                          ฿{dayVals.effectivePrice.toLocaleString()}
-                        </div>
-                        {dayVals.priceAdjustment !== 0 && (
-                          <span
-                            className={cn(
-                              'text-[9px] font-semibold tabular-nums leading-none',
-                              dayVals.priceAdjustment > 0
-                                ? 'text-positive-green'
-                                : 'text-accent-orange'
-                            )}
-                          >
-                            {dayVals.priceAdjustment > 0 ? `+฿${dayVals.priceAdjustment}` : `-฿${Math.abs(dayVals.priceAdjustment)}`}
+                      {isBeyondWindow ? (
+                        <div className="my-0.5 truncate">
+                          <span className="text-[10px] font-medium text-neutral-400">
+                            Closed
                           </span>
-                        )}
-                      </div>
+                        </div>
+                      ) : (
+                        <div className="my-0.5 truncate">
+                          <div className="text-[11px] sm:text-xs font-bold text-deep-teal tabular-nums leading-tight">
+                            ฿{dayVals.effectivePrice.toLocaleString()}
+                          </div>
+                          {dayVals.priceAdjustment !== 0 && (
+                            <span
+                              className={cn(
+                                'text-[9px] font-semibold tabular-nums leading-none',
+                                dayVals.priceAdjustment > 0
+                                  ? 'text-positive-green'
+                                  : 'text-accent-orange'
+                              )}
+                            >
+                              {dayVals.priceAdjustment > 0 ? `+฿${dayVals.priceAdjustment}` : `-฿${Math.abs(dayVals.priceAdjustment)}`}
+                            </span>
+                          )}
+                        </div>
+                      )}
 
                       {/* Bottom status badges */}
                       <div className="flex flex-col gap-0.5 w-full overflow-hidden">
-                        {dayVals.bookedRooms > 0 ? (
+                        {isBeyondWindow ? (
+                          <span className="text-[9px] sm:text-[10px] text-neutral-400 truncate">
+                            &gt; {MAX_ADVANCE_BOOKING_DAYS}d limit
+                          </span>
+                        ) : dayVals.bookedRooms > 0 ? (
                           <span className="text-[9px] sm:text-[10px] px-1 py-0.2 rounded bg-neutral-900 text-white font-medium flex items-center gap-0.5 truncate">
                             <Lock className="w-2.5 h-2.5 shrink-0" />
                             {dayVals.bookedRooms} booked
