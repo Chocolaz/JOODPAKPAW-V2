@@ -19,13 +19,15 @@ interface FavoriteDrawerProps {
   propertyId: number
   isOpen: boolean
   onOpenChange: (isOpen: boolean) => void
-  onSuccess?: () => void
+  currentFolderId?: number | null
+  onSuccess?: (folderId?: number) => void
 }
 
 export function FavoriteDrawer({
   propertyId,
   isOpen,
   onOpenChange,
+  currentFolderId,
   onSuccess,
 }: FavoriteDrawerProps) {
   const [folders, setFolders] = useState<FavoriteFolder[]>([])
@@ -64,12 +66,17 @@ export function FavoriteDrawer({
   }, [currentView])
 
   const handleSaveToFolder = async (folderId: number, folderName: string) => {
+    if (currentFolderId != null && folderId === currentFolderId) {
+      toast.info(`Already in ${folderName}`)
+      onOpenChange(false)
+      return
+    }
     setIsPosting(true)
     try {
       await moveFavorite({ propertyId, folderId })
-      toast.success(`Moved to ${folderName}!`)
+      toast.success(`Moved to ${folderName}`)
       onOpenChange(false)
-      onSuccess?.()
+      onSuccess?.(folderId)
     } catch (_err) {
       toast.error('Failed to move to folder.')
     } finally {
@@ -99,37 +106,41 @@ export function FavoriteDrawer({
   return (
     <Drawer open={isOpen} onOpenChange={onOpenChange}>
       <DrawerContent>
-        <div className="mx-auto w-full max-w-sm pb-5">
+        <div className="mx-auto w-full max-w-md sm:max-w-lg md:max-w-2xl pb-6">
           {currentView === 'list' && (
             <div>
-              <DrawerHeader>
-                <DrawerTitle>Select folders</DrawerTitle>
+              <DrawerHeader className="px-5 pt-4 pb-2">
+                <DrawerTitle className="text-lg font-semibold text-deep-teal">
+                  Select wishlist
+                </DrawerTitle>
               </DrawerHeader>
-              <div className="px-4 pb-0">
+              <div>
                 {isLoading ? (
-                  <div className="flex justify-center items-center h-32">
+                  <div className="flex justify-center items-center h-36 px-5">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   </div>
                 ) : error ? (
-                  <div className="text-red-500 text-center">{error}</div>
+                  <div className="text-red-500 text-center px-5 py-6">{error}</div>
                 ) : (
                   <div className="space-y-4">
-                    <div className="max-h-[60vh]">
-                      <div className="flex overflow-x-auto space-x-4 hide-scrollbar">
+                    <div className="max-h-[55vh] overflow-y-auto px-5 py-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                         {folders.map((folder) => (
                           <FavoriteFolderCard
                             key={folder.id}
                             folder={folder}
                             onClick={handleSaveToFolder}
                             disabled={isPosting}
+                            isCurrent={currentFolderId === folder.id}
+                            widthClass="w-full"
                           />
                         ))}
                       </div>
                     </div>
-                    <div className="text-center">
+                    <div className="px-5 pt-1 flex justify-center">
                       <Button
                         variant="outline"
-                        className="px-8 py-5 bg-deep-teal text-white"
+                        className="w-full sm:w-auto sm:min-w-[220px] h-11 px-6 bg-deep-teal hover:bg-deep-teal/90 text-white hover:text-white border-deep-teal rounded-xl cursor-pointer"
                         onClick={() => setCurrentView('create')}
                       >
                         <Plus className="mr-2 h-4 w-4" /> Create new wishlist
@@ -142,37 +153,37 @@ export function FavoriteDrawer({
           )}
 
           {currentView === 'create' && (
-            <div>
-              <DrawerHeader className="flex items-center justify-start gap-1 px-4 pt-4">
+            <div className="mx-auto w-full max-w-md">
+              <DrawerHeader className="flex items-center justify-start gap-2 px-5 pt-4 pb-2">
                 <Button
                   variant="ghost"
                   size="icon"
                   className="flex-none"
                   onClick={() => setCurrentView('list')}
                 >
-                  <ChevronLeft className="h-6! w-6!" />
+                  <ChevronLeft className="h-5 w-5" />
                 </Button>
-                <DrawerTitle className="text-start">
-                  Create your favorite folder
+                <DrawerTitle className="text-start text-lg font-semibold text-deep-teal">
+                  Create your wishlist
                 </DrawerTitle>
               </DrawerHeader>
-              <div className="px-4 space-y-2">
+              <div className="px-5 pt-2 space-y-3">
                 <Input
                   ref={inputRef}
-                  placeholder="Folder Name"
+                  placeholder="Wishlist name"
                   value={newFolderName}
                   onChange={(e) => setNewFolderName(e.target.value)}
                   maxLength={20}
                 />
-                <div className="text-sm text-gray-500 text-right">
+                <div className="text-xs text-neutral-gray text-right tabular-nums">
                   {newFolderName.length}/20
                 </div>
                 <Button
                   onClick={handleCreateAndSave}
                   disabled={isPosting}
-                  className="py-5 w-full bg-deep-teal text-white"
+                  className="h-11 w-full bg-deep-teal hover:bg-deep-teal/90 text-white rounded-xl cursor-pointer"
                 >
-                  Create & Save
+                  Create &amp; Save
                 </Button>
               </div>
             </div>

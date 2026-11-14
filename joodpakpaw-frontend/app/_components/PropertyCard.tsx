@@ -48,6 +48,9 @@ export function PropertyCard({
   )
   const [isHeartClicked, setIsHeartClicked] = useState(property.isFavorite)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const [currentFolderId, setCurrentFolderId] = useState<number | null>(
+    favoriteFolderId ?? null
+  )
 
   useEffect(() => {
     setIsHeartClicked(property.isFavorite)
@@ -75,6 +78,7 @@ export function PropertyCard({
       try {
         await deleteFavoriteProperty(property.id)
         setIsHeartClicked(false)
+        setCurrentFolderId(null)
         toast.success('Property removed from favorites.')
       } catch (_error) {
         toast.error('Failed to remove from favorites.')
@@ -87,6 +91,10 @@ export function PropertyCard({
 
         if (folders.length === 0) {
           await addFavorite({ propertyId: property.id })
+          const refreshed = await getFavoriteFolders()
+          if (refreshed.favoriteFolders.length > 0) {
+            setCurrentFolderId(refreshed.favoriteFolders[0].id)
+          }
         } else {
           const sortedFolders = folders.sort((a, b) => a.id - b.id)
           const targetFolder = sortedFolders[0]
@@ -95,6 +103,7 @@ export function PropertyCard({
             propertyId: property.id,
             folderId: targetFolder.id,
           })
+          setCurrentFolderId(targetFolder.id)
         }
         setIsHeartClicked(true)
         toast.success(`Property added to ${folderName}`, {
@@ -180,7 +189,11 @@ export function PropertyCard({
                 propertyId={property.id}
                 isOpen={isDrawerOpen}
                 onOpenChange={setIsDrawerOpen}
-                onSuccess={() => setIsHeartClicked(true)}
+                currentFolderId={currentFolderId}
+                onSuccess={(folderId) => {
+                  setIsHeartClicked(true)
+                  if (folderId != null) setCurrentFolderId(folderId)
+                }}
               />
             </>
           )}
