@@ -60,14 +60,14 @@ export function BookingRoomCard({
         return (
           <div
             key={cat.id}
-            className="border border-neutral-200 rounded-lg p-4 shadow-md transition-shadow duration-200 bg-white mb-4"
+            className="border border-border rounded-2xl p-4 shadow-sm bg-white mb-4"
           >
             <div className="flex gap-3">
               {/* Left: Details */}
               <div className="flex-1 min-w-0">
-                <h4 className="capitalize">{cat.name}</h4>
-                <p className="text-xs text-neutral-600 mt-0.5">
-                  <span className="bg-neutral-900 rounded-full px-1 py-0.5 text-white font-medium mr-2">
+                <h4 className="capitalize font-semibold text-foreground">{cat.name}</h4>
+                <p className="text-xs text-neutral-gray mt-0.5">
+                  <span className="bg-deep-teal/10 text-deep-teal rounded-full px-2 py-0.5 text-xs font-semibold mr-2">
                     {getPetPolicy(cat.pets)}
                   </span>
                   {cat.numberOfPets} pets max{' '}
@@ -84,7 +84,7 @@ export function BookingRoomCard({
                     {cat.facilities?.map((facility) => (
                       <span
                         key={facility.id}
-                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-neutral-100 text-neutral-700"
+                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-off-white text-neutral-gray border border-border/50"
                       >
                         {facility.name}
                       </span>
@@ -97,11 +97,11 @@ export function BookingRoomCard({
               <div className="flex flex-col items-end gap-2 shrink-0">
                 {/* Price */}
                 <div className="text-right">
-                  <div className="text-lg font-semibold text-neutral-900">
+                  <div className="text-lg font-semibold text-foreground tabular-nums">
                     ฿{cat.availability.totalPrice.toLocaleString()}
                   </div>
                   {totalNights > 0 && (
-                    <p className="text-xs text-neutral-600">
+                    <p className="text-xs text-neutral-gray tabular-nums">
                       ฿{averagePricePerNight.toLocaleString()}/night
                     </p>
                   )}
@@ -110,10 +110,10 @@ export function BookingRoomCard({
                 {/* Select */}
                 {isSummary ? (
                   <div className="text-center">
-                    <span className="text-lg font-semibold text-neutral-900">
+                    <span className="text-lg font-semibold text-foreground tabular-nums">
                       {selectedRooms[cat.id]}
                     </span>
-                    <p className="text-xs text-neutral-600">rooms</p>
+                    <p className="text-xs text-neutral-gray">rooms</p>
                   </div>
                 ) : (
                   <>
@@ -121,7 +121,7 @@ export function BookingRoomCard({
                       value={String(selectedRooms[cat.id] ?? 0)}
                       onValueChange={(v) => onSelectChange(cat.id, Number(v))}
                     >
-                      <SelectTrigger className="w-20 h-10 text-sm font-medium  hover:bg-neutral-50">
+                      <SelectTrigger className="w-20 h-10 text-sm font-medium hover:bg-off-white">
                         <SelectValue>{selectedRooms[cat.id] ?? 0}</SelectValue>
                       </SelectTrigger>
 
@@ -151,14 +151,14 @@ export function BookingRoomCard({
 
                     {/* Total Price or Available Count */}
                     {selectedRooms[cat.id] && selectedRooms[cat.id] > 0 ? (
-                      <span className="text-sm font-medium">
+                      <span className="text-sm font-medium text-foreground tabular-nums">
                         ฿
                         {(
                           cat.availability.totalPrice * selectedRooms[cat.id]
                         ).toLocaleString()}
                       </span>
                     ) : (
-                      <span className="text-sm text-neutral-600">
+                      <span className="text-sm text-neutral-gray">
                         {cat.availability.availableRooms} available
                       </span>
                     )}
