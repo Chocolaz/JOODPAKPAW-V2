@@ -2,12 +2,11 @@
 
 import { useRef } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { PropertyCard } from '@/app/_components/PropertyCard'
 import { Property } from '@/types'
-import { assetPath, cn } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 
 const SECTION_LIMIT = 7
 
@@ -118,23 +117,20 @@ export function BrowseSection({
         {seeAllHref && count > SECTION_LIMIT && (
           <div
             data-card
-            className="w-44 shrink-0 snap-start lg:w-[calc((100%-6*1rem)/7)]"
+            className="w-44 shrink-0 snap-start lg:w-[calc((100%-6*1rem)/7)] flex flex-col"
           >
             <Link
               href={seeAllHref}
-              className="group flex flex-col items-center justify-center gap-3 aspect-square w-full rounded-[20px] bg-white border border-gray-100 shadow-sm hover:border-deep-teal hover:shadow-md transition-all duration-300 overflow-hidden relative"
+              className="group flex flex-col items-center justify-center gap-2 aspect-square w-full rounded-2xl bg-white border border-gray-100 shadow-sm hover:border-deep-teal/40 hover:shadow-md transition-all duration-200 p-4 text-center"
             >
-              <div className="relative w-3/4 aspect-square">
-                <Image
-                  src={assetPath('/graphics/see-all.png')}
-                  alt="See all"
-                  fill
-                  unoptimized
-                  className="object-contain transition-transform duration-300 group-hover:scale-105"
-                />
+              <div className="w-10 h-10 rounded-full bg-deep-teal/5 flex items-center justify-center text-deep-teal group-hover:bg-deep-teal group-hover:text-white transition-colors duration-200">
+                <ChevronRight className="w-5 h-5 stroke-[1.5] transition-transform duration-200 group-hover:translate-x-0.5" />
               </div>
               <span className="text-sm font-semibold text-deep-teal group-hover:text-accent-orange transition-colors">
                 See All
+              </span>
+              <span className="text-xs text-neutral-gray">
+                {count} listings
               </span>
             </Link>
           </div>

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
@@ -514,6 +515,9 @@ async function main() {
     'check_in_reminder',
     'check_out',
     'booking_cancelled',
+    'booking_completed',
+    'booking_review_submitted',
+    'booking_review_replied',
     'kyc_approved',
     'kyc_rejected',
   ];

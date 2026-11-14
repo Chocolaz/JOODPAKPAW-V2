@@ -33,9 +33,11 @@ export default function BookingLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex justify-center">
-      <div className="w-full max-w-[500px]">
-        <MenuHeader {...headerProps} />
-        {children}
+      <div className="w-full">
+        <div className="lg:hidden">
+          <MenuHeader {...headerProps} />
+        </div>
+        <div className="pt-14 lg:pt-0">{children}</div>
       </div>
     </div>
   )

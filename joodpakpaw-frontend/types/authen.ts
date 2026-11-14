@@ -1,3 +1,5 @@
+import { User } from './user'
+
 // --- Credentials Interfaces ---
 export interface SignInCredentials {
   email: string
@@ -7,9 +9,11 @@ export interface SignInCredentials {
 export interface SignUpCredentials {
   email: string
   password: string
-  confirmPassword: string
-  firstname: string
-  lastname: string
+  confirmPassword?: string
+  firstName: string
+  lastName: string
+  firstname?: string
+  lastname?: string
   phone: string
 }
 
@@ -24,34 +28,33 @@ export interface ForgotPasswordCredentials {
 
 export interface ResetPasswordCredentials {
   email: string
-
   password: string
-
-  confirmPassword: string
-
+  confirmPassword?: string
   resetPasswordToken: string
 }
 
 export interface ChangePasswordCredentials {
   oldPassword: string
-
   newPassword: string
-
-  confirmPassword: string
+  confirmPassword?: string
 }
 
 // --- Response Interfaces ---
 
 export interface SignInResponse {
-  accessToken: string
-
-  refreshToken: string
-
-  code: number
-
-  expiresIn: number
-
+  code: string | number
   message: string
-
-  tokenType: string
+  data: {
+    accessToken: string
+    refreshToken: string
+    expiresIn: number
+    tokenType: string
+    user: User
+  }
+  // Optional backward compatibility getters or properties if needed by UI
+  accessToken?: string
+  refreshToken?: string
+  expiresIn?: number
+  tokenType?: string
+  user?: User
 }

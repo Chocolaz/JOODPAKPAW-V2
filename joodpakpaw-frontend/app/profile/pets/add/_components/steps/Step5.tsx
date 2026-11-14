@@ -1,179 +1,142 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import Image from 'next/image'
-import { StepNavigation } from '@/app/profile/host/add-property/_components/StepNavigation'
-import { cn } from '@/lib/utils'
+import React from 'react'
+import { Phone, User, FileText, AlertCircle } from 'lucide-react'
 import { useAddPet } from '../../_context/AddPetContext'
-import { PawPrint, HelpCircle } from 'lucide-react'
-import { PetSizeCategory } from '@/types'
-import { getPetSizeCategories } from '@/lib/api'
-import { ErrorState } from '@/app/profile/_components/ErrorState'
+import { StepNavigation } from '@/app/profile/host/add-property/_components/StepNavigation'
+import { useAuth } from '@/app/_components/AuthContext'
+import { WizardStepHeader } from '../WizardStepHeader'
 
-interface Step5Props {
-  onNext: () => void
-  onBack: () => void
-}
-
-export function Step5({ onNext, onBack }: Step5Props) {
+export function Step5({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const { formData, updateField } = useAddPet()
-  const petImageSrc = formData.petImage instanceof File ? URL.createObjectURL(formData.petImage) : null
-  const [sizeCategories, setSizeCategories] = useState<PetSizeCategory[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { user } = useAuth()
 
-  useEffect(() => {
-    const fetchSizes = async () => {
-      try {
-        setLoading(true)
-        const response = await getPetSizeCategories()
-        setSizeCategories(response.petSizeCategories)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch pet sizes.')
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchSizes()
-  }, [])
+  const petName = formData.petName || 'your pet'
 
-  const getIconSizeClass = (sizeName: string) => {
-    switch (sizeName.toLowerCase()) {
-      case 'small':
-        return 'w-8 h-8'
-      case 'medium':
-        return 'w-12 h-12'
-      case 'large':
-        return 'w-16 h-16'
-      default:
-        return 'w-12 h-12'
-    }
+  const handleAutofill = () => {
+    if (!user) return
+    const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ')
+    if (fullName) updateField('contactName', fullName)
+    if (user.phone) updateField('contactPhone', user.phone)
   }
 
-  const getDescription = (sizeName: string) => {
-    switch (sizeName.toLowerCase()) {
-      case 'small':
-        return 'under 14kg'
-      case 'medium':
-        return '14-25kg'
-      case 'large':
-        return 'over 25kg'
-      default:
-        return ''
-    }
-  }
-  
-  if (loading) {
-    return (
-      <div className="flex flex-col flex-grow w-full animate-pulse">
-        <div className="flex flex-col items-center mt-5">
-          <div className="w-24 h-24 bg-gray-100 rounded-full mb-8" />
-          <div className="h-6 bg-gray-200 rounded w-44 mb-2" />
-          <div className="h-4 bg-gray-100 rounded w-64 mb-4" />
-          <div className="flex flex-row gap-2 pb-4 w-full">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex-1 h-28 bg-gray-100 rounded-[20px]" />
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return <ErrorState message={error} />
-  }
+  const isContactNameValid = Boolean(
+    formData.contactName && formData.contactName.trim().length >= 2
+  )
+  const isPhoneValid = Boolean(
+    formData.contactPhone && formData.contactPhone.trim().length >= 8
+  )
+  const isNextDisabled = !isContactNameValid || !isPhoneValid
 
   return (
-    <div className="flex flex-col flex-grow w-full">
-      <div className="w-full text-center mt-5">
-        {/* Pet Image Display */}
-        <div className="flex justify-center mb-8">
-          <div
-            className={cn(
-              'w-24 h-24 rounded-full flex items-center justify-center overflow-hidden border relative', // Adjusted size
-              petImageSrc ? 'border-positive-green' : 'border-deep-teal'
-            )}
-          >
-            {petImageSrc ? (
-              <Image
-                src={petImageSrc}
-                alt={formData.petName || 'Pet image'}
-                fill
-                className="rounded-full object-cover"
-              />
-            ) : (
-              <HelpCircle className="w-16 h-16 text-gray-500" />
-            )}
-          </div>
-        </div>
+    <>
+      <div className="w-full mt-6">
+        <WizardStepHeader
+          title="Emergency and care instructions"
+          description="Provide an emergency contact and any medical or dietary notes for the host"
+        />
 
-        <h3 className="text-deep-teal text-2xl font-semibold">
-          How big is your pet?
-        </h3>
-        <p className="mb-4 text-neutral-gray text-sm">
-          Don&apos;t worry, this can be updated later as they grow!
-        </p>
-
-        {/* Size Selection Cards */}
-        <div className="flex flex-row justify-center items-center gap-2 pb-4 w-full">
-          {sizeCategories.map((size) => {
-            const isSelected = formData.petSizeCategoryId === size.id
-            return (
-              <button
-                key={size.id}
-                onClick={() => {
-                  updateField('petSizeCategoryId', size.id)
-                  updateField('petSizeName', size.name)
-                }}
-                className={cn(
-                  'flex flex-col items-center justify-center p-3 border rounded-[20px] cursor-pointer bg-white transition-all duration-300 ease-in-out flex-1',
-                  isSelected
-                    ? 'border-positive-green shadow-lg'
-                    : 'border-gray-200 hover:border-deep-teal/50 shadow-sm'
-                )}
-              >
-                <div
-                  className={cn(
-                    'w-10 h-10 rounded-full flex items-center justify-center transition-colors',
-                    isSelected ? 'bg-teal-50' : 'bg-gray-100'
-                  )}
-                >
-                  <PawPrint
-                    className={cn(
-                      'w-5 h-5',
-                      isSelected ? 'text-positive-green' : 'text-neutral-gray'
-                    )}
-                    strokeWidth={1.5}
-                  />
-                </div>
-                <span
-                  className={cn(
-                    'mt-2 text-center font-medium capitalize text-sm',
-                    isSelected ? 'text-positive-green' : 'text-neutral-dark'
-                  )}
-                >
-                  {size.name}
+        <div className="max-w-lg mx-auto space-y-6 pb-6">
+          {/* Quick Autofill Banner */}
+          {user && (!formData.contactName || !formData.contactPhone) && (
+            <div className="flex items-center justify-between gap-3 p-4 rounded-xl bg-off-white border border-[#323232]/10">
+              <div className="flex items-center gap-2.5 text-deep-teal">
+                <User className="w-4 h-4 shrink-0 text-neutral-gray" strokeWidth={1.5} />
+                <span className="text-xs font-medium">
+                  Use my account contact details
                 </span>
-                <p
-                  className={cn(
-                    'text-center text-xs',
-                    isSelected ? 'text-positive-green' : 'text-neutral-gray'
-                  )}
-                >
-                  {getDescription(size.name)}
-                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleAutofill}
+                className="text-xs font-medium text-white bg-deep-teal hover:bg-deep-teal/90 px-3 py-1.5 rounded-lg transition-colors duration-150 cursor-pointer shrink-0"
+              >
+                Autofill
               </button>
-            )
-          })}
+            </div>
+          )}
+
+          {/* Contact Name Input */}
+          <div className="space-y-2">
+            <label
+              htmlFor="contact-name-input"
+              className="flex items-center gap-2 text-sm font-medium text-deep-teal"
+            >
+              <User className="w-4 h-4 text-neutral-gray shrink-0" strokeWidth={1.5} />
+              <span>
+                Emergency contact name <span className="text-accent-orange">*</span>
+              </span>
+            </label>
+            <input
+              id="contact-name-input"
+              type="text"
+              value={formData.contactName || ''}
+              onChange={(e) => updateField('contactName', e.target.value)}
+              placeholder="e.g. Alice Smith"
+              maxLength={70}
+              className="w-full px-4 py-3 text-sm bg-white border border-[#323232]/15 rounded-xl text-foreground placeholder:text-neutral-gray/60 focus:outline-none focus:ring-2 focus:ring-accent-orange/25 focus:border-accent-orange transition-colors duration-150"
+            />
+          </div>
+
+          {/* Contact Phone Input */}
+          <div className="space-y-2">
+            <label
+              htmlFor="contact-phone-input"
+              className="flex items-center gap-2 text-sm font-medium text-deep-teal"
+            >
+              <Phone className="w-4 h-4 text-neutral-gray shrink-0" strokeWidth={1.5} />
+              <span>
+                Emergency phone number <span className="text-accent-orange">*</span>
+              </span>
+            </label>
+            <input
+              id="contact-phone-input"
+              type="tel"
+              value={formData.contactPhone || ''}
+              onChange={(e) => updateField('contactPhone', e.target.value)}
+              placeholder="e.g. 0812345678"
+              maxLength={20}
+              className="w-full px-4 py-3 text-sm bg-white border border-[#323232]/15 rounded-xl text-foreground placeholder:text-neutral-gray/60 focus:outline-none focus:ring-2 focus:ring-accent-orange/25 focus:border-accent-orange transition-colors duration-150 tabular-nums"
+            />
+          </div>
+
+          {/* Special Boarding Notes Textarea */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label
+                htmlFor="pet-note-input"
+                className="flex items-center gap-2 text-sm font-medium text-deep-teal"
+              >
+                <FileText className="w-4 h-4 text-neutral-gray shrink-0" strokeWidth={1.5} />
+                <span>Special care and boarding notes</span>
+              </label>
+              <span className="text-xs text-neutral-gray">Optional</span>
+            </div>
+            <textarea
+              id="pet-note-input"
+              rows={4}
+              value={formData.petNote || ''}
+              onChange={(e) => updateField('petNote', e.target.value)}
+              placeholder={`Diet, medications, anxiety triggers, or sleeping habits for ${petName}`}
+              maxLength={500}
+              className="w-full px-4 py-3 text-sm bg-white border border-[#323232]/15 rounded-xl text-foreground placeholder:text-neutral-gray/60 focus:outline-none focus:ring-2 focus:ring-accent-orange/25 focus:border-accent-orange transition-colors duration-150 resize-none"
+            />
+            <div className="flex justify-between items-center text-xs text-neutral-gray pt-0.5">
+              <span className="flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 shrink-0" strokeWidth={1.5} />
+                <span>Shared with the host upon booking</span>
+              </span>
+              <span className="tabular-nums">{(formData.petNote || '').length}/500</span>
+            </div>
+          </div>
         </div>
       </div>
 
       <StepNavigation
-        onNext={onNext}
         onBack={onBack}
-        isNextDisabled={!formData.petSizeCategoryId}
+        onNext={onNext}
+        isNextDisabled={isNextDisabled}
       />
-    </div>
+    </>
   )
 }

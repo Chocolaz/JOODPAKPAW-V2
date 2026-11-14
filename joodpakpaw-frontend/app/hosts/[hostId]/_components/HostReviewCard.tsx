@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { Star, Flag, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { HostReview } from '@/types/hostProfile'
+import { HostReplyBlock } from '@/app/_components/HostReplyBlock'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import Lightbox from 'yet-another-react-lightbox'
 import 'yet-another-react-lightbox/styles.css'
@@ -136,6 +137,14 @@ export function HostReviewCard({ review, onReport }: { review: HostReview; onRep
           <ReviewImages images={reviewImages} onOpen={openLightbox} />
         )}
 
+        {/* Host Reply */}
+        <HostReplyBlock
+          hostReply={review.hostReply}
+          hostRepliedAt={review.hostRepliedAt}
+          compact
+          onSeeMore={() => setModalOpen(true)}
+        />
+
         {/* Property tag */}
         <div className="flex items-center gap-1.5 text-xs text-deep-teal/70 pt-1 border-t border-gray-50">
           <span className="w-1.5 h-1.5 rounded-full bg-accent-orange shrink-0" />
@@ -180,6 +189,10 @@ export function HostReviewCard({ review, onReport }: { review: HostReview; onRep
             {reviewImages.length > 0 && (
               <ReviewImages images={reviewImages} onOpen={openLightbox} />
             )}
+            <HostReplyBlock
+              hostReply={review.hostReply}
+              hostRepliedAt={review.hostRepliedAt}
+            />
             <div className="flex items-center gap-1.5 text-xs text-deep-teal/70 pt-2 border-t border-gray-100">
               <span className="w-1.5 h-1.5 rounded-full bg-accent-orange shrink-0" />
               <span className="truncate">{review.propertyName}</span>

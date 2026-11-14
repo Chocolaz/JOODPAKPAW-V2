@@ -1,5 +1,11 @@
 // lib/api.ts
 import request from './apiClient'
+export { signOut } from './authApi'
+import {
+  compressFormDataImages,
+  compressImagesToWebP,
+  compressImageToWebP,
+} from './imageCompression'
 import {
   BookingRequestBody,
   CreatePropertyResponse,
@@ -16,6 +22,7 @@ import {
   ResetPasswordCredentials,
   RoomCategoryFormData,
   RoomCategoriesResponse,
+  RoomCategories,
   SignInCredentials,
   SignInResponse,
   SignUpCredentials,
@@ -28,7 +35,22 @@ import {
   NotificationsResponse,
   FavoriteFoldersResponse, // Added FavoriteFoldersResponse
   PetBreedsResponse,
+  RoomCategoryCalendarItem,
+  RoomCategoryCalendarsResponse,
+  ApiResponse,
+  BookingStatus,
+  BookingErrorCode,
 } from '@/types'
+export type { ApiResponse, BookingStatus, BookingErrorCode }
+export const BOOKING_ERROR_CODES = {
+  ALREADY_EXISTS_OR_CONFLICT: 'B-4001',
+  SELF_BOOKING_PROHIBITED: 'B-4002',
+  WINDOW_EXPIRED_OR_INVALID_DATES: 'B-4003',
+  CAPACITY_OR_ELIGIBILITY_ERROR: 'B-4004',
+  FORBIDDEN_IDOR: 'A-3007',
+  VALIDATION_ERROR: 'T-2007',
+  NOT_FOUND: 'DB-1002',
+} as const
 import { FavoriteFolderDetail } from '@/types/favorite'
 import type { PropertiesResponse } from '@/types/property'
 import type { HostProfileResponse, HostReviewsResponse } from '@/types/hostProfile'
@@ -50,35 +72,58 @@ import type {
 import type { AdminActionLogsResponse } from '@/types/adminActionLog'
 
 // --- Auth Functions ---
-export const signIn = (
+export const signIn = async (
   credentials: SignInCredentials
 ): Promise<SignInResponse> => {
-  return request<SignInResponse>({
+  const res = await request<SignInResponse>({
     endpoint: 'api/v1/auth/sign-in',
     method: 'POST',
     body: credentials,
     errorContext: 'Sign-in',
   })
+  return {
+    ...res,
+    accessToken: res.data?.accessToken || res.accessToken,
+    refreshToken: res.data?.refreshToken || res.refreshToken,
+    expiresIn: res.data?.expiresIn || res.expiresIn,
+    tokenType: res.data?.tokenType || res.tokenType,
+    user: res.data?.user || res.user,
+  }
 }
 
 export const signUp = (credentials: SignUpCredentials) => {
+  const payload = {
+    ...credentials,
+    firstName: credentials.firstName || credentials.firstname,
+    lastName: credentials.lastName || credentials.lastname,
+    firstname: credentials.firstname || credentials.firstName,
+    lastname: credentials.lastname || credentials.lastName,
+  }
   return request({
     endpoint: 'api/v1/auth/sign-up',
     method: 'POST',
-    body: credentials,
+    body: payload,
     errorContext: 'Sign-up',
   })
 }
 
-export const verifyOtp = (
+export const verifyOtp = async (
   credentials: VerifyOtpCredentials
 ): Promise<SignInResponse> => {
-  return request<SignInResponse>({
+  const res = await request<SignInResponse>({
     endpoint: 'api/v1/auth/verify-otp',
     method: 'POST',
     body: credentials,
     errorContext: 'OTP Verification',
   })
+  return {
+    ...res,
+    accessToken: res.data?.accessToken || res.accessToken,
+    refreshToken: res.data?.refreshToken || res.refreshToken,
+    expiresIn: res.data?.expiresIn || res.expiresIn,
+    tokenType: res.data?.tokenType || res.tokenType,
+    user: res.data?.user || res.user,
+  }
 }
 
 export const resendOtp = (credentials: { email: string }) => {
@@ -109,8 +154,8 @@ export const resetPassword = (credentials: ResetPasswordCredentials) => {
 }
 
 // --- User Functions ---
-export const getProfile = (): Promise<ProfileResponse> => {
-  return request<ProfileResponse>({
+export const getProfile = async (): Promise<ProfileResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/auth/profile',
     method: 'GET',
     requiresAuth: true,
@@ -118,58 +163,91 @@ export const getProfile = (): Promise<ProfileResponse> => {
     errorContext: 'Get Profile',
     cache: 'no-store',
   })
+  return {
+    code: res?.code ?? 'S-0000',
+    message: res?.message ?? 'Success',
+    data: res?.data || res,
+  }
 }
 
-export const updateUserProfile = (userId: string, formData: FormData) => {
+export const updateUserProfile = async (userId: string, formData: FormData) => {
+  const compressedFormData = await compressFormDataImages(formData)
   return request({
     endpoint: `api/v1/users/${userId}`,
     method: 'PUT',
-    body: formData,
+    body: compressedFormData,
     requiresAuth: true,
     errorContext: 'Update Profile',
   })
 }
 
-export const getAllPetProfiles = (): Promise<PetProfilesResponse> => {
-  return request<PetProfilesResponse>({
+export const getAllPetProfiles = async (): Promise<PetProfilesResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/profiles/pet-profiles/all',
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get All Pet Profiles',
   })
+  const petProfiles: PetProfile[] = Array.isArray(res?.data?.petProfiles)
+    ? res.data.petProfiles
+    : Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.petProfiles)
+    ? res.petProfiles
+    : []
+  return {
+    ...res,
+    petProfiles,
+    data: res?.data ?? { petProfiles },
+  }
 }
 
-export const getPetProfileById = (id: string): Promise<PetProfile> => {
-  return request<PetProfile>({
+export const getPetProfileById = async (id: string): Promise<PetProfile> => {
+  const res = await request<any>({
     endpoint: `api/v1/profiles/pet-profiles/${id}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Pet Profile By Id',
   })
+  return (res?.data?.petProfile ?? res?.data ?? res) as PetProfile
 }
 
-export const createPetProfile = (formData: FormData) => {
-  return request({
+export const createPetProfile = async (formData: FormData) => {
+  const compressedFormData = await compressFormDataImages(formData)
+  const res = await request<any>({
     endpoint: 'api/v1/profiles/pet-profiles',
     method: 'POST',
-    body: formData,
+    body: compressedFormData,
     requiresAuth: true,
     errorContext: 'Create Pet Profile',
   })
+  const petProfile = res?.data?.petProfile ?? res?.data ?? res
+  return {
+    ...res,
+    petProfile,
+    data: res?.data ?? { petProfile },
+  }
 }
 
-export const updatePetProfile = (id: string, formData: FormData) => {
-  return request({
+export const updatePetProfile = async (id: string, formData: FormData) => {
+  const compressedFormData = await compressFormDataImages(formData)
+  const res = await request<any>({
     endpoint: `api/v1/profiles/pet-profiles/${id}`,
     method: 'PUT',
-    body: formData,
+    body: compressedFormData,
     requiresAuth: true,
     errorContext: 'Update Pet Profile',
   })
+  const petProfile = res?.data?.petProfile ?? res?.data ?? res
+  return {
+    ...res,
+    petProfile,
+    data: res?.data ?? { petProfile },
+  }
 }
 
-export const deletePetProfile = (id: string): Promise<void> => {
-  return request<void>({
+export const deletePetProfile = async (id: string): Promise<void> => {
+  await request<void>({
     endpoint: `api/v1/profiles/pet-profiles/${id}`,
     method: 'DELETE',
     requiresAuth: true,
@@ -178,7 +256,7 @@ export const deletePetProfile = (id: string): Promise<void> => {
 }
 
 // --- Property Functions ---
-export const getProperties = (
+export const getProperties = async (
   page: number,
   limit: number,
   options?: {
@@ -202,32 +280,99 @@ export const getProperties = (
   if (options?.petTypes) params.append('petTypes', options.petTypes)
   if (options?.maxPrice != null && options.maxPrice !== '') params.append('maxPrice', String(options.maxPrice))
 
-  return request<PropertiesResponse>({
+  const res = await request<any>({
     endpoint: `api/v1/properties?${params.toString()}`,
     method: 'GET',
     errorContext: 'Get Properties',
     sendAuthIfAvailable: true,
   })
+
+  const propertiesList: Property[] = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.data?.properties)
+    ? res.data.properties
+    : Array.isArray(res?.properties)
+    ? res.properties
+    : []
+
+  const pagination = res?.pagination || {
+    page: res?.page || page,
+    limit: res?.limit || limit,
+    totalRows: res?.totalRows ?? propertiesList.length,
+    totalPages: res?.totalPages ?? (propertiesList.length > 0 ? 1 : 0),
+  }
+
+  return {
+    ...res,
+    data: propertiesList,
+    pagination,
+    totalRows: pagination.totalRows,
+    totalPages: pagination.totalPages,
+    limit: pagination.limit,
+    page: pagination.page,
+  }
 }
 
-export const getPropertyById = (
+export interface FeaturedSectionsData {
+  topRated: Property[]
+  topRatedTotal: number
+  bestValue: Property[]
+  bestValueTotal: number
+  newListings: Property[]
+  newListingsTotal: number
+  trending: Property[]
+  trendingTotal: number
+  dogFriendly: Property[]
+  dogFriendlyTotal: number
+  catFriendly: Property[]
+  catFriendlyTotal: number
+  allProperties: Property[]
+  allPropertiesTotal: number
+  allPropertiesTotalPages: number
+}
+
+export const getFeaturedSections = async (): Promise<FeaturedSectionsData> => {
+  const res = (await request<FeaturedSectionsData>({
+    endpoint: 'api/v1/properties/featured-sections',
+    method: 'GET',
+    errorContext: 'Get Featured Sections',
+    sendAuthIfAvailable: true,
+  })) as unknown as { data: FeaturedSectionsData }
+  return res.data
+}
+
+export const getPropertyById = async (
   propertyId: string
-): Promise<{ property: Property }> => {
-  return request<{ property: Property }>({
+): Promise<{ property: Property; data?: { property: Property } }> => {
+  const res = await request<any>({
     endpoint: `api/v1/properties/${propertyId}`,
     method: 'GET',
     sendAuthIfAvailable: true,
     errorContext: 'Get Property By Id',
   })
+  const property: Property =
+    res?.data?.property || res?.data || res?.property
+  return {
+    ...res,
+    property,
+    data: res?.data ?? { property },
+  }
 }
 
-export const getHostProfile = (hostId: string): Promise<HostProfileResponse> => {
-  return request<HostProfileResponse>({
+export const getHostProfile = async (hostId: string): Promise<HostProfileResponse> => {
+  const res = await request<any>({
     endpoint: `api/v1/properties/hosts/${hostId}/profile`,
     method: 'GET',
     sendAuthIfAvailable: true,
     errorContext: 'Get Host Profile',
   })
+  const host: import('@/types').HostProfile =
+    res?.data?.host || res?.data || res?.host
+  return {
+    ...res,
+    host,
+    data: res?.data ?? { host },
+  }
 }
 
 // --- Verification ---
@@ -239,10 +384,17 @@ export const getVerificationStatus = (): Promise<VerificationResponse> =>
     errorContext: 'Get Verification Status',
   })
 
-export const submitVerification = (idPhoto: File, selfieWithId: File): Promise<void> => {
+export const submitVerification = async (
+  idPhoto: File,
+  selfieWithId: File
+): Promise<void> => {
+  const [compressedIdPhoto, compressedSelfie] = await Promise.all([
+    compressImageToWebP(idPhoto),
+    compressImageToWebP(selfieWithId),
+  ])
   const formData = new FormData()
-  formData.append('idPhoto', idPhoto)
-  formData.append('selfieWithId', selfieWithId)
+  formData.append('idPhoto', compressedIdPhoto)
+  formData.append('selfieWithId', compressedSelfie)
   return request<void>({
     endpoint: 'api/v1/user-verifications',
     method: 'POST',
@@ -252,35 +404,97 @@ export const submitVerification = (idPhoto: File, selfieWithId: File): Promise<v
   })
 }
 
-export const getHostReviews = (
+export const getHostReviews = async (
   hostId: string,
   page = 1,
   limit = 10
 ): Promise<HostReviewsResponse> => {
-  return request<HostReviewsResponse>({
+  const res = await request<any>({
     endpoint: `api/v1/properties/hosts/${hostId}/reviews?page=${page}&limit=${limit}`,
     method: 'GET',
     sendAuthIfAvailable: true,
     errorContext: 'Get Host Reviews',
   })
+  const reviewsList: import('@/types').HostReview[] = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.data?.reviews)
+    ? res.data.reviews
+    : Array.isArray(res?.reviews)
+    ? res.reviews
+    : []
+
+  const pagination = res?.pagination || {
+    page,
+    limit,
+    totalRows: res?.totalRows ?? reviewsList.length,
+    totalPages: res?.totalPages ?? (reviewsList.length > 0 ? 1 : 0),
+  }
+
+  return {
+    ...res,
+    data: reviewsList,
+    reviews: reviewsList,
+    pagination,
+    totalRows: pagination.totalRows,
+    totalPages: pagination.totalPages,
+  }
 }
 
-export const getRecommendedProperties = (page = 1, limit = 20): Promise<PropertiesResponse> => {
-  return request<PropertiesResponse>({
+export const getRecommendedProperties = async (page = 1, limit = 20): Promise<PropertiesResponse> => {
+  const res = await request<any>({
     endpoint: `api/v1/properties/recommend?page=${page}&limit=${limit}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Recommended Properties',
   })
+  const propertiesList: Property[] = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.data?.properties)
+    ? res.data.properties
+    : Array.isArray(res?.properties)
+    ? res.properties
+    : []
+
+  const pagination = res?.pagination || {
+    page,
+    limit,
+    totalRows: res?.totalRows ?? propertiesList.length,
+    totalPages: res?.totalPages ?? (propertiesList.length > 0 ? 1 : 0),
+  }
+
+  return {
+    ...res,
+    data: propertiesList,
+    pagination,
+    totalRows: pagination.totalRows,
+    totalPages: pagination.totalPages,
+    limit: pagination.limit,
+    page: pagination.page,
+  }
 }
 
-export const getPropertyRecommendations = (propertyId: string | number, limit = 12): Promise<HostPropertiesResponse> => {
-  return request<HostPropertiesResponse>({
+export const getPropertyRecommendations = async (
+  propertyId: string | number,
+  limit = 12
+): Promise<HostPropertiesResponse> => {
+  const res = await request<any>({
     endpoint: `api/v1/properties/recommend/property/${propertyId}?limit=${limit}`,
     method: 'GET',
     sendAuthIfAvailable: true,
     errorContext: 'Get Property Recommendations',
   })
+  const properties: Property[] = Array.isArray(res?.data?.properties)
+    ? res.data.properties
+    : Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.properties)
+    ? res.properties
+    : []
+  return {
+    ...res,
+    properties,
+    data: res?.data ?? { properties },
+  }
 }
 
 export const trackPropertyView = (propertyId: number): Promise<void> => {
@@ -292,24 +506,43 @@ export const trackPropertyView = (propertyId: number): Promise<void> => {
   })
 }
 
-export const getHostProperties = (): Promise<HostPropertiesResponse> => {
-  return request<HostPropertiesResponse>({
+export const getHostProperties = async (): Promise<HostPropertiesResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/hosts/properties/all',
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Host Properties',
   })
+  const properties: Property[] = Array.isArray(res?.data?.properties)
+    ? res.data.properties
+    : Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.properties)
+    ? res.properties
+    : []
+  return {
+    ...res,
+    properties,
+    data: res?.data ?? { properties },
+  }
 }
 
-export const getHostPropertyById = (
+export const getHostPropertyById = async (
   propertyId: string
-): Promise<{ property: Property }> => {
-  return request<{ property: Property }>({
+): Promise<{ property: Property; data?: { property: Property } }> => {
+  const res = await request<any>({
     endpoint: `api/v1/hosts/properties/${propertyId}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Host Property By Id',
   })
+  const property: Property =
+    res?.data?.property || res?.data || res?.property
+  return {
+    ...res,
+    property,
+    data: res?.data ?? { property },
+  }
 }
 
 export const updateHostPropertyIsActive = async (
@@ -325,44 +558,73 @@ export const updateHostPropertyIsActive = async (
   })
 }
 
-export const getFacilities = (): Promise<FacilitiesResponse> => {
-  return request<FacilitiesResponse>({
+export const getFacilities = async (): Promise<FacilitiesResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/hosts/facilities/all',
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Facilities',
   })
+  const facilities = res?.data?.facilities ?? res?.facilities ?? []
+  return {
+    ...res,
+    facilities,
+    data: res?.data ?? { facilities },
+  }
 }
+export const getAllFacilities = getFacilities
 
-export const getPetTypes = (): Promise<PetsResponse> => {
-  return request<PetsResponse>({
+export const getPetTypes = async (): Promise<PetsResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/pets/all',
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Pet Types',
   })
+  const pets = res?.data?.pets ?? res?.pets ?? []
+  return {
+    ...res,
+    pets,
+    data: res?.data ?? { pets },
+  }
 }
+export const getAllPets = getPetTypes
 
-export const getPetBreeds = (petTypeId: number): Promise<PetBreedsResponse> => {
-  return request<PetBreedsResponse>({
+export const getPetBreeds = async (petTypeId: number): Promise<PetBreedsResponse> => {
+  const res = await request<any>({
     endpoint: `api/v1/pets/${petTypeId}/pet-breeds/all`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Pet Breeds',
   })
+  const petBreeds = res?.data?.petBreeds ?? res?.petBreeds ?? []
+  return {
+    ...res,
+    petBreeds,
+    data: res?.data ?? { petBreeds },
+  }
 }
+export const getPetBreedsByTypeId = getPetBreeds
 
-export const getPetSizeCategories = (): Promise<PetSizeCategoriesResponse> => {
-  return request<PetSizeCategoriesResponse>({
+export const getPetSizeCategories = async (): Promise<PetSizeCategoriesResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/pet-size-categories/all',
     method: 'GET',
     sendAuthIfAvailable: true,
     errorContext: 'Get Pet Size Categories',
   })
+  const petSizeCategories =
+    res?.data?.petSizeCategories ?? res?.petSizeCategories ?? []
+  return {
+    ...res,
+    petSizeCategories,
+    data: res?.data ?? { petSizeCategories },
+  }
 }
+export const getAllPetSizeCategories = getPetSizeCategories
 
 // --- Chat Functions ---
-export const createChatRoom = (
+export const createChatRoom = async (
   participantId: number,
   content?: string,
   images?: File[]
@@ -370,7 +632,10 @@ export const createChatRoom = (
   const formData = new FormData()
   formData.append('participantId', String(participantId))
   if (content) formData.append('content', content)
-  if (images) images.forEach((img) => formData.append('images', img))
+  if (images && images.length > 0) {
+    const compressedImages = await compressImagesToWebP(images)
+    compressedImages.forEach((img) => formData.append('images', img))
+  }
   return request<ChatRoom>({
     endpoint: 'api/v1/chat-rooms',
     method: 'POST',
@@ -398,15 +663,16 @@ export const getChatRoomById = (id: number): Promise<ChatRoomDetail> => {
   })
 }
 
-export const sendChatMessage = (
+export const sendChatMessage = async (
   roomId: number,
   content: string,
   images?: File[]
 ): Promise<ChatMessage> => {
   if (images && images.length > 0) {
+    const compressedImages = await compressImagesToWebP(images)
     const formData = new FormData()
     if (content) formData.append('content', content)
-    images.forEach((img) => formData.append('images', img))
+    compressedImages.forEach((img) => formData.append('images', img))
     return request<ChatMessage>({
       endpoint: `api/v1/chat-rooms/${roomId}/messages`,
       method: 'POST',
@@ -454,35 +720,48 @@ export const deleteRoomCategory = (
   })
 }
 
-export const createProperty = (data: PropertyFormData) => {
+export const createProperty = async (data: PropertyFormData): Promise<CreatePropertyResponse> => {
   const formData = new FormData()
 
-  Object.entries(data).forEach(([key, value]) => {
+  for (const [key, value] of Object.entries(data)) {
     if (key === 'images') {
-      ;(value as File[]).forEach((file: File) => {
+      const compressedImages = await compressImagesToWebP((value as File[]) || [])
+      compressedImages.forEach((file: File) => {
         formData.append('images', file)
       })
     } else if (key === 'facilities') {
       formData.append('facilities', JSON.stringify(value))
-    } else if (value !== null) {
+    } else if (value !== null && value !== undefined) {
       formData.append(key, String(value))
     }
-  })
+  }
 
-  return request<CreatePropertyResponse>({
+  const res = await request<any>({
     endpoint: 'api/v1/hosts/properties',
     method: 'POST',
     body: formData,
     requiresAuth: true,
     errorContext: 'Create Property',
   })
+
+  const propertyId = res?.data?.id ?? res?.id ?? 0
+
+  return {
+    ...res,
+    id: propertyId,
+    data: {
+      ...res?.data,
+      id: propertyId,
+    },
+  }
 }
 
-export const updateProperty = (propertyId: string, data: FormData) => {
+export const updateProperty = async (propertyId: string, data: FormData) => {
+  const compressedFormData = await compressFormDataImages(data)
   return request({
     endpoint: `api/v1/hosts/properties/${propertyId}`,
     method: 'PUT',
-    body: data,
+    body: compressedFormData,
     requiresAuth: true,
     errorContext: 'Update Property',
   })
@@ -497,32 +776,43 @@ export const deleteProperty = (propertyId: string): Promise<void> => {
   })
 }
 
-export const createRoomCategory = (
+export const createRoomCategory = async (
   propertyId: number,
   data: RoomCategoryFormData
 ) => {
   const formData = new FormData()
 
-  Object.entries(data).forEach(([key, value]) => {
+  for (const [key, value] of Object.entries(data)) {
     if (key === 'pets' || key === 'facilities') {
       formData.append(key, JSON.stringify(value))
     } else if (key === 'images') {
-      (value as File[]).forEach((file) => formData.append('images', file))
-    } else {
+      const compressedImages = await compressImagesToWebP((value as File[]) || [])
+      compressedImages.forEach((file) => formData.append('images', file))
+    } else if (value !== null && value !== undefined) {
       formData.append(key, String(value))
+      if (key === 'petSizeCategoryId') {
+        formData.append('petSizeCategories', String(value))
+      }
     }
-  })
+  }
 
-  return request({
+  const res = await request<any>({
     endpoint: `api/v1/hosts/properties/${propertyId}/room-categories`,
     method: 'POST',
     body: formData,
     requiresAuth: true,
     errorContext: 'Create Room Category',
   })
+
+  const roomCategory = res?.data?.roomCategory || res?.data || res?.roomCategory
+  return {
+    ...res,
+    roomCategory,
+    data: res?.data ?? { roomCategory },
+  }
 }
 
-export const updateRoomCategory = (
+export const updateRoomCategory = async (
   propertyId: number,
   roomId: number,
   data: import('@/types').EditRoomCategoryFormData
@@ -534,8 +824,10 @@ export const updateRoomCategory = (
   formData.append('basePrice', String(data.basePrice))
   formData.append('pets', JSON.stringify(data.pets))
   formData.append('facilities', JSON.stringify(data.facilities))
+  formData.append('petSizeCategoryId', String(data.petSizeCategoryId))
   formData.append('petSizeCategories', String(data.petSizeCategoryId))
-  data.newImages.forEach((file) => formData.append('images', file))
+  const compressedNewImages = await compressImagesToWebP(data.newImages || [])
+  compressedNewImages.forEach((file) => formData.append('images', file))
   formData.append('deleteImageIds', JSON.stringify(data.deleteImageIds))
 
   return request({
@@ -547,18 +839,31 @@ export const updateRoomCategory = (
   })
 }
 
-export const getRoomCategories = (
+export const getRoomCategories = async (
   propertyId: number
 ): Promise<RoomCategoriesResponse> => {
-  return request<RoomCategoriesResponse>({
+  const res = await request<any>({
     endpoint: `api/v1/hosts/properties/${propertyId}/room-categories/all`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Room Categories',
   })
+  const roomCategories: RoomCategories[] = Array.isArray(res?.data?.roomCategories)
+    ? res.data.roomCategories
+    : Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.roomCategories)
+    ? res.roomCategories
+    : []
+  return {
+    ...res,
+    roomCategories,
+    data: res?.data ?? { roomCategories },
+  }
 }
+export const getHostRoomCategories = getRoomCategories
 
-export const searchRoomCategories = (
+export const searchRoomCategories = async (
   propertyId: number,
   checkInDate: string,
   checkOutDate: string,
@@ -573,88 +878,278 @@ export const searchRoomCategories = (
   if (petSizeId !== undefined) {
     params.append('petSizeId', String(petSizeId))
   }
-  return request<RoomCategoriesResponse>({
+  const res = await request<any>({
     endpoint: `api/v1/properties/${propertyId}/room-categories/search?${params.toString()}`,
     method: 'GET',
     errorContext: 'Search Room Categories',
   })
+  const roomCategories: RoomCategories[] = Array.isArray(res?.data?.roomCategories)
+    ? res.data.roomCategories
+    : Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.roomCategories)
+    ? res.roomCategories
+    : []
+  return {
+    ...res,
+    roomCategories,
+    data: res?.data ?? { roomCategories },
+  }
 }
 
-// --- Booking Functions ---
-export const createBooking = (data: BookingRequestBody): Promise<Booking> => {
-  return request<Booking>({
-    endpoint: 'api/v1/bookings',
-    method: 'POST',
-    body: data,
+export const getRoomCategoryCalendars = async (
+  propertyId: number | string,
+  roomId: number | string,
+  startDate?: string,
+  endDate?: string
+): Promise<{ calendars: RoomCategoryCalendarItem[] }> => {
+  const query = new URLSearchParams()
+  if (startDate) query.append('startDate', startDate)
+  if (endDate) query.append('endDate', endDate)
+  const qs = query.toString() ? `?${query.toString()}` : ''
+
+  const res = await request<any>({
+    endpoint: `api/v1/hosts/properties/${propertyId}/room-categories/${roomId}/calendars${qs}`,
+    method: 'GET',
     requiresAuth: true,
-    errorContext: 'Create Booking',
+    errorContext: 'Get Room Category Calendars',
+    cache: 'no-store',
+  })
+
+  const calendars: RoomCategoryCalendarItem[] =
+    res?.data?.calendars ?? res?.calendars ?? []
+
+  return {
+    ...res,
+    calendars,
+  }
+}
+
+export const updateRoomCategoryCalendars = async (
+  propertyId: number | string,
+  roomId: number | string,
+  updates: Array<{ date: string; unavailableRooms?: number; priceAdjustment?: number }>
+): Promise<void> => {
+  await request<void>({
+    endpoint: `api/v1/hosts/properties/${propertyId}/room-categories/${roomId}/calendars`,
+    method: 'PATCH',
+    body: { updates },
+    requiresAuth: true,
+    errorContext: 'Update Room Category Calendars',
   })
 }
 
-export const getBookings = (
+// --- Booking Functions ---
+export const createBooking = async (
+  data: BookingRequestBody
+): Promise<Booking> => {
+  const payload: any = { ...data }
+  if (payload.petProfileIds && !payload.PetProfileIDs) {
+    payload.PetProfileIDs = payload.petProfileIds
+  } else if (payload.PetProfileIDs && !payload.petProfileIds) {
+    payload.petProfileIds = payload.PetProfileIDs
+  }
+  const res = await request<any>({
+    endpoint: 'api/v1/bookings',
+    method: 'POST',
+    body: payload,
+    requiresAuth: true,
+    errorContext: 'Create Booking',
+  })
+  const booking: Booking = res?.data?.booking ?? res?.data ?? res
+  return booking
+}
+
+export const getBookings = async (
   page = 1,
   limit = 10
 ): Promise<BookingsPaginatedResponse> => {
-  return request<BookingsPaginatedResponse>({
+  const res = await request<any>({
     endpoint: `api/v1/bookings/paginate?page=${page}&limit=${limit}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Bookings',
     cache: 'no-store',
   })
+  const bookings: Booking[] = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.data?.bookings)
+    ? res.data.bookings
+    : Array.isArray(res?.bookings)
+    ? res.bookings
+    : []
+
+  const pagination = res?.pagination || {
+    page: res?.page || page,
+    limit: res?.limit || limit,
+    totalRows: res?.totalRows ?? bookings.length,
+    totalPages: res?.totalPages ?? (bookings.length > 0 ? 1 : 0),
+  }
+
+  return {
+    ...res,
+    data: bookings,
+    totalRows: pagination.totalRows,
+    totalPages: pagination.totalPages,
+    limit: pagination.limit,
+    page: pagination.page,
+  }
 }
 
-export const getBookingById = (
+export const getBookingById = async (
   bookingId: string
 ): Promise<FullBookingDetail> => {
-  return request<FullBookingDetail>({
+  const res = await request<any>({
     endpoint: `api/v1/bookings/${bookingId}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Booking By Id',
   })
+  const booking: FullBookingDetail =
+    res?.data?.booking ?? res?.data ?? res
+  return booking
 }
 
-export const confirmPayment = (bookingId: number): Promise<void> => {
-  return request<void>({
+export const confirmPayment = async (
+  bookingId: number,
+  slipImage?: File | Blob
+): Promise<ApiResponse<FullBookingDetail>> => {
+  if (slipImage) {
+    const fileToCompress =
+      slipImage instanceof File
+        ? slipImage
+        : new File([slipImage], 'payment-slip.png', {
+            type: slipImage.type || 'image/png',
+          })
+    const compressedSlip = await compressImageToWebP(fileToCompress)
+    const formData = new FormData()
+    formData.append('slip', compressedSlip, compressedSlip.name)
+    const res = await request<ApiResponse<FullBookingDetail>>({
+      endpoint: `api/v1/bookings/${bookingId}/confirm-payment`,
+      method: 'PATCH',
+      body: formData,
+      requiresAuth: true,
+      errorContext: 'Confirm Payment',
+    })
+    return res
+  }
+  const res = await request<ApiResponse<FullBookingDetail>>({
     endpoint: `api/v1/bookings/${bookingId}/confirm-payment`,
     method: 'PATCH',
     requiresAuth: true,
     errorContext: 'Confirm Payment',
   })
+  return res
 }
 
-export const cancelBooking = (bookingId: string): Promise<void> => {
-  return request<void>({
+export const confirmBookingPayment = confirmPayment
+
+export const cancelBooking = async (
+  bookingId: string | number,
+  reason?: string
+): Promise<ApiResponse<FullBookingDetail>> => {
+  const res = await request<ApiResponse<FullBookingDetail>>({
     endpoint: `api/v1/bookings/${bookingId}/cancel`,
+    ...(reason?.trim() ? { body: { reason: reason.trim() } } : {}),
     method: 'PATCH',
     requiresAuth: true,
     errorContext: 'Cancel Booking',
   })
+  return res
 }
 
-export const getHostBookings = (): Promise<BookingsResponse> => {
-  return request<BookingsResponse>({
+export const hostCancelBooking = async (
+  bookingId: number,
+  reason: string
+): Promise<ApiResponse<FullBookingDetail>> => {
+  const res = await request<ApiResponse<FullBookingDetail>>({
+    endpoint: `api/v1/bookings/${bookingId}/cancel`,
+    method: 'PATCH',
+    body: { reason: reason?.trim() || '' },
+    requiresAuth: true,
+    errorContext: 'Host Cancel Booking',
+  })
+  return res
+}
+
+export const hostAcceptBooking = async (
+  bookingId: number
+): Promise<ApiResponse<HostBookingDetail>> => {
+  const res = await request<ApiResponse<HostBookingDetail>>({
+    endpoint: `api/v1/hosts/bookings/${bookingId}/accept`,
+    method: 'PATCH',
+    requiresAuth: true,
+    errorContext: 'Host Accept Booking',
+  })
+  return res
+}
+
+export const hostConfirmBooking = async (
+  bookingId: number
+): Promise<ApiResponse<HostBookingDetail>> => {
+  return hostAcceptBooking(bookingId)
+}
+
+export const getHostBookings = async (): Promise<BookingsResponse> => {
+  const res = await request<any>({
     endpoint: `api/v1/hosts/bookings/all`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Host Bookings',
     cache: 'no-store',
   })
+  const bookings: Booking[] = Array.isArray(res?.data?.bookings)
+    ? res.data.bookings
+    : Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.bookings)
+    ? res.bookings
+    : []
+  return {
+    ...res,
+    bookings,
+    data: res?.data ?? { bookings },
+  }
 }
 
-export const getHostBookingsPaginated = (page = 1, limit = 20): Promise<BookingsPaginatedResponse> => {
-  return request<BookingsPaginatedResponse>({
+export const getHostBookingsPaginated = async (
+  page = 1,
+  limit = 20
+): Promise<BookingsPaginatedResponse> => {
+  const res = await request<any>({
     endpoint: `api/v1/hosts/bookings/paginate?page=${page}&limit=${limit}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Host Bookings',
     cache: 'no-store',
   })
+  const bookings: Booking[] = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.data?.bookings)
+    ? res.data.bookings
+    : Array.isArray(res?.bookings)
+    ? res.bookings
+    : []
+
+  const pagination = res?.pagination || {
+    page: res?.page || page,
+    limit: res?.limit || limit,
+    totalRows: res?.totalRows ?? bookings.length,
+    totalPages: res?.totalPages ?? (bookings.length > 0 ? 1 : 0),
+  }
+
+  return {
+    ...res,
+    data: bookings,
+    totalRows: pagination.totalRows,
+    totalPages: pagination.totalPages,
+    limit: pagination.limit,
+    page: pagination.page,
+  }
 }
 
-export const completeBooking = (bookingId: number): Promise<void> => {
-  return request<void>({
+export const completeBooking = async (bookingId: number): Promise<void> => {
+  await request<any>({
     endpoint: `api/v1/hosts/bookings/${bookingId}/success`,
     method: 'PATCH',
     requiresAuth: true,
@@ -662,121 +1157,183 @@ export const completeBooking = (bookingId: number): Promise<void> => {
   })
 }
 
-export const getHostBookingById = (
+export const getHostBookingById = async (
   bookingId: string
 ): Promise<HostBookingDetail> => {
-  return request<HostBookingDetail>({
+  const res = await request<any>({
     endpoint: `api/v1/hosts/bookings/${bookingId}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Host Booking By Id',
   })
+  const booking: HostBookingDetail =
+    res?.data?.booking ?? res?.data ?? res
+  return booking
 }
 
-export const getHostPropertyBookings = (
+export const getHostPropertyBookings = async (
   propertyId: string,
   page = 1,
   limit = 10
 ): Promise<BookingsPaginatedResponse> => {
-  return request<BookingsPaginatedResponse>({
+  const res = await request<any>({
     endpoint: `api/v1/hosts/properties/${propertyId}/bookings/paginate?page=${page}&limit=${limit}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Host Property Bookings',
     cache: 'no-store',
   })
+  const bookings: Booking[] = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.data?.bookings)
+    ? res.data.bookings
+    : Array.isArray(res?.bookings)
+    ? res.bookings
+    : []
+
+  const pagination = res?.pagination || {
+    page: res?.page || page,
+    limit: res?.limit || limit,
+    totalRows: res?.totalRows ?? bookings.length,
+    totalPages: res?.totalPages ?? (bookings.length > 0 ? 1 : 0),
+  }
+
+  return {
+    ...res,
+    data: bookings,
+    totalRows: pagination.totalRows,
+    totalPages: pagination.totalPages,
+    limit: pagination.limit,
+    page: pagination.page,
+  }
 }
 
 // --- Favorite Functions ---
-export const getFavoriteFolders = (): Promise<FavoriteFoldersResponse> => {
-  return request<FavoriteFoldersResponse>({
+export const getFavoriteFolders = async (): Promise<FavoriteFoldersResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/favorite-folders/all',
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Favorite Folders',
+    cache: 'no-store',
   })
+  const favoriteFolders: import('@/types').FavoriteFolder[] =
+    res?.data?.favoriteFolders ??
+    res?.favoriteFolders ??
+    (Array.isArray(res?.data) ? res.data : [])
+  return {
+    ...res,
+    favoriteFolders,
+    data: res?.data ?? { favoriteFolders },
+  }
 }
 
 export const getFavoriteFolderById = async (
-  folderId: string
+  folderId: string | number
 ): Promise<FavoriteFolderDetail> => {
-  // Define local types for the raw API response to avoid conflicts
-  interface ApiFavoriteProperty {
-    id: number
-    title: string
-    province: string
-    firstImage: string
-  }
-
-  interface ApiFavoriteFolderDetail {
-    id: number
-    name: string
-    propertyCount: number
-    createdAt: string
-    properties: ApiFavoriteProperty[]
-  }
-
-  const response = await request<ApiFavoriteFolderDetail>({
+  const response = await request<any>({
     endpoint: `api/v1/favorite-folders/${folderId}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Favorite Folder By Id',
+    cache: 'no-store',
   })
 
-  // Transform the simplified properties into full Property objects
-  const transformedProperties: Property[] = response.properties.map(
-    (favProperty) => ({
-      id: favProperty.id,
-      title: favProperty.title,
-      province: favProperty.province,
-      images: favProperty.firstImage
-        ? [
-            {
-              id: 0,
-              filePath: favProperty.firstImage,
-              fileName: '',
-              fileContentType: '',
-              fileExtensionName: '',
-              fileSize: 0,
-            },
-          ]
-        : [],
-      // Add default values for other required fields
-      description: '',
-      district: '',
-      country: '',
-      latitude: '0',
-      longitude: '0',
-      zipcode: '',
-      isActive: true,
-      isFavorite: true, // Favorites are always favorited
-      avgRating: 0,
-      hostId: 0,
-      propertyTypeId: 0,
-      createdAt: '',
-      updatedAt: '',
-    })
+  const folderData = response?.data?.folder ?? response?.data ?? response
+  const rawProperties = Array.isArray(folderData?.properties) ? folderData.properties : []
+
+  // Transform the simplified properties into full Property objects using real data from backend
+  const transformedProperties: Property[] = rawProperties.map(
+    (favProperty: any) => {
+      const minPrice = Number(favProperty.minPrice || 0)
+      const avgRating = Number(favProperty.avgRating || 0)
+      const reviewCount = Number(favProperty.reviewCount || 0)
+      const imagePath =
+        favProperty.firstImage ||
+        (Array.isArray(favProperty.images) && favProperty.images[0]?.filePath) ||
+        ''
+
+      return {
+        id: favProperty.id,
+        title: favProperty.title || '',
+        province: favProperty.province || '',
+        description: favProperty.description || '',
+        district: favProperty.district || '',
+        country: favProperty.country || 'Thailand',
+        latitude: favProperty.latitude || '0',
+        longitude: favProperty.longitude || '0',
+        zipcode: favProperty.zipcode || '',
+        isActive: favProperty.isActive !== undefined ? favProperty.isActive : true,
+        isFavorite: true,
+        avgRating,
+        reviewCount,
+        hostId: favProperty.hostId || 0,
+        propertyTypeId: favProperty.propertyTypeId || 0,
+        createdAt: favProperty.createdAt || '',
+        updatedAt: favProperty.updatedAt || '',
+        images: imagePath
+          ? [
+              {
+                id: 0,
+                filePath: imagePath,
+                fileName: '',
+                fileContentType: 'image/webp',
+                fileExtensionName: 'webp',
+                fileSize: 0,
+              },
+            ]
+          : [],
+        pets: Array.isArray(favProperty.pets) ? favProperty.pets : [],
+        roomCategories:
+          minPrice > 0
+            ? ([
+                {
+                  id: 0,
+                  name: 'Standard',
+                  totalRoom: 1,
+                  numberOfPets: 1,
+                  basePrice: minPrice,
+                  propertyId: favProperty.id,
+                  isAvailable: true,
+                  isCapacityInsufficient: false,
+                  isBooked: false,
+                  availability: {
+                    roomsNeeded: 1,
+                    availableRooms: 1,
+                    totalPrice: minPrice,
+                    dates: [],
+                  },
+                  pets: favProperty.pets || [],
+                } as any,
+              ] as any)
+            : [],
+      }
+    }
   )
 
   const firstPropertyImage =
-    transformedProperties.length > 0 &&
-    transformedProperties[0].images.length > 0
+    folderData.firstPropertyImage ||
+    (transformedProperties.length > 0 && transformedProperties[0].images.length > 0
       ? transformedProperties[0].images[0].filePath
-      : ''
+      : '')
 
   return {
-    ...response,
+    ...folderData,
+    id: folderData.id,
+    name: folderData.name || '',
+    propertyCount: transformedProperties.length,
     firstPropertyImage,
+    createdAt: folderData.createdAt || '',
     properties: transformedProperties,
   }
 }
 
-export const addFavorite = (data: {
+export const addFavorite = async (data: {
   propertyId: number
   folderId?: number
   folderName?: string
 }): Promise<void> => {
-  return request<void>({
+  await request<any>({
     endpoint: 'api/v1/favorite-folders',
     method: 'POST',
     body: data,
@@ -785,8 +1342,8 @@ export const addFavorite = (data: {
   })
 }
 
-export const createFavoriteFolder = (name: string): Promise<void> => {
-  return request<void>({
+export const createFavoriteFolder = async (name: string): Promise<void> => {
+  await request<any>({
     endpoint: 'api/v1/favorite-folders',
     method: 'POST',
     body: { folderName: name },
@@ -795,8 +1352,8 @@ export const createFavoriteFolder = (name: string): Promise<void> => {
   })
 }
 
-export const deleteFavoriteFolder = (folderId: string): Promise<void> => {
-  return request<void>({
+export const deleteFavoriteFolder = async (folderId: string | number): Promise<void> => {
+  await request<any>({
     endpoint: `api/v1/favorite-folders/${folderId}`,
     method: 'DELETE',
     requiresAuth: true,
@@ -804,11 +1361,11 @@ export const deleteFavoriteFolder = (folderId: string): Promise<void> => {
   })
 }
 
-export const renameFavoriteFolder = (
-  folderId: string,
+export const renameFavoriteFolder = async (
+  folderId: string | number,
   name: string
 ): Promise<void> => {
-  return request<void>({
+  await request<any>({
     endpoint: `api/v1/favorite-folders/${folderId}`,
     method: 'PUT',
     body: { name },
@@ -817,8 +1374,8 @@ export const renameFavoriteFolder = (
   })
 }
 
-export const deleteFavoriteProperty = (propertyId: number): Promise<void> => {
-  return request<void>({
+export const deleteFavoriteProperty = async (propertyId: number): Promise<void> => {
+  await request<any>({
     endpoint: `api/v1/favorite-properties/${propertyId}`,
     method: 'DELETE',
     requiresAuth: true,
@@ -827,21 +1384,41 @@ export const deleteFavoriteProperty = (propertyId: number): Promise<void> => {
 }
 
 // --- Review Functions ---
-export const submitReview = (
-  bookingId: string,
+export const submitReview = async (
+  bookingId: string | number,
   data: { rating: number; comment: string; images?: File[] }
 ): Promise<void> => {
   const formData = new FormData()
   formData.append('rating', String(data.rating))
   formData.append('comment', data.comment)
-  if (data.images) data.images.forEach((img) => formData.append('images', img))
-  return request<void>({
+  if (data.images && data.images.length > 0) {
+    const compressedImages = await compressImagesToWebP(data.images)
+    compressedImages.forEach((img) => formData.append('images', img))
+  }
+  const res = await request<any>({
     endpoint: `api/v1/bookings/${bookingId}/review`,
     method: 'POST',
     body: formData,
     requiresAuth: true,
     errorContext: 'Submit Review',
   })
+  return res?.data ?? res
+}
+
+export const submitBookingReview = submitReview
+
+export const replyToBookingReview = async (
+  bookingId: string | number,
+  reply: string
+): Promise<{ hostReply?: string; hostRepliedAt?: string } | undefined> => {
+  const res = await request<any>({
+    endpoint: `api/v1/hosts/bookings/${bookingId}/review-reply`,
+    method: 'POST',
+    body: { hostReply: reply },
+    requiresAuth: true,
+    errorContext: 'Reply to Booking Review',
+  })
+  return res?.data ?? res
 }
 
 // --- Notification Functions ---
@@ -882,16 +1459,23 @@ export const moveFavorite = async (data: {
 }
 
 // --- Report Functions ---
-export const getReportCategories = (type: string): Promise<ReportCategoriesResponse> => {
-  return request({
+export const getReportCategories = async (type: string): Promise<ReportCategoriesResponse> => {
+  const res = await request<any>({
     endpoint: `api/v1/report-categories?type=${type}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Report Categories',
   })
+  const reportCategories: import('@/types').ReportCategory[] =
+    res?.data?.reportCategories ?? res?.reportCategories ?? []
+  return {
+    ...res,
+    reportCategories,
+    data: res?.data ?? { reportCategories },
+  }
 }
 
-export const submitPropertyReport = (
+export const submitPropertyReport = async (
   propertyId: number,
   reportCategoryId: number,
   description: string,
@@ -901,7 +1485,10 @@ export const submitPropertyReport = (
   formData.append('propertyId', String(propertyId))
   formData.append('reportCategoryId', String(reportCategoryId))
   formData.append('description', description)
-  if (images) images.forEach((img) => formData.append('images', img))
+  if (images && images.length > 0) {
+    const compressedImages = await compressImagesToWebP(images)
+    compressedImages.forEach((img) => formData.append('images', img))
+  }
   return request<void>({
     endpoint: 'api/v1/reports/property',
     method: 'POST',
@@ -911,7 +1498,9 @@ export const submitPropertyReport = (
   })
 }
 
-export const submitReviewReport = (
+export const reportProperty = submitPropertyReport
+
+export const submitReviewReport = async (
   bookingId: number,
   reportCategoryId: number,
   description: string,
@@ -921,7 +1510,10 @@ export const submitReviewReport = (
   formData.append('bookingId', String(bookingId))
   formData.append('reportCategoryId', String(reportCategoryId))
   formData.append('description', description)
-  if (images) images.forEach((img) => formData.append('images', img))
+  if (images && images.length > 0) {
+    const compressedImages = await compressImagesToWebP(images)
+    compressedImages.forEach((img) => formData.append('images', img))
+  }
   return request<void>({
     endpoint: 'api/v1/reports/review',
     method: 'POST',
@@ -931,7 +1523,9 @@ export const submitReviewReport = (
   })
 }
 
-export const submitUnbanPropertyRequest = (
+export const reportReview = submitReviewReport
+
+export const submitUnbanPropertyRequest = async (
   reportCategoryId: number,
   description: string,
   propertyId?: number,
@@ -941,7 +1535,10 @@ export const submitUnbanPropertyRequest = (
   formData.append('reportCategoryId', String(reportCategoryId))
   formData.append('description', description)
   if (propertyId) formData.append('propertyId', String(propertyId))
-  if (images) images.forEach((img) => formData.append('images', img))
+  if (images && images.length > 0) {
+    const compressedImages = await compressImagesToWebP(images)
+    compressedImages.forEach((img) => formData.append('images', img))
+  }
   return request<void>({
     endpoint: 'api/v1/reports/unban-property',
     method: 'POST',
@@ -950,6 +1547,8 @@ export const submitUnbanPropertyRequest = (
     errorContext: 'Submit Unban Property Request',
   })
 }
+
+export const requestUnbanProperty = submitUnbanPropertyRequest
 
 // --- Admin: Dashboard ---
 export interface AdminDashboardData {
@@ -1094,4 +1693,3 @@ export const rejectVerification = (id: number, rejectDescription: string): Promi
     errorContext: 'Reject Verification',
   })
 }
-

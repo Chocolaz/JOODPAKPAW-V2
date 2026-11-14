@@ -66,12 +66,15 @@ export default function AddPetDynamicStepsPage() {
 
   if (isLoading || authLoading || stepId > highestStepReached + 1) {
     return (
-      <div className="flex flex-col w-full mt-5 animate-pulse">
-        <div className="h-7 bg-gray-200 rounded-lg w-48 mx-auto mb-2" />
-        <div className="h-4 bg-gray-100 rounded w-32 mx-auto mb-8" />
-        <div className="flex justify-center gap-4 mb-6">
-          {[1, 2].map((i) => (
-            <div key={i} className="w-[150px] h-[150px] bg-gray-100 rounded-[20px]" />
+      <div className="flex flex-col w-full mt-6">
+        <div className="h-7 bg-off-white rounded-lg w-56 mx-auto mb-2" />
+        <div className="h-4 bg-off-white/70 rounded w-72 mx-auto mb-8" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-52 bg-off-white/60 rounded-2xl border border-[#323232]/10"
+            />
           ))}
         </div>
       </div>

@@ -50,10 +50,10 @@ export default function ForgotPasswordForm({
   }
 
   return (
-    <div className="px-5 w-full max-w-sm lg:max-w-md text-center mx-auto mt-[30px]">
+    <div className="px-4 sm:px-5 w-full max-w-sm lg:max-w-md text-center mx-auto mt-4 sm:mt-[30px]">
       <form
         onSubmit={handleForgotPassword}
-        className="space-y-[30px] mt-[70px]"
+        className="space-y-4 sm:space-y-6 mt-8 sm:mt-[50px]"
       >
         <div>
           <Input
@@ -76,14 +76,14 @@ export default function ForgotPasswordForm({
         <Button
           type="submit"
           disabled={!email || isSubmitting}
-          className="w-full py-4 rounded-lg bg-accent-orange text-white hover:bg-accent-orange/80 h-auto text-[20px] font-semibold"
+          className="w-full py-4 rounded-lg bg-accent-orange text-white hover:bg-accent-orange/80 h-auto text-base sm:text-lg font-semibold"
         >
           {isSubmitting ? 'Sending...' : 'Confirm'}
         </Button>
       </form>
       <div className="mt-[30px]">
         <Link href="/authen/login" passHref>
-          <div className="py-4 text-deep-teal h-auto text-[20px] font-semibold">
+          <div className="py-4 text-deep-teal h-auto text-base sm:text-lg font-semibold">
             Back to Login
           </div>
         </Link>

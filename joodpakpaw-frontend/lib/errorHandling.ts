@@ -20,11 +20,13 @@ const errorMessages: { [key: string]: string } = {
   'A-3001': 'Invalid email or password.',
   'A-3003': 'Email is already in used.',
   'DB-1002': 'This email is not registered.',
+  'A-3006': 'Email not verified. Please verify your email with OTP.',
+  'A-3008': 'Email is already verified. Please sign in instead.',
   'A-3010': 'Reset password token already used.',
-  'A-3012': 'New password same as old password.',
   'A-3011': 'Wrong password.',
+  'A-3012': 'New password cannot be the same as your current password.',
   'A-3004': 'Phone number already exists.',
-  // Add other error codes and messages here
+  'P-5001': 'Cannot publish property without at least one room category.',
 }
 
 export function getApiErrorMessages(
@@ -61,7 +63,7 @@ export function getApiErrorMessages(
     if (error.code === 'A-3004') {
       return [{ field: 'phone', message: errorMessages[error.code] }]
     }
-    if (error.code === 'A-3003') {
+    if (error.code === 'A-3003' || error.code === 'A-3006' || error.code === 'A-3008') {
       return [{ field: 'email', message: errorMessages[error.code] }]
     }
     if (error.code in errorMessages) {

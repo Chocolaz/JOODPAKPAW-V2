@@ -13,7 +13,6 @@ export const ProfileCard = ({
   onPasswordChangeClick: () => void
 }) => {
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
-  const guestAvatarSrc = `${basePath}/graphics/guest.jpg`
   const roleLabel = profile.role?.map(r => r.name).join(', ') || (profile.isBecomeToHost ? 'Host' : 'Guest')
   const isHost = profile.role?.some(r => r.name === 'host') || profile.isBecomeToHost
 
@@ -21,16 +20,13 @@ export const ProfileCard = ({
     <div className="space-y-4 py-2">
       {/* Profile card with banner */}
       <Card className="w-full overflow-hidden">
-        {/* Gradient banner */}
-        <div className="h-20 relative bg-gradient-to-br from-deep-teal via-deep-teal/80 to-positive-green/60">
-          <div className="absolute top-2 right-6 w-16 h-16 rounded-full bg-white/10" />
-          <div className="absolute -bottom-2 left-8 w-10 h-10 rounded-full bg-white/5" />
-        </div>
+        {/* Banner */}
+        <div className="h-20 relative bg-deep-teal border-b border-deep-teal/20" />
 
         <CardContent className="px-5 pb-5 pt-0 relative">
           {/* Avatar overlapping banner */}
           <Avatar className="w-18 h-18 ring-4 ring-white shadow-lg -mt-10">
-            <AvatarImage src={profile.avatar || guestAvatarSrc} alt={`${profile.firstName} ${profile.lastName}`} />
+            <AvatarImage src={profile.avatar || undefined} alt={`${profile.firstName} ${profile.lastName}`} />
             <AvatarFallback className="text-2xl bg-gray-100 text-deep-teal font-semibold">
               {profile.firstName?.charAt(0)}{profile.lastName?.charAt(0)}
             </AvatarFallback>

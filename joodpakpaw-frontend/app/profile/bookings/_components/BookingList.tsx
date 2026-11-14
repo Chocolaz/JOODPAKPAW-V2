@@ -1,134 +1,48 @@
 'use client'
 
 import React, { useEffect, useState, useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { getBookings } from '@/lib/api'
 import { Booking } from '@/types/booking'
 import Image from 'next/image'
-import { assetPath } from '@/lib/utils'
+import { assetPath, cn } from '@/lib/utils'
 import { BookingCard } from './BookingCard'
 import { ErrorState } from '@/app/profile/_components/ErrorState'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { cn } from '@/lib/utils'
 import {
   CalendarCheck,
   History,
   AlertCircle,
-  ChevronLeft,
   Loader2,
+  Search,
+  X,
 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 
 const UPCOMING_FILTERS = [
   { value: 'ALL', label: 'All' },
-  {
-    value: 'CONFIRMED',
-    label: 'Confirmed',
-    color: 'bg-green-100 text-green-700 border-green-300',
-  },
-  {
-    value: 'PENDING',
-    label: 'Pending',
-    color: 'bg-blue-100 text-blue-700 border-blue-300',
-  },
+  { value: 'CONFIRMED', label: 'Confirmed' },
+  { value: 'PENDING', label: 'Pending payment' },
 ] as const
 
 const PAST_FILTERS = [
   { value: 'ALL', label: 'All' },
-  {
-    value: 'SUCCESSFUL',
-    label: 'Completed',
-    color: 'bg-emerald-100 text-emerald-700 border-emerald-300',
-  },
-  {
-    value: 'CANCELLED',
-    label: 'Cancelled',
-    color: 'bg-red-100 text-red-700 border-red-300',
-  },
+  { value: 'SUCCESSFUL', label: 'Completed' },
+  { value: 'CANCELLED', label: 'Cancelled' },
 ] as const
 
 function BookingCardSkeleton() {
   return (
-    <div className="animate-pulse rounded-2xl border border-gray-100 overflow-hidden">
-      <div className="h-[3px] bg-gray-200 w-full" />
-      <div className="p-4 space-y-3">
-        <div className="flex justify-between items-start">
-          <div className="h-4 bg-gray-200 rounded w-2/5" />
-          <div className="h-5 bg-gray-200 rounded-full w-24" />
+    <div className="rounded-2xl border border-border bg-white p-5 space-y-4">
+      <div className="flex justify-between items-start gap-3">
+        <div className="space-y-2 flex-1">
+          <div className="h-3 bg-gray-100 rounded w-1/3" />
+          <div className="h-4 bg-gray-100 rounded w-2/3" />
         </div>
-        <div className="flex rounded-xl overflow-hidden border border-gray-100">
-          <div className="flex-1 bg-gray-50 p-3 space-y-1.5">
-            <div className="h-2.5 bg-gray-200 rounded w-14" />
-            <div className="h-4 bg-gray-200 rounded w-16" />
-            <div className="h-2.5 bg-gray-200 rounded w-20" />
-          </div>
-          <div className="w-12 bg-white" />
-          <div className="flex-1 bg-gray-50 p-3 space-y-1.5">
-            <div className="h-2.5 bg-gray-200 rounded w-14 ml-auto" />
-            <div className="h-4 bg-gray-200 rounded w-16 ml-auto" />
-            <div className="h-2.5 bg-gray-200 rounded w-20 ml-auto" />
-          </div>
-        </div>
-        <div className="flex justify-between items-center">
-          <div className="flex gap-3">
-            <div className="h-3 bg-gray-200 rounded w-14" />
-            <div className="h-3 bg-gray-200 rounded w-12" />
-          </div>
-          <div className="h-4 bg-gray-200 rounded w-20" />
-        </div>
+        <div className="h-6 bg-gray-100 rounded-full w-24" />
       </div>
-    </div>
-  )
-}
-
-function FilterChips({
-  filters,
-  activeFilter,
-  counts,
-  onFilterChange,
-}: {
-  filters: readonly { value: string; label: string; color?: string }[]
-  activeFilter: string
-  counts: Record<string, number>
-  onFilterChange: (value: string) => void
-}) {
-  return (
-    <div className="flex gap-2 px-3 sm:px-4 py-2.5 overflow-x-auto hide-scrollbar">
-      {filters.map((filter) => {
-        const count = counts[filter.value] || 0
-        const isActive = activeFilter === filter.value
-
-        return (
-          <button
-            key={filter.value}
-            onClick={() => onFilterChange(filter.value)}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border whitespace-nowrap transition-all duration-200',
-              isActive
-                ? filter.value === 'ALL'
-                  ? 'bg-deep-teal text-white border-deep-teal'
-                  : filter.color
-                : 'bg-white text-gray-500 border-gray-200'
-            )}
-          >
-            {filter.label}
-            {count > 0 && (
-              <span
-                className={cn(
-                  'text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5',
-                  isActive
-                    ? filter.value === 'ALL'
-                      ? 'bg-white/20'
-                      : 'bg-black/10'
-                    : 'bg-gray-100'
-                )}
-              >
-                {count}
-              </span>
-            )}
-          </button>
-        )
-      })}
+      <div className="h-20 bg-off-white rounded-xl" />
+      <div className="pt-3 border-t border-border flex justify-between items-center">
+        <div className="h-3.5 bg-gray-100 rounded w-28" />
+        <div className="h-5 bg-gray-100 rounded w-16" />
+      </div>
     </div>
   )
 }
@@ -141,16 +55,16 @@ function EmptyState({
   description: string
 }) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-center px-6">
+    <div className="col-span-full flex flex-col items-center justify-center py-14 text-center px-6 rounded-2xl border border-dashed border-border bg-off-white">
       <Image
         src={assetPath('/graphics/no-booking.png')}
         alt="No bookings"
-        width={120}
-        height={120}
+        width={112}
+        height={112}
         className="mb-4 select-none"
       />
-      <h4 className="text-sm font-semibold text-gray-600">{title}</h4>
-      <p className="text-xs text-gray-400 mt-1 max-w-[220px] leading-relaxed">
+      <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+      <p className="text-xs text-neutral-gray mt-1 max-w-xs leading-relaxed">
         {description}
       </p>
     </div>
@@ -160,7 +74,6 @@ function EmptyState({
 const PAGE_LIMIT = 10
 
 export function BookingList() {
-  const router = useRouter()
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -169,6 +82,8 @@ export function BookingList() {
   const [totalPages, setTotalPages] = useState(1)
   const [upcomingFilter, setUpcomingFilter] = useState('ALL')
   const [pastFilter, setPastFilter] = useState('ALL')
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming')
+  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     const fetchBookings = async () => {
@@ -204,342 +119,265 @@ export function BookingList() {
     }
   }
 
-  // Split bookings into upcoming and past
-  const upcomingBookings = useMemo(() => {
-    return bookings.filter((b) => {
-      const status = b.bookingStatus.toUpperCase()
-      return status === 'CONFIRMED' || status === 'PENDING'
-    })
-  }, [bookings])
+  const upcomingBookings = useMemo(
+    () =>
+      bookings.filter((b) => {
+        const s = b.bookingStatus.toUpperCase()
+        return s === 'CONFIRMED' || s === 'PENDING'
+      }),
+    [bookings]
+  )
 
-  const pastBookings = useMemo(() => {
-    return bookings.filter((b) => {
-      const status = b.bookingStatus.toUpperCase()
-      return status === 'SUCCESSFUL' || status === 'CANCELLED'
-    })
-  }, [bookings])
+  const pastBookings = useMemo(
+    () =>
+      bookings.filter((b) => {
+        const s = b.bookingStatus.toUpperCase()
+        return s === 'SUCCESSFUL' || s === 'CANCELLED' || s === 'REJECTED'
+      }),
+    [bookings]
+  )
 
-  // Counts
-  const upcomingCounts = useMemo(() => {
-    const counts: Record<string, number> = { ALL: upcomingBookings.length }
-    upcomingBookings.forEach((b) => {
-      const status = b.bookingStatus.toUpperCase()
-      counts[status] = (counts[status] || 0) + 1
+  const activeBookings =
+    activeTab === 'upcoming' ? upcomingBookings : pastBookings
+  const activeFilter = activeTab === 'upcoming' ? upcomingFilter : pastFilter
+  const setActiveFilter =
+    activeTab === 'upcoming' ? setUpcomingFilter : setPastFilter
+  const filterDefs =
+    activeTab === 'upcoming' ? UPCOMING_FILTERS : PAST_FILTERS
+
+  const activeCounts = useMemo(() => {
+    const counts: Record<string, number> = { ALL: activeBookings.length }
+    activeBookings.forEach((b) => {
+      const s = b.bookingStatus.toUpperCase()
+      counts[s] = (counts[s] || 0) + 1
     })
     return counts
-  }, [upcomingBookings])
+  }, [activeBookings])
 
-  const pastCounts = useMemo(() => {
-    const counts: Record<string, number> = { ALL: pastBookings.length }
-    pastBookings.forEach((b) => {
-      const status = b.bookingStatus.toUpperCase()
-      counts[status] = (counts[status] || 0) + 1
+  const pendingCount = useMemo(
+    () =>
+      upcomingBookings.filter(
+        (b) => b.bookingStatus.toUpperCase() === 'PENDING'
+      ).length,
+    [upcomingBookings]
+  )
+
+  const filteredBookings = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    return activeBookings.filter((b) => {
+      if (
+        activeFilter !== 'ALL' &&
+        b.bookingStatus.toUpperCase() !== activeFilter
+      ) {
+        return false
+      }
+      if (!q) return true
+      const titleMatch = b.property?.title?.toLowerCase().includes(q)
+      const idMatch = String(b.id).includes(q)
+      const roomMatch = b.property?.roomCategories?.some((r) =>
+        r.name?.toLowerCase().includes(q)
+      )
+      return Boolean(titleMatch || idMatch || roomMatch)
     })
-    return counts
-  }, [pastBookings])
-
-  // Filtered & sorted
-  const filteredUpcoming = useMemo(() => {
-    return upcomingBookings
-      .filter((b) => {
-        const status = b.bookingStatus.toUpperCase()
-        return upcomingFilter === 'ALL' || status === upcomingFilter
-      })
-      .sort((a, b) => {
-        // Pending first, then confirmed
-        const statusOrder = ['PENDING', 'CONFIRMED']
-        const orderA = statusOrder.indexOf(a.bookingStatus.toUpperCase())
-        const orderB = statusOrder.indexOf(b.bookingStatus.toUpperCase())
-        if (orderA !== orderB) return orderA - orderB
-        // Soonest check-in first
-        return (
-          new Date(a.checkInDate).getTime() - new Date(b.checkInDate).getTime()
-        )
-      })
-  }, [upcomingBookings, upcomingFilter])
-
-  const filteredPast = useMemo(() => {
-    return pastBookings
-      .filter((b) => {
-        const status = b.bookingStatus.toUpperCase()
-        return pastFilter === 'ALL' || status === pastFilter
-      })
-      .sort((a, b) => {
-        // Most recent first
-        return (
-          new Date(b.checkOutDate).getTime() -
-          new Date(a.checkOutDate).getTime()
-        )
-      })
-  }, [pastBookings, pastFilter])
-
-  const pendingCount = upcomingCounts.PENDING || 0
+  }, [activeBookings, activeFilter, searchQuery])
 
   if (error) {
     return <ErrorState message={error} />
   }
 
-  // Default tab: show upcoming if there are any, otherwise past
-  const defaultTab =
-    upcomingBookings.length > 0 || pastBookings.length === 0
-      ? 'upcoming'
-      : 'past'
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>(
-    defaultTab as 'upcoming' | 'past'
-  )
-
   return (
-    <AnimatePresence mode="wait">
-      {loading ? (
-        <motion.div
-          key="skeleton"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          className="flex flex-col h-full"
-        >
-          {/* Skeleton tabs — mobile */}
-          <div className="md:hidden flex border-b border-gray-100 py-2 px-4 gap-6 justify-center">
-            <div className="animate-pulse h-5 bg-gray-200 rounded w-20" />
-            <div className="animate-pulse h-5 bg-gray-200 rounded w-14" />
-          </div>
-          {/* Skeleton header — desktop */}
-          <div className="hidden md:flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="animate-pulse w-8 h-8 bg-gray-200 rounded-full" />
-              <div className="w-px h-5 bg-gray-200" />
-              <div className="animate-pulse h-5 bg-gray-200 rounded w-28" />
-            </div>
-            <div className="animate-pulse h-10 bg-gray-200 rounded-xl w-52" />
-          </div>
-          {/* Skeleton filter chips */}
-          <div className="flex gap-2 px-3 sm:px-4 py-2.5">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="animate-pulse">
-                <div
-                  className="h-8 rounded-full bg-gray-200"
-                  style={{ width: `${52 + i * 16}px` }}
-                />
-              </div>
-            ))}
-          </div>
-          {/* Skeleton booking cards */}
-          <div className="p-3 sm:p-4 md:p-6 flex flex-col gap-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <BookingCardSkeleton key={i} />
-            ))}
-          </div>
-        </motion.div>
-      ) : (
-        <motion.div
-          key="content"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, ease: 'easeOut' }}
-          className="flex flex-col h-full"
-        >
-          <Tabs
-            value={activeTab}
-            onValueChange={(v) => setActiveTab(v as 'upcoming' | 'past')}
-            className="w-full flex flex-col flex-1"
+    <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-8 space-y-5">
+      {/* Header + Segmented Tab Switcher */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
+        <div>
+          <h1 className="text-xl lg:text-2xl font-semibold text-deep-teal leading-tight">
+            My bookings
+          </h1>
+          <p className="text-xs sm:text-sm text-neutral-gray mt-1">
+            Pet stays, PromptPay payments, and reviews
+          </p>
+        </div>
+
+        {/* Segmented Tab Switcher */}
+        <div className="grid grid-cols-2 sm:inline-flex items-center gap-1 bg-off-white p-1 rounded-xl border border-border">
+          {(
+            [
+              {
+                value: 'upcoming',
+                label: 'Upcoming',
+                icon: CalendarCheck,
+                count: upcomingBookings.length,
+              },
+              {
+                value: 'past',
+                label: 'Past',
+                icon: History,
+                count: pastBookings.length,
+              },
+            ] as const
+          ).map(({ value, label, icon: Icon, count }) => {
+            const isActive = activeTab === value
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setActiveTab(value)}
+                className={cn(
+                  'flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors cursor-pointer',
+                  isActive
+                    ? 'bg-white text-deep-teal border border-border'
+                    : 'text-neutral-gray hover:text-foreground border border-transparent'
+                )}
+              >
+                <Icon className="w-4 h-4 stroke-[1.5]" />
+                <span>{label}</span>
+                {!loading && count > 0 && (
+                  <span className="text-xs font-mono text-neutral-gray tabular-nums">
+                    {count}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Pending Payment Alert Banner */}
+      {!loading &&
+        activeTab === 'upcoming' &&
+        pendingCount > 0 &&
+        upcomingFilter === 'ALL' && (
+          <button
+            type="button"
+            onClick={() => setUpcomingFilter('PENDING')}
+            className="w-full flex items-center justify-between gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors text-left cursor-pointer"
           >
-            {/* ── Mobile tab bar ── */}
-            <TabsList className="md:hidden grid w-full grid-cols-2 sticky top-14 z-10 rounded-none h-11 bg-gray-50/80 backdrop-blur-sm">
-              <TabsTrigger value="upcoming" className="text-sm gap-1.5">
-                <CalendarCheck className="w-4 h-4" />
-                Upcoming
-                {upcomingBookings.length > 0 && (
-                  <span className="text-[10px] bg-deep-teal/10 text-deep-teal rounded-full px-1.5 py-0.5 font-semibold">
-                    {upcomingBookings.length}
-                  </span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="past" className="text-sm gap-1.5">
-                <History className="w-4 h-4" />
-                Past
-                {pastBookings.length > 0 && (
-                  <span className="text-[10px] bg-gray-200 text-gray-600 rounded-full px-1.5 py-0.5 font-semibold">
-                    {pastBookings.length}
-                  </span>
-                )}
-              </TabsTrigger>
-            </TabsList>
-
-            {/* ── Desktop header ── */}
-            <div className="hidden md:flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 z-10 bg-white/90 backdrop-blur-sm">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => router.back()}
-                  className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-gray-100 transition text-gray-500 hover:text-gray-800"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <div className="w-px h-5 bg-gray-200" />
-                <h1 className="text-base font-semibold text-gray-900">
-                  My Bookings
-                </h1>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-4 h-4 stroke-[1.5] text-amber-700" />
               </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-amber-900 tabular-nums">
+                  {pendingCount} booking{pendingCount > 1 ? 's' : ''} awaiting
+                  payment
+                </p>
+                <p className="text-xs text-amber-800 truncate">
+                  Complete PromptPay transfer before the deadline to keep your
+                  room
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-medium text-amber-900 whitespace-nowrap shrink-0">
+              View &rarr;
+            </span>
+          </button>
+        )}
 
-              <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
-                {(
-                  [
-                    {
-                      value: 'upcoming',
-                      label: 'Upcoming',
-                      icon: CalendarCheck,
-                      count: upcomingBookings.length,
-                    },
-                    {
-                      value: 'past',
-                      label: 'Past',
-                      icon: History,
-                      count: pastBookings.length,
-                    },
-                  ] as const
-                ).map(({ value, label, icon: Icon, count }) => (
-                  <button
-                    key={value}
-                    onClick={() => setActiveTab(value)}
+      {/* Filter Pills + Search */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+          {filterDefs.map((filter) => {
+            const isActive = activeFilter === filter.value
+            const count = activeCounts[filter.value] ?? 0
+            return (
+              <button
+                key={filter.value}
+                type="button"
+                onClick={() => setActiveFilter(filter.value)}
+                className={cn(
+                  'inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-medium border whitespace-nowrap transition-colors cursor-pointer',
+                  isActive
+                    ? 'bg-deep-teal text-white border-deep-teal'
+                    : 'bg-white text-neutral-gray border-border hover:border-deep-teal/40 hover:text-foreground'
+                )}
+              >
+                <span>{filter.label}</span>
+                {!loading && count > 0 && (
+                  <span
                     className={cn(
-                      'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-                      activeTab === value
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-500 hover:text-gray-700'
+                      'text-xs font-mono tabular-nums',
+                      isActive ? 'text-white/80' : 'text-neutral-gray'
                     )}
                   >
-                    <Icon className="w-4 h-4" />
-                    {label}
-                    {count > 0 && (
-                      <span
-                        className={cn(
-                          'text-[11px] font-semibold rounded-full px-1.5 py-0.5 leading-none',
-                          activeTab === value
-                            ? value === 'upcoming'
-                              ? 'bg-deep-teal/10 text-deep-teal'
-                              : 'bg-gray-100 text-gray-500'
-                            : 'bg-gray-200/80 text-gray-500'
-                        )}
-                      >
-                        {count}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* ===== UPCOMING TAB ===== */}
-            <TabsContent value="upcoming" className="mt-0 flex-1 flex flex-col">
-              {/* Pending alert */}
-              {pendingCount > 0 && upcomingFilter === 'ALL' && (
-                <button
-                  onClick={() => setUpcomingFilter('PENDING')}
-                  className="mx-3 sm:mx-4 mt-3 w-[calc(100%-1.5rem)] sm:w-[calc(100%-2rem)] flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-2xl hover:bg-amber-100 transition text-left"
-                >
-                  <span className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0">
-                    <AlertCircle className="w-4 h-4 text-amber-500" />
+                    {count}
                   </span>
-                  <p className="text-sm text-amber-800 flex-1 min-w-0">
-                    <span className="font-semibold">{pendingCount}</span>{' '}
-                    booking{pendingCount > 1 ? 's' : ''} awaiting payment
-                  </p>
-                  <span className="text-xs font-semibold text-amber-700 whitespace-nowrap">
-                    View →
-                  </span>
-                </button>
-              )}
-
-              <FilterChips
-                filters={UPCOMING_FILTERS}
-                activeFilter={upcomingFilter}
-                counts={upcomingCounts}
-                onFilterChange={setUpcomingFilter}
-              />
-
-              <div className="grow overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4 max-w-xl mx-auto w-full">
-                {filteredUpcoming.length > 0 ? (
-                  <div className="flex flex-col gap-3">
-                    {filteredUpcoming.map((booking) => (
-                      <BookingCard key={booking.id} booking={booking} />
-                    ))}
-                  </div>
-                ) : upcomingBookings.length === 0 ? (
-                  <EmptyState
-                    title="No upcoming bookings"
-                    description="When you book a pet hotel, your upcoming stays will appear here."
-                  />
-                ) : (
-                  <EmptyState
-                    title={
-                      upcomingFilter === 'CONFIRMED'
-                        ? 'No confirmed bookings'
-                        : 'No pending bookings'
-                    }
-                    description={
-                      upcomingFilter === 'CONFIRMED'
-                        ? 'Your confirmed bookings will show up here.'
-                        : 'No bookings awaiting payment right now.'
-                    }
-                  />
                 )}
-              </div>
-            </TabsContent>
+              </button>
+            )
+          })}
+        </div>
 
-            {/* ===== PAST TAB ===== */}
-            <TabsContent value="past" className="mt-0 flex-1 flex flex-col">
-              <FilterChips
-                filters={PAST_FILTERS}
-                activeFilter={pastFilter}
-                counts={pastCounts}
-                onFilterChange={setPastFilter}
-              />
+        <div className="relative w-full sm:w-64 shrink-0">
+          <Search className="w-4 h-4 stroke-[1.5] text-neutral-gray absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search bookings"
+            className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm rounded-xl bg-white border border-border text-foreground placeholder:text-neutral-gray focus:outline-none focus:border-deep-teal transition-colors"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-gray hover:text-foreground"
+              aria-label="Clear search"
+            >
+              <X className="w-4 h-4 stroke-[1.5]" />
+            </button>
+          )}
+        </div>
+      </div>
 
-              <div className="grow overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4 max-w-xl mx-auto w-full">
-                {filteredPast.length > 0 ? (
-                  <div className="flex flex-col gap-3">
-                    {filteredPast.map((booking) => (
-                      <BookingCard key={booking.id} booking={booking} />
-                    ))}
-                  </div>
-                ) : pastBookings.length === 0 ? (
-                  <EmptyState
-                    title="No past bookings"
-                    description="Your completed and cancelled stays will appear here."
-                  />
-                ) : (
-                  <EmptyState
-                    title={
-                      pastFilter === 'SUCCESSFUL'
-                        ? 'No completed stays'
-                        : 'No cancellations'
-                    }
-                    description={
-                      pastFilter === 'SUCCESSFUL'
-                        ? 'Your completed stays will appear here.'
-                        : 'You have no cancelled bookings.'
-                    }
-                  />
-                )}
-              </div>
-            </TabsContent>
-
-            {/* Load more — only shown on Past tab since upcoming bookings fit in first page */}
-            {activeTab === 'past' && page < totalPages && (
-              <div className="flex justify-center py-4 px-4">
-                <button
-                  onClick={handleLoadMore}
-                  disabled={loadingMore}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-gray-200 text-sm font-medium text-gray-600 hover:border-deep-teal/40 hover:text-deep-teal transition disabled:opacity-50"
-                >
-                  {loadingMore && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {loadingMore ? 'Loading…' : 'Load more'}
-                </button>
-              </div>
-            )}
-          </Tabs>
-        </motion.div>
+      {/* Bookings Grid */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <BookingCardSkeleton key={i} />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filteredBookings.length > 0 ? (
+            filteredBookings.map((booking) => (
+              <BookingCard key={booking.id} booking={booking} />
+            ))
+          ) : activeBookings.length === 0 ? (
+            <EmptyState
+              title={
+                activeTab === 'upcoming'
+                  ? 'No upcoming stays'
+                  : 'No past bookings yet'
+              }
+              description={
+                activeTab === 'upcoming'
+                  ? 'Book a pet boarding stay to see your upcoming reservations here'
+                  : 'Completed and cancelled stays will appear here'
+              }
+            />
+          ) : (
+            <EmptyState
+              title="No matching bookings"
+              description="Try clearing your search or switching status filters"
+            />
+          )}
+        </div>
       )}
-    </AnimatePresence>
+
+      {/* Load More */}
+      {!loading && page < totalPages && (
+        <div className="flex justify-center pt-2">
+          <button
+            type="button"
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-deep-teal bg-white border border-border rounded-xl hover:border-deep-teal/40 hover:bg-off-white transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            {loadingMore && <Loader2 className="w-4 h-4 stroke-[1.5] animate-spin" />}
+            {loadingMore ? 'Loading' : 'Load more bookings'}
+          </button>
+        </div>
+      )}
+    </div>
   )
 }

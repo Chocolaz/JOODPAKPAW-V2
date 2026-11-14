@@ -4,6 +4,8 @@ export type {
   Property,
   HostPropertiesResponse,
   RoomCategoriesResponse,
+  RoomCategoryCalendarItem,
+  RoomCategoryCalendarsResponse,
   PropertiesResponse,
 } from './property'
 export * from './authen'

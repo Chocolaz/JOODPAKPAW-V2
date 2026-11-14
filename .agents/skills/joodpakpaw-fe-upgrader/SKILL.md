@@ -14,8 +14,34 @@ Use this skill whenever modifying or upgrading the existing Next.js 16 Frontend 
 2. **Preserve Existing Route Structure & Design System**:
    - Do not break existing routes (`app/(browse)`, `app/detail/[propertyId]`, `app/[propertyId]`, `app/booking`, `app/profile/*`, `app/admin/*`, `app/authen/*`).
    - Follow the established Tailwind CSS v4 + Radix UI (`shadcn/ui`) + Lucide Icons aesthetic.
-3. **Strict TypeScript Hygiene**:
-   - All changes in `joodpakpaw-frontend/` must pass `npm run build` / `tsc --noEmit` without introducing implicit `any` or breaking existing prop contracts in `joodpakpaw-frontend/types/*.ts`.
+3. **Strict TypeScript Hygiene & Proactive Legacy Refactoring**:
+   - You are explicitly authorized and encouraged to refactor legacy flaws in `joodpakpaw-frontend` (`lib/api.ts`, `lib/authApi.ts`, `lib/authenUtils.ts`, `types/*.ts`, and UI components) to align with Enterprise V2 Best Practices:
+     - Unify all API responses to read from the standard `res.data` (and `res.pagination`) envelope.
+     - Standardize DTO field names to strict `camelCase` (`firstName`, `lastName`, `petProfileIds`, `petSizeCategoryId`).
+     - Use context-aware endpoints (`/api/v1/users/me/change-password`, `/api/v1/auth/sign-out`) and full refresh token rotation.
+   - All changes in `joodpakpaw-frontend/` must pass `tsc --noEmit` without introducing implicit `any`.
+4. **Mobile-First Responsive Design (320px to 4K)**:
+   - **Mandatory Mobile-First Principle**: Every screen, modal, drawer, form, card, and layout must render cleanly without clipping, horizontal scrolling (`overflow-x-hidden`), or unclickable buttons on viewports from 320px up to 4K displays.
+   - **Dialogs & Modals (`AuthModal`, `DialogContent`, `DrawerContent`)**:
+     - Must include scrollable constraints: `max-h-[calc(100dvh-2rem)]` or `max-h-[90vh]` with `overflow-y-auto overscroll-contain` so users on small screens or with virtual keyboards can scroll to submit buttons.
+     - Sticky or fixed-height headers/footers with scrollable body content.
+   - **Responsive Forms & Typography**:
+     - Form layouts must use responsive padding (`px-4 sm:px-6 md:px-8`) instead of rigid fixed desktop padding (e.g. avoid `px-14` on mobile).
+     - Split fields (such as First Name / Last Name) must adapt from single-column on compact mobile (`grid-cols-1 sm:grid-cols-2`).
+     - Touch targets must be at least 44px (`min-h-[44px]`), and button typography should scale smoothly (`text-base sm:text-lg`).
+     - Avoid `w-screen` that introduces horizontal overflow scrollbars; prefer `w-full`.
+   - **Responsive Grids (`PropertyList`, Card Feeds)**:
+     - Adapt gracefully from compact devices while preserving home feed card sizing consistency (`grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4`).
+5. **shadcn-First Component Strategy**:
+   - Whenever building, refactoring, or creating any new UI component (inputs, buttons, dialogs, drawers, selects, tabs, popovers, tooltips, accordions, calendars, dropdowns, forms, etc.), **ALWAYS check and use official `shadcn/ui` components from `@/components/ui/` first**.
+   - If a required component is not yet in the project, install it via the official shadcn registry:
+     ```bash
+     npx shadcn@latest add <component-name>
+     ```
+   - Never build custom ad-hoc primitive components when a clean, accessible, theme-consistent `shadcn/ui` (Radix UI + Tailwind) component exists. Preserve full design system consistency across the monorepo.
+6. **Canonical Frontend Design Specification (`joodpakpaw-frontend/DESIGN.md`)**:
+   - The official design specification for the Frontend Agent (`frontend-upgrader`) is designated at **`d:\Project\joodpakpaw\joodpakpaw-frontend\DESIGN.md`** (replacing the removed `docs/frontend-component-design.md`).
+   - Always consult `joodpakpaw-frontend/DESIGN.md` for typography scales, card grid columns, image skeleton/shimmer placeholders, page transitions, and UI consistency rules.
 
 ---
 

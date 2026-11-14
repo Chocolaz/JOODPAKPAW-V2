@@ -1,8 +1,17 @@
 import { io, Socket } from 'socket.io-client'
 import { getAccessToken } from './tokenManager'
 
-const SOCKET_URL = 'https://bscit.sit.kmutt.ac.th'
-const SOCKET_PATH = '/capstone25/cp25nk2/api/socket.io'
+function getSocketUrl(): string {
+  if (process.env.NEXT_PUBLIC_SOCKET_URL) {
+    return process.env.NEXT_PUBLIC_SOCKET_URL
+  }
+  if (typeof window !== 'undefined') {
+    return window.location.origin
+  }
+  return 'http://localhost:8000'
+}
+
+const SOCKET_PATH = process.env.NEXT_PUBLIC_SOCKET_PATH || '/api/socket.io'
 
 let socket: Socket | null = null
 
@@ -29,15 +38,27 @@ export function connectSocket(): Socket | null {
     socket = null
   }
 
-  socket = io(SOCKET_URL, {
+  const socketUrl = getSocketUrl()
+
+  socket = io(socketUrl, {
     path: SOCKET_PATH,
     query: { token },
-    transports: ['polling'],
-    upgrade: false,
+    auth: { token },
+    transports: ['websocket', 'polling'],
+    upgrade: true,
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 2000,
     reconnectionDelayMax: 10000,
+    timeout: 10000,
+  })
+
+  socket.on('connect_error', (err) => {
+    console.warn('[Socket.IO] Connection error:', err.message)
+  })
+
+  socket.on('error', (err) => {
+    console.error('[Socket.IO] Socket error:', err)
   })
 
   applyPersistentListeners(socket)

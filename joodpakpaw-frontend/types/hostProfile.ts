@@ -15,6 +15,11 @@ export interface HostProfile {
 }
 
 export interface HostProfileResponse {
+  code?: string | number
+  message?: string
+  data?: {
+    host: HostProfile
+  } | HostProfile
   host: HostProfile
 }
 
@@ -31,12 +36,23 @@ export interface HostReview {
   comment: string
   propertyName: string
   reviewedAt: string
+  hostReply?: string | null
+  hostRepliedAt?: string | null
   guestProfile: HostReviewGuest
   reviewImages?: ReviewImage[]
 }
 
 export interface HostReviewsResponse {
+  code?: string | number
+  message?: string
   totalRows: number
   totalPages: number
   data: HostReview[]
+  reviews?: HostReview[]
+  pagination?: {
+    page: number
+    limit: number
+    totalRows: number
+    totalPages: number
+  }
 }

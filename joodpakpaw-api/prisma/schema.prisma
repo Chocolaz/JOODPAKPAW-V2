@@ -182,6 +182,10 @@ model Property {
   isBannedByAdmin          Boolean                @default(false) @map("is_banned_by_admin")
   isBannedBeforeAccountBan Boolean                @default(false) @map("is_banned_before_account_ban")
   reportCount              Int                    @default(0) @map("report_count")
+  minPrice                 Decimal                @default(0) @db.Decimal(10, 2) @map("min_price")
+  avgRating                Float                  @default(0) @map("avg_rating")
+  reviewCount              Int                    @default(0) @map("review_count")
+  bookingCount             Int                    @default(0) @map("booking_count")
   publishedAt              DateTime?              @map("published_at") @db.Timestamptz
   hostId                   Int                    @map("host_id")
   propertyTypeId           Int?                   @map("property_type_id")
@@ -207,6 +211,10 @@ model Property {
   @@index([isActive])
   @@index([isBannedByAdmin])
   @@index([deletedAt])
+  @@index([minPrice])
+  @@index([avgRating])
+  @@index([bookingCount])
+  @@index([isActive, isBannedByAdmin, deletedAt])
   @@map("properties")
 }
 
@@ -385,6 +393,10 @@ model Booking {
   paymentSlipUrl     String?              @map("payment_slip_url") @db.Text
   rating             Int?
   comment            String?              @db.VarChar(500)
+  hostReply          String?              @map("host_reply") @db.VarChar(500)
+  hostRepliedAt      DateTime?            @map("host_replied_at") @db.Timestamptz
+  cancelledBy        String?              @map("cancelled_by") @db.VarChar(20)
+  cancellationReason String?              @map("cancellation_reason") @db.VarChar(255)
   successedAt        DateTime?            @map("successed_at") @db.Timestamptz
   confirmedAt        DateTime?            @map("confirmed_at") @db.Timestamptz
   reviewedAt         DateTime?            @map("reviewed_at") @db.Timestamptz
@@ -405,6 +417,8 @@ model Booking {
   @@index([guestId])
   @@index([propertyId])
   @@index([bookingStatus])
+  @@index([bookingStatus, checkOutDate])
+  @@index([bookingStatus, createdAt])
   @@index([checkInDate, checkOutDate])
   @@index([deletedAt])
   @@map("bookings")

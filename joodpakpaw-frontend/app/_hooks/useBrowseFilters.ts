@@ -63,12 +63,11 @@ export function useBrowseFilters() {
   const setSearchQuery = useCallback(
     (q: string) => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
-      debounceRef.current = setTimeout(() => {
-        const params = new URLSearchParams(searchParams.toString())
-        if (q === '') params.delete('q')
-        else params.set('q', q)
-        router.replace(`?${params.toString()}`, { scroll: false })
-      }, 300)
+      const trimmed = q.trim()
+      const params = new URLSearchParams(searchParams.toString())
+      if (trimmed === '') params.delete('q')
+      else params.set('q', trimmed)
+      router.replace(`?${params.toString()}`, { scroll: false })
     },
     [searchParams, router]
   )

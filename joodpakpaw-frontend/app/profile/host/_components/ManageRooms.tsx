@@ -6,6 +6,7 @@ import { getRoomCategories } from '@/lib/api'
 import { RoomCategories } from '@/types'
 import { RoomCategoryCard } from '@/app/_components/RoomCategoryCard'
 import { AddRoomCategoryForm } from './AddRoomCategoryForm'
+import { RoomCalendarDrawer } from './RoomCalendarDrawer'
 import { Spinner } from '@/components/ui/spinner'
 import {
   Drawer,
@@ -24,6 +25,7 @@ export function ManageRooms({ propertyId }: ManageRoomsProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isAddDrawerOpen, setIsAddDrawerOpen] = useState(false)
+  const [calendarRoom, setCalendarRoom] = useState<RoomCategories | null>(null)
 
   const fetchRooms = useCallback(async () => {
     if (!propertyId) {
@@ -95,10 +97,19 @@ export function ManageRooms({ propertyId }: ManageRoomsProps) {
                 onDeleteSuccess={handleDeleteSuccess}
                 showDeleteButton={true}
                 isOnlyRoom={rooms.length === 1} // Added this line
+                onManageCalendar={(r) => setCalendarRoom(r)}
               />
             ))}
         </div>
       </div>
+
+      <RoomCalendarDrawer
+        propertyId={propertyId}
+        room={calendarRoom}
+        isOpen={!!calendarRoom}
+        onOpenChange={(open) => !open && setCalendarRoom(null)}
+        onSuccess={fetchRooms}
+      />
 
       <DrawerContent>
         <DrawerHeader className="relative">

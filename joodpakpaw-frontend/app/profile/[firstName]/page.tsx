@@ -42,6 +42,7 @@ import {
   Check,
   User,
   BadgeCheck,
+  Loader2,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
@@ -71,7 +72,6 @@ export default function UserProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
-  const guestAvatarSrc = `${basePath}/graphics/guest.jpg`
 
   // Sync edit state when profile loads
   useEffect(() => {
@@ -170,7 +170,7 @@ export default function UserProfilePage() {
 
   if (error) return <ErrorState message={error} />
 
-  const displayAvatar = avatarPreview || guestAvatarSrc
+  const displayAvatar = avatarPreview || undefined
   const roleLabel =
     profile?.role?.map((r) => r.name).join(', ') ||
     (profile?.isBecomeToHost ? 'Host' : 'Guest')
@@ -194,7 +194,7 @@ export default function UserProfilePage() {
               onPasswordChangeClick={() => setIsPasswordDrawerOpen(true)}
             />
           </div>
-          <DrawerContent aria-describedby={undefined}>
+          <DrawerContent aria-describedby={undefined} className="max-h-[90vh] overflow-y-auto">
             <DrawerHeader>
               <div className="flex items-center">
                 <DrawerClose asChild>
@@ -218,7 +218,7 @@ export default function UserProfilePage() {
           open={isPasswordDrawerOpen}
           onOpenChange={setIsPasswordDrawerOpen}
         >
-          <DrawerContent aria-describedby={undefined}>
+          <DrawerContent aria-describedby={undefined} className="max-h-[90vh] overflow-y-auto">
             <DrawerHeader>
               <div className="flex items-center">
                 <DrawerClose asChild>
@@ -269,7 +269,8 @@ export default function UserProfilePage() {
                   >
                     <button
                       onClick={handleCancel}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/20 text-white/80 text-sm hover:bg-white/10 transition-colors"
+                      disabled={saving}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/20 text-white/80 text-sm hover:bg-white/10 transition-colors disabled:opacity-40"
                     >
                       <X className="w-3.5 h-3.5" />
                       Cancel
@@ -279,8 +280,17 @@ export default function UserProfilePage() {
                       disabled={!isDirty || saving}
                       className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-white text-deep-teal text-sm font-semibold hover:bg-white/90 transition-colors disabled:opacity-40"
                     >
-                      <Check className="w-3.5 h-3.5" />
-                      {saving ? 'Saving…' : 'Save'}
+                      {saving ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          กำลังบันทึก...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          Save
+                        </>
+                      )}
                     </button>
                   </motion.div>
                 ) : (
@@ -305,7 +315,7 @@ export default function UserProfilePage() {
             <div className="flex items-end justify-between -mt-12">
               {/* Avatar */}
               <div className="relative shrink-0">
-                <Avatar className="w-24 h-24 ring-4 ring-white shadow-lg">
+                <Avatar className="w-24 h-24 ring-4 ring-white shadow-lg overflow-hidden">
                   <AvatarImage
                     src={displayAvatar}
                     alt={`${profile.firstName} ${profile.lastName}`}
@@ -315,8 +325,13 @@ export default function UserProfilePage() {
                     {profile.lastName?.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
+                {saving && (
+                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 backdrop-blur-[2px] z-10">
+                    <Loader2 className="w-6 h-6 animate-spin text-white" />
+                  </div>
+                )}
                 <AnimatePresence>
-                  {isEditing && (
+                  {isEditing && !saving && (
                     <motion.button
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -335,6 +350,7 @@ export default function UserProfilePage() {
                   accept="image/*"
                   className="hidden"
                   onChange={handleAvatarChange}
+                  disabled={saving}
                 />
               </div>
             </div>
@@ -356,6 +372,7 @@ export default function UserProfilePage() {
                       maxLength={60}
                       placeholder="First name"
                       className="max-w-[180px]"
+                      disabled={saving}
                     />
                     <Input
                       value={lastName}
@@ -363,6 +380,7 @@ export default function UserProfilePage() {
                       maxLength={60}
                       placeholder="Last name"
                       className="max-w-[180px]"
+                      disabled={saving}
                     />
                   </motion.div>
                 ) : (
@@ -488,7 +506,7 @@ export default function UserProfilePage() {
 
       {/* Desktop change password dialog */}
       <Dialog open={isPasswordOpen} onOpenChange={setIsPasswordOpen}>
-        <DialogContent className="max-w-md" aria-describedby={undefined}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Change Password</DialogTitle>
           </DialogHeader>

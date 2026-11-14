@@ -68,8 +68,8 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="px-5 w-full max-w-sm lg:max-w-md text-center mx-auto mt-[30px]">
-      <form onSubmit={handleSignIn} className="space-y-[30px] mt-[70px]">
+    <div className="px-4 sm:px-5 w-full max-w-sm lg:max-w-md text-center mx-auto mt-4 sm:mt-[30px]">
+      <form onSubmit={handleSignIn} className="space-y-4 sm:space-y-6 mt-8 sm:mt-[50px]">
         <div>
           <Input
             type="email"
@@ -114,14 +114,14 @@ export default function LoginForm() {
         <Button
           type="submit"
           disabled={isButtonDisabled || isSubmitting}
-          className="w-full py-4 rounded-lg bg-accent-orange text-white hover:bg-accent-orange/80 h-auto text-[20px] font-semibold"
+          className="w-full py-4 rounded-lg bg-accent-orange text-white hover:bg-accent-orange/80 h-auto text-base sm:text-lg font-semibold"
         >
           {isSubmitting ? 'Signing in...' : 'Sign in'}
         </Button>
       </form>
       <div className="mt-[30px]">
         <Link href="/authen/register" passHref>
-          <div className="py-4  text-deep-teal h-auto text-[20px] font-semibold">
+          <div className="py-4  text-deep-teal h-auto text-base sm:text-lg font-semibold">
             Create new account
           </div>
         </Link>

@@ -44,3 +44,5 @@ bun.lockb
 actions-runner/
 bun.lockb
 *.lockb
+
+!.env.example

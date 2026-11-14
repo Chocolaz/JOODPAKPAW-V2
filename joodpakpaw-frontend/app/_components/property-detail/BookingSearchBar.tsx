@@ -76,6 +76,29 @@ export function BookingSearchBar({
   const [isPetsDialogOpen, setIsPetsDialogOpen] = React.useState(false)
   const [inlineOpen, setInlineOpen] = React.useState<InlinePanel>(null)
 
+  const { minCheckInDate, maxAdvanceDate, isPastSameDayCutoff } = React.useMemo(() => {
+    const now = new Date()
+    const bangkokNow = new Date(now.getTime() + 7 * 60 * 60 * 1000)
+    const pastCutoff = bangkokNow.getUTCHours() >= 18
+
+    const todayLocal = new Date(
+      bangkokNow.getUTCFullYear(),
+      bangkokNow.getUTCMonth(),
+      bangkokNow.getUTCDate()
+    )
+    const minDate = new Date(todayLocal)
+    if (pastCutoff) minDate.setDate(minDate.getDate() + 1)
+
+    const maxDate = new Date(todayLocal)
+    maxDate.setDate(maxDate.getDate() + 180)
+
+    return {
+      minCheckInDate: minDate,
+      maxAdvanceDate: maxDate,
+      isPastSameDayCutoff: pastCutoff,
+    }
+  }, [])
+
   // Draft state inside the dialog — committed on "Confirm"
   const [draftPetIds, setDraftPetIds] = React.useState<number[]>([])
   const [draftNumberOfPets, setDraftNumberOfPets] = React.useState(0)
@@ -615,10 +638,15 @@ export function BookingSearchBar({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
             >
-              <p className="text-sm font-medium text-deep-teal mb-3">Select check-in date</p>
+              <p className="text-sm font-medium text-deep-teal mb-1">Select check-in date</p>
+              {isPastSameDayCutoff && (
+                <p className="text-[11px] text-neutral-gray mb-2">
+                  Same-day check-in closes at 18:00 ICT · Open up to 180 days ahead
+                </p>
+              )}
               <Calendar
                 mode="single"
-                defaultMonth={date?.from ?? new Date()}
+                defaultMonth={date?.from ?? minCheckInDate}
                 selected={date?.from}
                 onSelect={(day) => {
                   if (!day) return
@@ -626,8 +654,9 @@ export function BookingSearchBar({
                   setDate({ from: day, to: newTo })
                   if (!newTo) setInlineOpen('checkout')
                 }}
-                startMonth={new Date()}
-                hidden={[{ before: new Date() }]}
+                startMonth={minCheckInDate}
+                endMonth={maxAdvanceDate}
+                hidden={[{ before: minCheckInDate }, { after: maxAdvanceDate }]}
                 fixedWeeks
                 className="w-full"
               />
@@ -645,17 +674,23 @@ export function BookingSearchBar({
               <p className="text-sm font-medium text-deep-teal mb-3">Select check-out date</p>
               <Calendar
                 mode="single"
-                defaultMonth={date?.to ?? date?.from ?? new Date()}
+                defaultMonth={date?.to ?? date?.from ?? minCheckInDate}
                 selected={date?.to}
                 onSelect={(day) => {
                   if (!day) return
                   setDate((prev) => ({ from: prev?.from, to: day }))
                   setInlineOpen(null)
                 }}
-                startMonth={new Date()}
-                hidden={[{
-                  before: date?.from ? new Date(date.from.getTime() + 86400000) : new Date()
-                }]}
+                startMonth={minCheckInDate}
+                endMonth={maxAdvanceDate}
+                hidden={[
+                  {
+                    before: date?.from
+                      ? new Date(date.from.getTime() + 86400000)
+                      : new Date(minCheckInDate.getTime() + 86400000),
+                  },
+                  { after: maxAdvanceDate },
+                ]}
                 fixedWeeks
                 className="w-full"
               />
@@ -701,17 +736,22 @@ export function BookingSearchBar({
         <DialogContent className="w-auto max-h-[90vh] p-6 flex flex-col gap-2 overflow-y-auto">
           <DialogHeader className="text-left">
             <DialogTitle className="text-accent-orange">Select Dates</DialogTitle>
-            <DialogDescription>Choose your check-in and check-out dates.</DialogDescription>
+            <DialogDescription>
+              {isPastSameDayCutoff
+                ? 'Same-day check-in closes at 18:00 ICT · Bookings open up to 180 days ahead.'
+                : 'Choose your check-in and check-out dates (up to 180 days ahead).'}
+            </DialogDescription>
           </DialogHeader>
           <div className="flex justify-center">
             <Calendar
               mode="range"
-              defaultMonth={selectedDateRange?.from}
+              defaultMonth={selectedDateRange?.from ?? minCheckInDate}
               selected={selectedDateRange}
               onSelect={setSelectedDateRange}
               numberOfMonths={2}
-              startMonth={new Date()}
-              hidden={[{ before: new Date() }]}
+              startMonth={minCheckInDate}
+              endMonth={maxAdvanceDate}
+              hidden={[{ before: minCheckInDate }, { after: maxAdvanceDate }]}
               fixedWeeks
               className="min-w-[280px] md:min-w-[400px]"
             />

@@ -20,7 +20,6 @@ import {
   History,
   Check,
   ExternalLink,
-  ChevronLeft,
   Star,
   Ban,
   Clock,
@@ -45,7 +44,6 @@ export default function HostPage() {
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab')
   const filterParam = searchParams.get('filter') || 'all'
-  const fromNotifications = searchParams.get('from') === 'notifications'
 
   const defaultTab = useMemo(() => {
     if (
@@ -211,16 +209,6 @@ export default function HostPage() {
                 Hello, {user?.firstName}!
               </p>
               <div className="flex items-center gap-3">
-                <button
-                  onClick={() =>
-                    router.push(
-                      fromNotifications ? '/notifications' : '/profile'
-                    )
-                  }
-                  className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-gray-100 transition text-gray-500 hover:text-gray-800 -ml-1"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
                 <h2 className="text-xl font-semibold text-deep-teal">
                   My Properties
                 </h2>

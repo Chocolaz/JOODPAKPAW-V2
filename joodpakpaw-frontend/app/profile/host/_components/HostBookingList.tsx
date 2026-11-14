@@ -39,9 +39,9 @@ function saveSeen(seen: Record<string, number>) {
 
 const STATUS_FILTERS = [
   { value: 'ALL', label: 'All' },
-  { value: 'CONFIRMED', label: 'Confirmed', color: 'bg-green-100 text-green-700 border-green-300' },
-  { value: 'PENDING', label: 'Pending', color: 'bg-blue-100 text-blue-700 border-blue-300' },
-  { value: 'CANCELLED', label: 'Cancelled', color: 'bg-red-100 text-red-700 border-red-300' },
+  { value: 'CONFIRMED', label: 'Confirmed', color: 'bg-deep-teal/10 text-deep-teal border-deep-teal/30' },
+  { value: 'PENDING', label: 'Pending', color: 'bg-amber-50 text-amber-800 border-amber-200' },
+  { value: 'CANCELLED', label: 'Cancelled', color: 'bg-red-50 text-red-700 border-red-200' },
 ] as const
 
 const EMPTY_MESSAGES: Record<string, { title: string; description: string }> = {
@@ -247,7 +247,7 @@ export function HostBookingList() {
               </div>
             ))}
           </div>
-          <div className="flex gap-2 px-3 sm:px-4 py-2.5 border-b border-gray-100">
+          <div className="flex gap-2 px-3 sm:px-4 py-2 border-b border-gray-100">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="animate-pulse">
                 <div className="h-8 rounded-full bg-gray-200" style={{ width: `${60 + i * 16}px` }} />
@@ -294,7 +294,7 @@ export function HostBookingList() {
         >
           {/* Pending alert */}
           {pendingCount > 0 && statusFilter === 'ALL' && (
-            <div className="flex items-center gap-2.5 mx-3 sm:mx-4 mt-3 p-2.5 sm:p-3 bg-amber-50 border border-amber-200 rounded-xl shrink-0">
+            <div className="flex items-center gap-2 mx-3 sm:mx-4 mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl shrink-0">
               <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500 shrink-0" />
               <p className="text-xs sm:text-sm text-amber-800 min-w-0">
                 <span className="font-semibold">{pendingCount}</span> booking{pendingCount > 1 ? 's' : ''} awaiting response
@@ -314,12 +314,12 @@ export function HostBookingList() {
             className="overflow-x-auto whitespace-nowrap hide-scrollbar border-b shrink-0"
           >
             <div className="inline-flex items-end gap-1 px-3 sm:px-4 pt-2 pb-0 md:justify-center md:w-full">
-              {monthItems.map((item, idx) => {
+              {monthItems.map((item) => {
                 if (item.type === 'year') {
                   return (
                     <span
                       key={`year-${item.year}`}
-                      className="text-[10px] font-semibold text-gray-300 px-2 pb-2.5 tracking-wider self-end"
+                      className="text-[10px] font-semibold text-neutral-gray/40 px-2 pb-3 self-end"
                     >
                       {item.year}
                     </span>
@@ -338,12 +338,12 @@ export function HostBookingList() {
                     ref={(el) => { if (el) monthButtonRefs.current.set(monthStr, el) }}
                     onClick={() => handleMonthSelect(item.date)}
                     className={cn(
-                      'relative px-2.5 pt-1 pb-2.5 text-sm font-medium transition-colors duration-200',
+                      'relative px-3 pt-1 pb-3 text-sm font-medium transition-colors duration-200',
                       isSelected
                         ? 'text-deep-teal border-b-2 border-deep-teal'
                         : hasBooking
-                        ? 'text-gray-700 hover:text-deep-teal'
-                        : 'text-gray-400 hover:text-gray-600'
+                        ? 'text-foreground hover:text-deep-teal'
+                        : 'text-neutral-gray hover:text-foreground'
                     )}
                   >
                     {format(item.date, 'MMM')}
@@ -357,7 +357,7 @@ export function HostBookingList() {
           </div>
 
           {/* Filter bar — chips + property dropdown in one row */}
-          <div className="flex items-center gap-2 px-3 sm:px-4 py-2.5 overflow-x-auto hide-scrollbar shrink-0 border-b border-gray-100">
+          <div className="flex items-center gap-2 px-3 sm:px-4 py-2 overflow-x-auto hide-scrollbar shrink-0 border-b border-border">
             {STATUS_FILTERS.map((filter) => {
               const count = statusCounts[filter.value] || 0
               const isActive = statusFilter === filter.value
@@ -366,12 +366,12 @@ export function HostBookingList() {
                   key={filter.value}
                   onClick={() => setStatusFilter(filter.value)}
                   className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border whitespace-nowrap transition-all duration-150 cursor-pointer active:scale-95',
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border whitespace-nowrap transition-colors duration-150 cursor-pointer',
                     isActive
                       ? filter.value === 'ALL'
                         ? 'bg-deep-teal text-white border-deep-teal shadow-sm'
                         : filter.color + ' shadow-sm'
-                      : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400 hover:text-gray-700 hover:scale-105'
+                      : 'bg-white text-neutral-gray border-border hover:border-deep-teal/40 hover:text-foreground'
                   )}
                 >
                   {filter.label}
@@ -381,7 +381,7 @@ export function HostBookingList() {
                         'text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5',
                         isActive
                           ? filter.value === 'ALL' ? 'bg-white/20' : 'bg-black/10'
-                          : 'bg-gray-100'
+                          : 'bg-off-white text-neutral-gray'
                       )}
                     >
                       {count}
@@ -407,6 +407,7 @@ export function HostBookingList() {
                     <BookingCard
                       key={booking.id}
                       booking={booking}
+                      role="host"
                       onClick={(id) => router.push(`/profile/host/booking/${id}`)}
                     />
                   ))}
@@ -416,7 +417,7 @@ export function HostBookingList() {
                     <button
                       onClick={handleLoadMore}
                       disabled={loadingMore}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-gray-200 text-sm font-medium text-gray-600 hover:border-deep-teal/40 hover:text-deep-teal transition disabled:opacity-50"
+                      className="flex items-center gap-2 px-5 py-2 rounded-full border border-gray-200 text-sm font-medium text-gray-600 hover:border-deep-teal/40 hover:text-deep-teal transition disabled:opacity-50"
                     >
                       {loadingMore && <Loader2 className="w-4 h-4 animate-spin" />}
                       {loadingMore ? 'Loading…' : 'Load more'}

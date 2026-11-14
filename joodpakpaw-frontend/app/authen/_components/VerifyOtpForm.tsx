@@ -69,7 +69,7 @@ export default function VerifyOtpForm() {
   // Render Functions
   const renderFormContent = () => (
     <>
-      <p className="text-[20px] mb-16">
+      <p className="text-base sm:text-lg mb-8 sm:mb-12 text-center">
         We’ve sent a 6-digit code to{' '}
         <strong className="text-deep-teal">{email}</strong>
         <br /> Please enter it below
@@ -77,7 +77,7 @@ export default function VerifyOtpForm() {
       <Input
         type="text"
         placeholder="OTP"
-        className="w-full text-center tracking-[1rem]"
+        className="w-full text-center tracking-[0.5rem] sm:tracking-[1rem] text-lg sm:text-xl font-mono"
         value={otp}
         onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, ''))}
         maxLength={6}
@@ -105,7 +105,7 @@ export default function VerifyOtpForm() {
         type="submit"
         form="verify-otp-form"
         disabled={isButtonDisabled || isSubmitting}
-        className="w-full py-4 rounded-lg bg-accent-orange text-white hover:bg-accent-orange/80 h-auto text-[20px] font-semibold"
+        className="w-full py-4 rounded-lg bg-accent-orange text-white hover:bg-accent-orange/80 h-auto text-base sm:text-lg font-semibold"
       >
         {isSubmitting ? 'Verifying...' : 'Confirm'}
       </Button>

@@ -1,11 +1,13 @@
 'use client'
 
-import React, { useState, useRef, useEffect } from 'react'
-import { Star, Send, CheckCircle, ImagePlus, X } from 'lucide-react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
+import { HostReplyBlock } from '@/app/_components/HostReplyBlock'
+import { Star, Send, CheckCircle, ImagePlus, X, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
 import { submitReview } from '@/lib/api'
+import { ApiError } from '@/lib/errorHandling'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import Image from 'next/image'
@@ -14,6 +16,11 @@ interface ReviewSectionProps {
   bookingId: string
   existingRating?: number | null
   existingComment?: string | null
+  successedAt?: string | null
+  checkOutDate?: string
+  reviewDeadlineAt?: string | null
+  hostReply?: string | null
+  hostRepliedAt?: string | null
 }
 
 const RATING_LABELS = ['', 'Poor', 'Fair', 'Good', 'Very Good', 'Excellent']
@@ -24,8 +31,37 @@ export default function ReviewSection({
   bookingId,
   existingRating,
   existingComment,
+  successedAt,
+  checkOutDate,
+  reviewDeadlineAt,
+  hostReply,
+  hostRepliedAt,
 }: ReviewSectionProps) {
   const hasExistingReview = existingRating != null && existingRating > 0
+  const [now] = useState<number>(() => Date.now())
+
+  const reviewDeadline = useMemo(() => {
+    if (reviewDeadlineAt) {
+      return new Date(reviewDeadlineAt)
+    }
+    if (successedAt) {
+      return new Date(new Date(successedAt).getTime() + 14 * 24 * 60 * 60 * 1000)
+    }
+    if (checkOutDate) {
+      const checkOutAutoComplete = new Date(
+        `${checkOutDate.slice(0, 10)}T18:00:00+07:00`
+      )
+      return new Date(checkOutAutoComplete.getTime() + 14 * 24 * 60 * 60 * 1000)
+    }
+    return null
+  }, [reviewDeadlineAt, successedAt, checkOutDate])
+
+  const msRemaining = reviewDeadline ? reviewDeadline.getTime() - now : null
+  const isReviewWindowExpired = msRemaining !== null && msRemaining <= 0
+  const remainingDays =
+    msRemaining !== null && msRemaining > 0
+      ? Math.ceil(msRemaining / (1000 * 60 * 60 * 24))
+      : null
 
   const [rating, setRating] = useState(0)
   const [hoveredRating, setHoveredRating] = useState(0)
@@ -77,7 +113,11 @@ export default function ReviewSection({
       toast.success('Review submitted successfully!')
       setIsSubmitted(true)
     } catch (error) {
-      toast.error('Failed to submit review. Please try again.')
+      toast.error(
+        error instanceof ApiError
+          ? error.message
+          : 'Failed to submit review. Please try again.'
+      )
       console.error(error)
     } finally {
       setIsSubmitting(false)
@@ -91,12 +131,12 @@ export default function ReviewSection({
       : comment.trim()
 
     return (
-      <div className="bg-white rounded-2xl p-6 shadow-md border border-gray-100">
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-border">
         <div className="flex flex-col items-center gap-3 py-4">
           <div className="w-14 h-14 rounded-full bg-positive-green/10 flex items-center justify-center">
             <CheckCircle className="w-8 h-8 text-positive-green" />
           </div>
-          <h4 className="text-lg font-semibold text-gray-900">
+          <h4 className="text-lg font-semibold text-foreground">
             {hasExistingReview ? 'Your Review' : 'Thank you for your review!'}
           </h4>
           <div className="flex gap-1">
@@ -107,7 +147,7 @@ export default function ReviewSection({
                   'w-5 h-5',
                   star <= displayRating
                     ? 'fill-yellow-400 text-yellow-500'
-                    : 'text-gray-300'
+                    : 'text-border'
                 )}
               />
             ))}
@@ -120,21 +160,53 @@ export default function ReviewSection({
               &quot;{displayComment}&quot;
             </p>
           )}
+          <HostReplyBlock
+            hostReply={hostReply}
+            hostRepliedAt={hostRepliedAt}
+            className="w-full mt-2 p-4 space-y-1.5"
+            textClassName="text-sm"
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (isReviewWindowExpired) {
+    return (
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-border">
+        <div className="flex flex-col items-center gap-2 py-3 text-center">
+          <div className="w-12 h-12 rounded-full bg-off-white flex items-center justify-center">
+            <Clock className="w-6 h-6 text-neutral-gray" />
+          </div>
+          <h4 className="text-base font-semibold text-foreground">
+            Review Window Closed
+          </h4>
+          <p className="text-xs text-neutral-gray max-w-xs leading-relaxed">
+            Review window closed (14 days after stay completion).
+          </p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="bg-white rounded-2xl p-6 shadow-md border border-gray-100 space-y-5">
+    <div className="bg-white rounded-2xl p-6 shadow-sm border border-border space-y-5">
       {/* Header */}
-      <div className="space-y-1">
-        <h4 className="text-sm font-semibold text-deep-teal uppercase tracking-wide">
-          Rate Your Experience
-        </h4>
-        <p className="text-xs text-neutral-gray">
-          How was your stay? Let us know!
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h4 className="text-sm font-semibold text-deep-teal">
+            Rate your experience
+          </h4>
+          <p className="text-xs text-neutral-gray">
+            How was your stay? Let us know!
+          </p>
+        </div>
+        {remainingDays !== null && remainingDays > 0 && (
+          <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-off-white text-deep-teal border border-deep-teal/15">
+            <Clock className="w-3 h-3" />
+            {remainingDays} {remainingDays === 1 ? 'day' : 'days'} left to review
+          </span>
+        )}
       </div>
 
       {/* Star Rating */}
@@ -144,7 +216,7 @@ export default function ReviewSection({
             <button
               key={star}
               type="button"
-              className="group relative p-1 transition-transform hover:scale-110 active:scale-95"
+              className="group relative p-1 transition-colors"
               onMouseEnter={() => setHoveredRating(star)}
               onMouseLeave={() => setHoveredRating(0)}
               onClick={() => setRating(star)}
@@ -152,10 +224,10 @@ export default function ReviewSection({
             >
               <Star
                 className={cn(
-                  'w-9 h-9 transition-all duration-150',
+                  'w-9 h-9 transition-colors duration-150',
                   star <= activeRating
                     ? 'fill-yellow-400 text-yellow-500 drop-shadow-sm'
-                    : 'text-gray-300 hover:text-accent-orange/40'
+                    : 'text-border hover:text-accent-orange/40'
                 )}
               />
             </button>
@@ -191,7 +263,7 @@ export default function ReviewSection({
           }}
           disabled={isSubmitting}
           rows={4}
-          className="resize-none border-gray-200 focus-visible:ring-accent-orange"
+          className="resize-none border-border focus-visible:ring-accent-orange"
         />
         <div className="flex justify-end">
           <span
@@ -217,14 +289,14 @@ export default function ReviewSection({
         <div className="flex flex-wrap gap-2">
           {previews.map((src, i) => (
             <div key={i} className="relative w-20 h-20 rounded-xl overflow-visible shrink-0">
-              <div className="relative w-full h-full rounded-xl overflow-hidden border border-gray-200">
+              <div className="relative w-full h-full rounded-xl overflow-hidden border border-border">
                 <Image src={src} alt={`Review photo ${i + 1}`} fill unoptimized className="object-cover" />
               </div>
               <button
                 type="button"
                 onClick={() => handleImageRemove(i)}
                 disabled={isSubmitting}
-                className="absolute -top-2 -right-2 w-5 h-5 bg-gray-800 text-white rounded-full flex items-center justify-center shadow-sm hover:bg-red-500 transition-colors disabled:opacity-50 z-10"
+                className="absolute -top-2 -right-2 w-5 h-5 bg-foreground text-white rounded-full flex items-center justify-center shadow-sm hover:bg-red-500 transition-colors disabled:opacity-50 z-10"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -235,7 +307,7 @@ export default function ReviewSection({
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isSubmitting}
-              className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-300 hover:border-accent-orange hover:text-accent-orange transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+              className="w-20 h-20 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center gap-1 text-neutral-gray/40 hover:border-accent-orange hover:text-accent-orange transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
             >
               <ImagePlus className="w-5 h-5" />
             </button>
@@ -255,7 +327,7 @@ export default function ReviewSection({
       <Button
         onClick={handleSubmit}
         disabled={rating === 0 || isSubmitting}
-        className="w-full h-11 bg-deep-teal hover:bg-deep-teal/90 text-white font-medium rounded-xl transition-all disabled:opacity-50"
+        className="w-full h-11 bg-accent-orange hover:bg-accent-orange/90 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
       >
         {isSubmitting ? (
           <Spinner className="size-4 mr-2" />

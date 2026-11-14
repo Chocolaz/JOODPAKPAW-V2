@@ -9,7 +9,7 @@ import { useAuth } from '@/app/_components/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   SearchX,
-  Sparkles,
+  Compass,
   Star,
   Heart,
   Loader2,
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { useBrowseFilters } from '@/app/_hooks/useBrowseFilters'
 import { useRecentlyViewed } from '@/app/_hooks/useRecentlyViewed'
+import { useFeaturedSections } from '@/app/_hooks/useFeaturedSections'
 import { BrowseSection } from './_components/BrowseSection'
 
 function haversineDistance(
@@ -56,30 +57,19 @@ const EMPTY_SECTION = {
 }
 
 export default function Home() {
-  const [properties, setProperties] = useState<Property[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
+  const { featured, isLoading: isFeaturedLoading, mutate: mutateFeatured } = useFeaturedSections()
+
+  const [pagedProperties, setPagedProperties] = useState<Property[]>([])
   const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const [totalRows, setTotalRows] = useState(0)
+  const [pagedTotalPages, setPagedTotalPages] = useState<number | null>(null)
+  const [pagedTotalRows, setPagedTotalRows] = useState<number | null>(null)
+  const [loadingMore, setLoadingMore] = useState(false)
+
   const [recommendedProperties, setRecommendedProperties] = useState<
     Property[]
   >([])
   const [recommendedTotal, setRecommendedTotal] = useState(0)
-  const [sectionData, setSectionData] = useState({
-    topRated: [] as Property[],
-    topRatedTotal: 0,
-    bestValue: [] as Property[],
-    bestValueTotal: 0,
-    newListings: [] as Property[],
-    newListingsTotal: 0,
-    trending: [] as Property[],
-    trendingTotal: 0,
-    dogFriendly: [] as Property[],
-    dogFriendlyTotal: 0,
-    catFriendly: [] as Property[],
-    catFriendlyTotal: 0,
-  })
+
   const { isAuthenticated, user } = useAuth()
   const { searchQuery, filters, buildSeeAllUrl } = useBrowseFilters()
   const { ids: recentlyViewedIds } = useRecentlyViewed()
@@ -92,82 +82,75 @@ export default function Home() {
   const [filterTotal, setFilterTotal] = useState(0)
   const [isFilterLoading, setIsFilterLoading] = useState(false)
 
-  const fetchKeyRef = useRef(0)
   const filterKeyRef = useRef(0)
 
-  const fetchProperties = useCallback(
-    async (pageNum: number, reset: boolean) => {
-      const key = ++fetchKeyRef.current
-      if (reset) setIsLoading(true)
-      else setLoadingMore(true)
+  // Revalidate featured sections when auth status genuinely changes (e.g. login/logout)
+  const prevAuthRef = useRef(isAuthenticated)
+  useEffect(() => {
+    if (prevAuthRef.current !== isAuthenticated) {
+      prevAuthRef.current = isAuthenticated
+      mutateFeatured()
+    }
+  }, [isAuthenticated, mutateFeatured])
+
+  const sectionData = useMemo(() => ({
+    topRated: featured?.topRated || [],
+    topRatedTotal: featured?.topRatedTotal || 0,
+    bestValue: featured?.bestValue || [],
+    bestValueTotal: featured?.bestValueTotal || 0,
+    newListings: featured?.newListings || [],
+    newListingsTotal: featured?.newListingsTotal || 0,
+    trending: featured?.trending || [],
+    trendingTotal: featured?.trendingTotal || 0,
+    dogFriendly: featured?.dogFriendly || [],
+    dogFriendlyTotal: featured?.dogFriendlyTotal || 0,
+    catFriendly: featured?.catFriendly || [],
+    catFriendlyTotal: featured?.catFriendlyTotal || 0,
+  }), [featured])
+
+  const properties = useMemo(() => {
+    const base = featured?.allProperties || []
+    if (pagedProperties.length === 0) return base
+    return [...base, ...pagedProperties]
+  }, [featured?.allProperties, pagedProperties])
+
+  const totalPages = pagedTotalPages ?? (featured?.allPropertiesTotalPages || 1)
+  const totalRows = pagedTotalRows ?? (featured?.allPropertiesTotal || 0)
+
+  // Combined loading state: only true during initial network fetch when no cached data exists
+  const isLoading = isFeaturedLoading && !featured
+
+  const fetchMoreProperties = useCallback(
+    async (nextPage: number) => {
+      setLoadingMore(true)
       try {
-        if (reset) {
-          const [
-            propertiesRes,
-            topRatedRes,
-            bestValueRes,
-            newListingsRes,
-            trendingRes,
-            dogRes,
-            catRes,
-          ] = await Promise.all([
-            getProperties(pageNum, PAGE_SIZE),
-            getProperties(1, SECTION_FETCH_LIMIT, { minRating: 4.0 }).catch(
-              () => EMPTY_SECTION
-            ),
-            getProperties(1, SECTION_FETCH_LIMIT, { sortBy: 'price' }).catch(
-              () => EMPTY_SECTION
-            ),
-            getProperties(1, SECTION_FETCH_LIMIT, { days: 30 }).catch(
-              () => EMPTY_SECTION
-            ),
-            getProperties(1, SECTION_FETCH_LIMIT, { sortBy: 'trending' }).catch(
-              () => EMPTY_SECTION
-            ),
-            getProperties(1, SECTION_FETCH_LIMIT, { petTypes: 'dog' }).catch(
-              () => EMPTY_SECTION
-            ),
-            getProperties(1, SECTION_FETCH_LIMIT, { petTypes: 'cat' }).catch(
-              () => EMPTY_SECTION
-            ),
-          ])
-          if (key !== fetchKeyRef.current) return
-          setProperties(propertiesRes.data)
-          setPage(pageNum)
-          setTotalPages(propertiesRes.totalPages)
-          setTotalRows(propertiesRes.totalRows)
-          setSectionData({
-            topRated: topRatedRes.data,
-            topRatedTotal: topRatedRes.totalRows,
-            bestValue: bestValueRes.data,
-            bestValueTotal: bestValueRes.totalRows,
-            newListings: newListingsRes.data,
-            newListingsTotal: newListingsRes.totalRows,
-            trending: trendingRes.data,
-            trendingTotal: trendingRes.totalRows,
-            dogFriendly: dogRes.data,
-            dogFriendlyTotal: dogRes.totalRows,
-            catFriendly: catRes.data,
-            catFriendlyTotal: catRes.totalRows,
-          })
-        } else {
-          const response = await getProperties(pageNum, PAGE_SIZE)
-          if (key !== fetchKeyRef.current) return
-          setProperties((prev) => [...prev, ...response.data])
-          setPage(pageNum)
-          setTotalPages(response.totalPages)
-          setTotalRows(response.totalRows)
-        }
+        const response = await getProperties(nextPage, PAGE_SIZE)
+        setPagedProperties((prev) => [...prev, ...response.data])
+        setPage(nextPage)
+        setPagedTotalPages(response.totalPages)
+        setPagedTotalRows(response.totalRows)
       } catch (error) {
-        console.error(error)
+        console.error('Failed to load more properties:', error)
       } finally {
-        if (key === fetchKeyRef.current) {
-          setIsLoading(false)
-          setLoadingMore(false)
-        }
+        setLoadingMore(false)
       }
     },
     []
+  )
+
+  const fetchProperties = useCallback(
+    async (pageNum: number, reset = false) => {
+      if (reset) {
+        setPagedProperties([])
+        setPage(1)
+        setPagedTotalPages(null)
+        setPagedTotalRows(null)
+        await mutateFeatured()
+      } else {
+        await fetchMoreProperties(pageNum)
+      }
+    },
+    [fetchMoreProperties, mutateFeatured]
   )
 
   useEffect(() => {
@@ -219,10 +202,6 @@ export default function Home() {
     filters.minRating,
     filters.maxPrice,
   ])
-
-  useEffect(() => {
-    fetchProperties(1, true)
-  }, [fetchProperties, isAuthenticated])
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -359,8 +338,8 @@ export default function Home() {
             <>
               {/* Flat results header — shown when searching or filtering */}
               {isFiltering && (
-                <div className="flex items-center justify-between mb-4 lg:mb-8 lg:pt-10">
-                  <h5 className="text-xl lg:text-3xl xl:text-4xl font-medium text-deep-teal truncate mr-4">
+                <div className="flex items-center justify-between mb-4 lg:mb-6 lg:pt-6">
+                  <h5 className="text-lg lg:text-xl xl:text-2xl font-semibold text-deep-teal truncate mr-4">
                     {filterLabel}
                   </h5>
                   <AnimatePresence>
@@ -370,7 +349,7 @@ export default function Home() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="text-sm lg:text-lg xl:text-xl text-neutral-gray shrink-0"
+                        className="text-sm lg:text-base font-normal text-neutral-gray shrink-0"
                       >
                         {filterTotal} {filterTotal === 1 ? 'place' : 'places'}
                       </motion.span>
@@ -435,7 +414,7 @@ export default function Home() {
                           animate={{ opacity: 1 }}
                           exit={{ opacity: 0 }}
                           transition={{ duration: 0.15 }}
-                          className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 lg:gap-6"
+                          className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4"
                         >
                           {Array.from({ length: 14 }).map((_, i) => (
                             <div key={i} className="animate-pulse">
@@ -462,7 +441,7 @@ export default function Home() {
                         >
                           <PropertyList
                             properties={filterResults}
-                            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 lg:gap-6"
+                            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4"
                             showPetPolicyChip={true}
                             showHeartIcon={isAuthenticated}
                           />
@@ -484,7 +463,7 @@ export default function Home() {
                     {recentlyViewedFullProperties.length > 0 && (
                       <BrowseSection
                         title="Recently Viewed"
-                        icon={<Clock className="w-5 h-5 text-neutral-gray" />}
+                        icon={<Clock className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />}
                         properties={recentlyViewedFullProperties}
                         totalCount={recentlyViewedFullProperties.length}
                         showHeartIcon={isAuthenticated}
@@ -498,7 +477,7 @@ export default function Home() {
                       <BrowseSection
                         title="Recommended for You"
                         icon={
-                          <Heart className="w-5 h-5 fill-accent-orange text-accent-orange" />
+                          <Heart className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />
                         }
                         properties={recommendedProperties}
                         totalCount={recommendedTotal}
@@ -517,7 +496,7 @@ export default function Home() {
                           <BrowseSection
                             title="Near You"
                             icon={
-                              <MapPin className="w-5 h-5 text-accent-orange" />
+                              <MapPin className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />
                             }
                             properties={nearYou}
                             totalCount={nearYou.length}
@@ -530,7 +509,7 @@ export default function Home() {
                         <BrowseSection
                           title="Top Rated"
                           icon={
-                            <Star className="w-5 h-5 fill-yellow-400 text-yellow-500" />
+                            <Star className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />
                           }
                           properties={topRatedItems}
                           totalCount={sectionData.topRatedTotal}
@@ -540,7 +519,7 @@ export default function Home() {
                         />
                         <BrowseSection
                           title="Best Value"
-                          icon={<Tag className="w-5 h-5 text-positive-green" />}
+                          icon={<Tag className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />}
                           properties={bestValueItems}
                           totalCount={sectionData.bestValueTotal}
                           showHeartIcon={isAuthenticated}
@@ -549,7 +528,7 @@ export default function Home() {
                         />
                         <BrowseSection
                           title="New Listings"
-                          icon={<Sparkles className="w-5 h-5 text-deep-teal" />}
+                          icon={<Compass className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />}
                           properties={newListingsItems}
                           totalCount={sectionData.newListingsTotal}
                           showHeartIcon={isAuthenticated}
@@ -559,7 +538,7 @@ export default function Home() {
                         <BrowseSection
                           title="Trending"
                           icon={
-                            <TrendingUp className="w-5 h-5 text-accent-orange" />
+                            <TrendingUp className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />
                           }
                           properties={trendingItems}
                           totalCount={sectionData.trendingTotal}
@@ -572,7 +551,7 @@ export default function Home() {
                         {dogFriendly.length > 0 && (
                           <BrowseSection
                             title="Dog-Friendly"
-                            icon={<Dog className="w-5 h-5 text-amber-500" />}
+                            icon={<Dog className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />}
                             properties={dogFriendly}
                             totalCount={sectionData.dogFriendlyTotal}
                             showHeartIcon={isAuthenticated}
@@ -585,7 +564,7 @@ export default function Home() {
                         {catFriendly.length > 0 && (
                           <BrowseSection
                             title="Cat-Friendly"
-                            icon={<Cat className="w-5 h-5 text-purple-400" />}
+                            icon={<Cat className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />}
                             properties={catFriendly}
                             totalCount={sectionData.catFriendlyTotal}
                             showHeartIcon={isAuthenticated}

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { cn, getLowestPrice, getPetPolicy, assetPath, getApiImageUrl } from '@/lib/utils'
 import { Globe, GlobeLock, Heart, Star, Ban } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 import { FavoriteDrawer } from './FavoriteDrawer'
 import { useAuth } from '@/app/_components/AuthContext'
 import {
@@ -41,11 +42,15 @@ export function PropertyCard({
   const { user } = useAuth()
   const isOwner = user && property.hostId === user.id
 
+  const [isImageLoaded, setIsImageLoaded] = useState(false)
   const [imgSrc, setImgSrc] = useState(
     getApiImageUrl(property.images[0]?.filePath) || assetPath('/graphics/welcome.svg')
   )
   const [isHeartClicked, setIsHeartClicked] = useState(property.isFavorite)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const [currentFolderId, setCurrentFolderId] = useState<number | null>(
+    favoriteFolderId ?? null
+  )
 
   useEffect(() => {
     setIsHeartClicked(property.isFavorite)
@@ -73,6 +78,7 @@ export function PropertyCard({
       try {
         await deleteFavoriteProperty(property.id)
         setIsHeartClicked(false)
+        setCurrentFolderId(null)
         toast.success('Property removed from favorites.')
       } catch (_error) {
         toast.error('Failed to remove from favorites.')
@@ -85,6 +91,10 @@ export function PropertyCard({
 
         if (folders.length === 0) {
           await addFavorite({ propertyId: property.id })
+          const refreshed = await getFavoriteFolders()
+          if (refreshed.favoriteFolders.length > 0) {
+            setCurrentFolderId(refreshed.favoriteFolders[0].id)
+          }
         } else {
           const sortedFolders = folders.sort((a, b) => a.id - b.id)
           const targetFolder = sortedFolders[0]
@@ -93,6 +103,7 @@ export function PropertyCard({
             propertyId: property.id,
             folderId: targetFolder.id,
           })
+          setCurrentFolderId(targetFolder.id)
         }
         setIsHeartClicked(true)
         toast.success(`Property added to ${folderName}`, {
@@ -119,22 +130,32 @@ export function PropertyCard({
 
   return (
     <div className={cn('group', className)}>
-      {/* Card inner — hover lifts the whole card */}
-      <div className="transition-transform duration-300 ease-out group-hover:-translate-y-1.5">
+      {/* Card inner */}
+      <div className="transition-colors duration-200">
         {/* Image Box */}
-        <div className="w-full aspect-square relative">
+        <div className="w-full aspect-square relative rounded-2xl overflow-hidden bg-gray-100 border border-gray-100 group-hover:border-gray-200/80 shadow-sm transition-colors">
           <Link href={finalHref} className="relative block w-full h-full" onClick={handleCardClick}>
+            {!isImageLoaded && (
+              <Skeleton className="absolute inset-0 w-full h-full rounded-2xl bg-gray-200 animate-pulse" />
+            )}
             <Image
               src={imgSrc}
               alt={property.title}
               fill
               unoptimized
-              className="object-cover rounded-[20px] shadow-md group-hover:shadow-xl transition-shadow duration-300"
-              onError={() => setImgSrc(assetPath('/graphics/welcome.svg'))}
+              onLoad={() => setIsImageLoaded(true)}
+              className={cn(
+                'object-cover rounded-2xl transition-all duration-300',
+                isImageLoaded ? 'opacity-100' : 'opacity-0'
+              )}
+              onError={() => {
+                setImgSrc(assetPath('/graphics/welcome.svg'))
+                setIsImageLoaded(true)
+              }}
             />
           </Link>
           {showPetPolicyChip && petPolicy && (
-            <div className="absolute top-2 left-2 px-2 py-1 bg-white rounded-full opacity-90 text-xs font-semibold text-deep-teal shadow-sm">
+            <div className="absolute top-2 left-2 px-2 py-0.5 bg-white/95 rounded-md text-[11px] font-medium text-deep-teal shadow-sm">
               {petPolicy}
             </div>
           )}
@@ -168,7 +189,11 @@ export function PropertyCard({
                 propertyId={property.id}
                 isOpen={isDrawerOpen}
                 onOpenChange={setIsDrawerOpen}
-                onSuccess={() => setIsHeartClicked(true)}
+                currentFolderId={currentFolderId}
+                onSuccess={(folderId) => {
+                  setIsHeartClicked(true)
+                  if (folderId != null) setCurrentFolderId(folderId)
+                }}
               />
             </>
           )}
@@ -182,7 +207,7 @@ export function PropertyCard({
             </p>
 
             <div className="flex items-start justify-between gap-1">
-              <div className="text-xs md:text-sm lg:text-xs xl:text-sm text-neutral-gray leading-tight">
+              <div className="text-xs md:text-sm text-neutral-gray leading-tight">
                 <p>{property.province}</p>
                 <p>{property.district}</p>
               </div>
@@ -209,8 +234,8 @@ export function PropertyCard({
             )}
 
             {lowestPrice !== null && (
-              <p className="font-bold text-xs md:text-sm lg:text-sm xl:text-base text-deep-teal">
-                THB {lowestPrice}
+              <p className="font-semibold text-xs md:text-sm lg:text-sm xl:text-base text-deep-teal tabular-nums">
+                ฿{lowestPrice.toLocaleString()}
               </p>
             )}
           </div>

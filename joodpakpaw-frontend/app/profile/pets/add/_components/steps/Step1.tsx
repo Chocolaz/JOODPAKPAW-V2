@@ -1,18 +1,20 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
+import Image from 'next/image'
+import { Check } from 'lucide-react'
 import { useAddPet } from '../../_context/AddPetContext'
 import { StepNavigation } from '@/app/profile/host/add-property/_components/StepNavigation'
-import { cn } from '@/lib/utils'
-import { Dog, Cat } from 'lucide-react'
-import { getPetTypes } from '@/lib/api'
-import { Pet } from '@/types'
 import { ErrorState } from '@/app/profile/_components/ErrorState'
-
+import { WizardStepHeader } from '../WizardStepHeader'
+import { SPECIES_CONFIG, SpeciesCardConfig } from '../../_constants/petWizard'
+import { getPetTypes } from '@/lib/api'
+import { cn } from '@/lib/utils'
+import { Pet } from '@/types'
 
 export function Step1({ onNext }: { onNext: () => void }) {
   const { formData, updateField } = useAddPet()
-  const [availablePetTypes, setAvailablePetTypes] = useState<(Pet & { icon: React.ElementType })[]>([])
+  const [dbPets, setDbPets] = useState<Pet[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -21,13 +23,14 @@ export function Step1({ onNext }: { onNext: () => void }) {
       try {
         setLoading(true)
         const response = await getPetTypes()
-        const typesWithIcons = response.pets.map((petType) => ({
-          ...petType,
-          icon: petType.name.toLowerCase() === 'dog' ? Dog : Cat,
-        }))
-        setAvailablePetTypes(typesWithIcons)
+        const petsList = Array.isArray(response.pets)
+          ? response.pets
+          : Array.isArray((response as { data?: { pets?: Pet[] } })?.data?.pets)
+          ? (response as { data: { pets: Pet[] } }).data.pets
+          : []
+        setDbPets(petsList)
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch pet types.')
+        setError(err instanceof Error ? err.message : 'Failed to fetch pet types')
       } finally {
         setLoading(false)
       }
@@ -35,16 +38,52 @@ export function Step1({ onNext }: { onNext: () => void }) {
     fetchPetTypes()
   }, [])
 
+  const resolvePetTypeId = (key: SpeciesCardConfig['key']): { id: number; name: string } => {
+    if (key === 'dog') {
+      const match = dbPets.find(
+        (p) => p.name.toLowerCase().includes('dog') || p.name.includes('สุนัข') || p.id === 1
+      )
+      return { id: match?.id ?? 1, name: 'Dog' }
+    }
+    if (key === 'cat') {
+      const match = dbPets.find(
+        (p) => p.name.toLowerCase().includes('cat') || p.name.includes('แมว') || p.id === 2
+      )
+      return { id: match?.id ?? 2, name: 'Cat' }
+    }
+    const match = dbPets.find(
+      (p) => p.name.toLowerCase().includes('exotic') || p.name.includes('พิเศษ') || p.id === 7
+    )
+    return { id: match?.id ?? 7, name: 'Exotic' }
+  }
+
+  const handleSelectSpecies = (cfg: SpeciesCardConfig) => {
+    const { id, name } = resolvePetTypeId(cfg.key)
+    updateField('petTypeId', id)
+    updateField('petTypeName', name)
+
+    if (formData.petTypeId !== id) {
+      updateField('petBreedId', null)
+      updateField('petBreedName', null)
+      updateField('petBreedImageUrl', null)
+      updateField('isMixedBreed', false)
+      updateField('approxWeight', null)
+    }
+  }
+
   if (loading) {
     return (
-      <div className="w-full mt-5 animate-pulse">
-        <div className="flex flex-col items-center mb-16">
-          <div className="h-6 bg-gray-200 rounded w-52 mb-2" />
-          <div className="h-4 bg-gray-100 rounded w-64" />
+      <div className="w-full mt-6">
+        <div className="flex flex-col items-center mb-8">
+          <div className="h-7 bg-off-white rounded-lg w-64 mb-2" />
+          <div className="h-4 bg-off-white/70 rounded w-80" />
         </div>
-        <div className="flex flex-wrap justify-center gap-8 pb-4">
-          {[1, 2].map((i) => (
-            <div key={i} className="w-[150px] h-[150px] bg-gray-100 rounded-[20px]" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pb-6">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-52 bg-off-white/60 rounded-2xl border border-[#323232]/10"
+            />
           ))}
         </div>
       </div>
@@ -57,58 +96,64 @@ export function Step1({ onNext }: { onNext: () => void }) {
 
   return (
     <>
-      <div className="w-full text-center mt-5">
-        <h3 className="text-deep-teal text-2xl font-semibold">
-          What kind of pet is this?
-        </h3>
-        <p className="mb-16 text-neutral-gray text-sm">
-          Choose the species that best describes the pet.
-        </p>
+      <div className="w-full mt-6">
+        <WizardStepHeader
+          title="What type of pet are you boarding?"
+          description="Choose your pet species to match room availability and care options"
+        />
 
-        <div className="flex flex-wrap justify-center gap-8 pb-4">
-          {availablePetTypes.map((type) => {
-            const isSelected = formData.petTypeId === type.id
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pb-6">
+          {SPECIES_CONFIG.map((cfg) => {
+            const { id } = resolvePetTypeId(cfg.key)
+            const isSelected = formData.petTypeId === id
+
             return (
               <button
-                key={type.id}
-                onClick={() => {
-                  updateField('petTypeId', type.id)
-                  updateField('petTypeName', type.name)
-                }}
+                key={cfg.key}
+                type="button"
+                onClick={() => handleSelectSpecies(cfg)}
                 className={cn(
-                  'flex flex-col items-center justify-center p-4 border rounded-[20px] shadow-sm cursor-pointer transition-colors w-[150px] h-[150px] bg-white',
+                  'relative flex flex-col items-center text-center p-6 rounded-2xl border transition-colors duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-accent-orange/40',
                   isSelected
-                    ? 'border-positive-green'
-                    : 'border-gray-200 hover:border-deep-teal/50'
+                    ? 'border-accent-orange bg-off-white'
+                    : 'border-[#323232]/10 bg-white hover:border-deep-teal/30'
                 )}
               >
+                {isSelected && (
+                  <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-accent-orange text-white flex items-center justify-center">
+                    <Check className="w-3.5 h-3.5" strokeWidth={2} />
+                  </div>
+                )}
+
                 <div
                   className={cn(
-                    'w-20 h-20 rounded-full flex items-center justify-center transition-colors',
-                    isSelected ? 'bg-teal-50' : 'bg-gray-100'
+                    'w-24 h-24 rounded-xl flex items-center justify-center mb-4 p-2 transition-colors duration-150',
+                    isSelected ? 'bg-white' : 'bg-off-white/70'
                   )}
                 >
-                  <type.icon
-                    className={cn(
-                      'w-12 h-12',
-                      isSelected ? 'text-positive-green' : 'text-neutral-gray'
-                    )}
-                    strokeWidth={1.5}
+                  <Image
+                    src={cfg.imageSrc}
+                    alt={cfg.label}
+                    width={88}
+                    height={88}
+                    className="w-20 h-20 object-contain"
+                    unoptimized
+                    priority
                   />
                 </div>
-                <span
-                  className={cn(
-                    'mt-4 text-center font-medium',
-                    isSelected ? 'text-positive-green' : 'text-neutral-dark'
-                  )}
-                >
-                  {type.name}
-                </span>
+
+                <h3 className="text-lg font-medium text-deep-teal">
+                  {cfg.label}
+                </h3>
+                <p className="mt-1 text-xs text-neutral-gray leading-relaxed">
+                  {cfg.subtitle}
+                </p>
               </button>
             )
           })}
         </div>
       </div>
+
       <StepNavigation onNext={onNext} isNextDisabled={!formData.petTypeId} />
     </>
   )

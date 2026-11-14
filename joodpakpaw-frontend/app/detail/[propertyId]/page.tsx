@@ -124,11 +124,11 @@ function PropertyDetailSkeleton() {
 }
 
 const fadeUp = {
-  hidden: { opacity: 0, y: 16 },
+  hidden: { opacity: 0, y: 8 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { duration: 0.4, delay: i * 0.07, ease: 'easeOut' as const },
+    transition: { duration: 0.25, delay: i * 0.03, ease: 'easeOut' as const },
   }),
 }
 
@@ -230,9 +230,9 @@ export default function PropertyDetailPage() {
 
       {/* Gallery — full width, slides in from top */}
       <motion.div
-        initial={{ opacity: 0, scale: 1.02 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, ease: 'easeOut' }}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25, ease: 'easeOut' }}
       >
         <PropertyImageGallery images={property.images} />
       </motion.div>
@@ -319,9 +319,9 @@ export default function PropertyDetailPage() {
         {/* Right: sticky booking sidebar (desktop only) */}
         <motion.div
           className="hidden lg:block"
-          initial={{ opacity: 0, x: 24 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, delay: 0.2, ease: 'easeOut' }}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
         >
           <div className="sticky top-6 flex flex-col gap-3">
             <BookingDrawer

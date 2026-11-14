@@ -1,7 +1,7 @@
 import { UserProfile } from './user'
 
 export interface ProfileResponse {
-  code: number
+  code: string | number
   data: UserProfile
   message: string
 }
@@ -16,6 +16,11 @@ export interface Facility {
 }
 
 export interface FacilitiesResponse {
+  code?: string | number
+  message?: string
+  data?: {
+    facilities: Facility[]
+  }
   facilities: Facility[]
 }
 
@@ -38,9 +43,13 @@ export interface PropertyFormData {
 }
 
 export interface CreatePropertyResponse {
+  code?: string | number
+  message?: string
   data: {
     id: number
+    property?: unknown
   }
+  id?: number
 }
 
 export interface RoomCategoryFormData {
@@ -74,9 +83,18 @@ export interface BookingOrderItem {
 }
 
 export type BookingRequestBody =
-  | { PetProfileIDs: number[]; bookingOrders: BookingOrderItem[] }
-  | { numberOfPets: number; bookingOrders: BookingOrderItem[] }
+  | {
+      PetProfileIDs?: number[]
+      petProfileIds?: number[]
+      bookingOrders: BookingOrderItem[]
+    }
+  | {
+      numberOfPets: number
+      bookingOrders: BookingOrderItem[]
+    }
 
 export interface BookingResponse {
   message: string
+  code?: string | number
+  data?: unknown
 }

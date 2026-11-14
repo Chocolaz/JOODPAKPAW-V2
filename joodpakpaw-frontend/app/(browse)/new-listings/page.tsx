@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Sparkles } from 'lucide-react'
+import { Compass } from 'lucide-react'
 import { getProperties } from '@/lib/api'
 import { Property } from '@/types'
 import { useAuth } from '@/app/_components/AuthContext'
@@ -33,7 +33,7 @@ export default function NewListingsPage() {
   return (
     <BrowsePageLayout
       title="New Listings"
-      icon={<Sparkles className="w-5 h-5 text-deep-teal" />}
+      icon={<Compass className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />}
       isLoading={isLoading}
       filtered={filtered}
       visibleCount={visibleCount}

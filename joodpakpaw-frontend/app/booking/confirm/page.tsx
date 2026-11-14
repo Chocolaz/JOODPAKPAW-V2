@@ -2,7 +2,7 @@
 
 import React, { Suspense } from 'react'
 import { Spinner } from '@/components/ui/spinner'
-import ConfirmBookingDataLoader from './_components/ConfirmBookingDataLoader' // Import the new data loader component
+import ConfirmBookingDataLoader from './_components/ConfirmBookingDataLoader'
 
 export default function ConfirmBookingPage() {
   return (
@@ -11,3 +11,4 @@ export default function ConfirmBookingPage() {
     </Suspense>
   )
 }
+

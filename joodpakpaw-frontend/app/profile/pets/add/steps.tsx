@@ -5,9 +5,6 @@ import { Step3 } from './_components/steps/Step3'
 import { Step4 } from './_components/steps/Step4'
 import { Step5 } from './_components/steps/Step5'
 import { Step6 } from './_components/steps/Step6'
-import { Step7 } from './_components/steps/Step7'
-import { Step8 } from './_components/steps/Step8'
-import { Step9 } from './_components/steps/Step9'
 
 export const addPetStepsComponents = [
   Step1,
@@ -16,7 +13,4 @@ export const addPetStepsComponents = [
   Step4,
   Step5,
   Step6,
-  Step7,
-  Step8,
-  Step9,
 ]
