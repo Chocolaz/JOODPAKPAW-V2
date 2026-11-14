@@ -733,7 +733,10 @@ export async function createBooking(
             numberOfPets: totalPetsCount,
             totalPrice: grandTotalPrice,
             bookingStatus: 'pending',
-            guestNote: req.body.guestNote || null,
+            guestNote:
+              typeof req.body.guestNote === 'string'
+                ? req.body.guestNote.trim().slice(0, 255) || null
+                : null,
             paymentSlipUrl: null,
             confirmedAt: null,
             guestId: userId,
@@ -1699,6 +1702,185 @@ export async function completeHostBooking(
       data: {
         booking: formatted,
       },
+      booking: formatted,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * PATCH /api/v1/hosts/bookings/:bookingId/accept
+ * Confirms a pending booking reservation by the property host.
+ */
+export async function acceptHostBooking(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new AppError('Authentication required.', 401, 'A-3001');
+    }
+
+    const bookingId = parseInt(req.params.bookingId, 10);
+    if (isNaN(bookingId)) {
+      throw new AppError('Invalid booking ID.', 400, 'T-2007');
+    }
+
+    const result = await prisma.$transaction(
+      async (tx) => {
+        try {
+          await tx.$queryRawUnsafe(
+            `SELECT id, booking_status FROM bookings WHERE id = $1 FOR UPDATE`,
+            bookingId
+          );
+        } catch {}
+
+        const booking = await tx.booking.findUnique({
+          where: { id: bookingId },
+          include: {
+            property: { include: { host: true } },
+            bookingOrders: true,
+          },
+        });
+
+        if (!booking || booking.deletedAt !== null) {
+          throw new AppError('Booking not found.', 404, 'DB-1002');
+        }
+
+        if (booking.property.hostId !== userId) {
+          throw new AppError(
+            'Forbidden. You do not host this booking.',
+            403,
+            'A-3007'
+          );
+        }
+
+        const isUnavailable =
+          !booking.property.isActive ||
+          booking.property.deletedAt !== null ||
+          booking.property.isBannedByAdmin ||
+          isUserBanned(booking.property.host) ||
+          booking.property.host?.isBannedAllProperties === true;
+
+        if (isUnavailable) {
+          if (booking.bookingStatus === 'pending') {
+            const { cancelled } = await autoCancelPendingBookingInTx(
+              tx,
+              bookingId,
+              'Property or host unavailable',
+              { fallbackOrders: booking.bookingOrders }
+            );
+            return {
+              outcome: 'unavailable' as const,
+              cancelled,
+              propertyId: booking.propertyId,
+              guestId: booking.guestId,
+            };
+          }
+          throw new AppError('Property is not available for booking', 400, 'A-3002');
+        }
+
+        if (booking.bookingStatus !== 'pending') {
+          throw new AppError(
+            `Cannot accept booking with current status "${booking.bookingStatus}". Must be pending.`,
+            400,
+            'B-4003'
+          );
+        }
+
+        const paymentDeadline = getPaymentDeadline(booking.createdAt, booking.checkOutDate);
+        if (Date.now() > paymentDeadline.getTime()) {
+          const { cancelled } = await autoCancelPendingBookingInTx(
+            tx,
+            bookingId,
+            'Payment window expired',
+            { fallbackOrders: booking.bookingOrders }
+          );
+          return {
+            outcome: 'expired' as const,
+            cancelled,
+            propertyId: booking.propertyId,
+            guestId: booking.guestId,
+          };
+        }
+
+        const updatedBooking = await tx.booking.update({
+          where: { id: bookingId },
+          data: {
+            bookingStatus: 'confirmed',
+            confirmedAt: new Date(),
+          },
+          include: BOOKING_DETAIL_INCLUDE,
+        });
+
+        return {
+          outcome: 'accepted' as const,
+          booking: updatedBooking,
+        };
+      },
+      { maxWait: 10000, timeout: 30000 }
+    );
+
+    if (result.outcome === 'unavailable') {
+      if (result.cancelled) {
+        try {
+          await syncPropertyBookingCount(result.propertyId);
+        } catch (syncErr) {
+          console.warn('Failed to sync property booking count:', syncErr);
+        }
+      }
+      throw new AppError('Property is not available for booking', 400, 'A-3002');
+    }
+
+    if (result.outcome === 'expired') {
+      if (result.cancelled) {
+        try {
+          await syncPropertyBookingCount(result.propertyId);
+        } catch (syncErr) {
+          console.warn('Failed to sync property booking count:', syncErr);
+        }
+        await createNotificationSafe({
+          userId: result.guestId,
+          actionName: 'booking_cancelled',
+          title: 'Booking expired',
+          message: `Booking #${bookingId} was automatically cancelled because the payment window expired.`,
+          category: 'booking',
+          type: 'warning',
+          referenceTable: 'bookings',
+          referenceId: bookingId,
+        });
+      }
+      throw new AppError('Payment window has expired', 400, 'B-4003');
+    }
+
+    const updated = result.booking;
+
+    try {
+      await syncPropertyBookingCount(updated.propertyId);
+    } catch (syncErr) {
+      console.warn('Failed to sync property booking count:', syncErr);
+    }
+
+    // Notify guest
+    await createNotificationSafe({
+      userId: updated.guestId,
+      actionName: 'booking_confirmed',
+      title: 'Booking request accepted',
+      message: `Your booking #${updated.id} at "${updated.property?.title}" was accepted by the host.`,
+      category: 'booking',
+      type: 'success',
+      referenceTable: 'bookings',
+      referenceId: updated.id,
+    });
+
+    const formatted = formatHostBookingDetailDto(updated);
+    res.status(200).json({
+      code: 'S-0000',
+      message: 'Booking accepted successfully',
+      data: formatted,
       booking: formatted,
     });
   } catch (error) {

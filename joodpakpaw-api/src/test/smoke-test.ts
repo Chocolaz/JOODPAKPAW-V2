@@ -3057,6 +3057,56 @@ async function main() {
       if (finalBookingState?.bookingStatus !== 'cancelled') {
         throw new Error(`Cancelled booking resurrected to ${finalBookingState?.bookingStatus}`)
       }
+
+      // 10. Host accepts pending booking (IDOR check, valid confirm, repeat-accept guard)
+      const acceptTargetRes = await makeRequest(pipePath, '/api/v1/bookings', 'POST', {
+        bookingOrders: [
+          { roomCategoryId: 501, checkInDate: '2026-12-25', checkOutDate: '2026-12-27', roomsBooked: 1 },
+        ],
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      const acceptTargetBookingId = acceptTargetRes.body?.data?.booking?.id
+      if (!acceptTargetBookingId) {
+        throw new Error(`Expected created booking for host accept test, got ${acceptTargetRes.statusCode}`)
+      }
+
+      // 10a. Guest IDOR attempting to accept own booking -> 403 A-3007
+      const guestAcceptRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/bookings/${acceptTargetBookingId}/accept`,
+        'PATCH',
+        undefined,
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (guestAcceptRes.statusCode !== 403 || guestAcceptRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on guest host-accept IDOR, got ${guestAcceptRes.statusCode} ${guestAcceptRes.body?.code}`)
+      }
+
+      // 10b. Host accepts pending booking -> 200 confirmed
+      const hostAcceptRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/bookings/${acceptTargetBookingId}/accept`,
+        'PATCH',
+        undefined,
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (
+        hostAcceptRes.statusCode !== 200 ||
+        (hostAcceptRes.body?.data?.bookingStatus ?? hostAcceptRes.body?.booking?.bookingStatus) !== 'confirmed'
+      ) {
+        throw new Error(`Expected 200 confirmed on host accept, got ${hostAcceptRes.statusCode}: ${JSON.stringify(hostAcceptRes.body)}`)
+      }
+
+      // 10c. Repeat accept on already confirmed booking -> 400 B-4003
+      const repeatAcceptRes = await makeRequest(
+        pipePath,
+        `/api/v1/hosts/bookings/${acceptTargetBookingId}/accept`,
+        'PATCH',
+        undefined,
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (repeatAcceptRes.statusCode !== 400 || repeatAcceptRes.body?.code !== 'B-4003') {
+        throw new Error(`Expected 400 B-4003 on repeat host accept, got ${repeatAcceptRes.statusCode} ${repeatAcceptRes.body?.code}`)
+      }
     })
 
     // =========================================================================
