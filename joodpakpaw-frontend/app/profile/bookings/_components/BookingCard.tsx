@@ -9,16 +9,18 @@ import { cn } from '@/lib/utils'
 interface BookingCardProps {
   booking: Booking
   onClick?: (bookingId: number) => void
+  role?: 'guest' | 'host'
+  isHost?: boolean
 }
 
 const STATUS_CONFIG: Record<string, { label: string; pill: string; bar: string }> = {
-  CONFIRMED:  { label: 'Confirmed',       pill: 'bg-emerald-100 text-emerald-700', bar: 'bg-emerald-400' },
-  SUCCESSFUL: { label: 'Completed',       pill: 'bg-gray-100 text-gray-500',       bar: 'bg-positive-green' },
-  PENDING:    { label: 'Pending Payment', pill: 'bg-amber-100 text-amber-700',     bar: 'bg-amber-400' },
-  CANCELLED:  { label: 'Cancelled',       pill: 'bg-red-50 text-red-400',          bar: 'bg-gray-200' },
+  CONFIRMED:  { label: 'Confirmed',       pill: 'bg-deep-teal/10 text-deep-teal border border-deep-teal/20',     bar: 'bg-deep-teal' },
+  SUCCESSFUL: { label: 'Completed',       pill: 'bg-positive-green/10 text-positive-green border border-positive-green/20', bar: 'bg-positive-green' },
+  PENDING:    { label: 'Pending Payment', pill: 'bg-amber-50 text-amber-800 border border-amber-200',           bar: 'bg-amber-400' },
+  CANCELLED:  { label: 'Cancelled',       pill: 'bg-red-50 text-red-700 border border-red-200',                 bar: 'bg-border' },
 }
 
-export function BookingCard({ booking, onClick }: BookingCardProps) {
+export function BookingCard({ booking, onClick, role, isHost }: BookingCardProps) {
   const router = useRouter()
 
   const nights = Math.max(1, differenceInDays(new Date(booking.checkOutDate), new Date(booking.checkInDate)))
@@ -35,7 +37,7 @@ export function BookingCard({ booking, onClick }: BookingCardProps) {
 
   const propertyTitle = booking.property?.title || 'Unknown Property'
   const statusKey = booking.bookingStatus.toUpperCase()
-  const cfg = STATUS_CONFIG[statusKey] ?? { label: booking.bookingStatus, pill: 'bg-gray-100 text-gray-500', bar: 'bg-gray-200' }
+  const cfg = STATUS_CONFIG[statusKey] ?? { label: booking.bookingStatus, pill: 'bg-off-white text-neutral-gray border border-border', bar: 'bg-border' }
   const isCancelled = statusKey === 'CANCELLED'
   const isPending   = statusKey === 'PENDING'
   const isSuccessful = statusKey === 'SUCCESSFUL'
@@ -49,8 +51,8 @@ export function BookingCard({ booking, onClick }: BookingCardProps) {
     <div
       onClick={handleCardClick}
       className={cn(
-        'cursor-pointer group rounded-2xl bg-white border border-gray-100 shadow-sm overflow-hidden',
-        'hover:shadow-md transition-shadow duration-200 active:scale-[0.99]',
+        'cursor-pointer group rounded-2xl bg-white border border-border shadow-sm overflow-hidden',
+        'hover:shadow-sm hover:border-deep-teal/30 transition-colors duration-150',
         isCancelled && 'opacity-55',
         isPending && 'border-amber-200/70'
       )}
@@ -61,7 +63,7 @@ export function BookingCard({ booking, onClick }: BookingCardProps) {
       <div className="p-4">
         {/* ── Header ── */}
         <div className="flex items-start justify-between gap-2 mb-3">
-          <p className="text-sm font-semibold text-gray-900 leading-snug flex-1 min-w-0 truncate">
+          <p className="text-sm font-semibold text-foreground leading-snug flex-1 min-w-0 truncate">
             {propertyTitle}
           </p>
           <div className="flex flex-col items-end gap-1 shrink-0">
@@ -79,7 +81,7 @@ export function BookingCard({ booking, onClick }: BookingCardProps) {
                       'w-3 h-3',
                       booking.rating && s <= booking.rating
                         ? 'fill-yellow-400 text-yellow-400'
-                        : 'fill-gray-200 text-gray-200'
+                        : 'fill-border text-border'
                     )}
                   />
                 ))}
@@ -89,11 +91,11 @@ export function BookingCard({ booking, onClick }: BookingCardProps) {
         </div>
 
         {/* ── Date range hero ── */}
-        <div className="flex items-stretch rounded-xl overflow-hidden border border-gray-100 mb-3">
+        <div className="flex items-stretch rounded-xl overflow-hidden border border-border mb-3">
           {/* Check-in */}
-          <div className="flex-1 bg-deep-teal/[0.05] px-3 py-2.5">
-            <p className="text-[10px] font-semibold text-deep-teal uppercase tracking-wider mb-0.5">Check-in</p>
-            <p className="text-sm font-bold text-gray-900 leading-tight">
+          <div className="flex-1 bg-deep-teal/[0.05] px-3 py-3">
+            <p className="text-[10px] font-semibold text-deep-teal mb-0.5">Check-in</p>
+            <p className="text-sm font-bold text-foreground leading-tight">
               {format(new Date(booking.checkInDate), 'MMM d')}
             </p>
             <p className="text-[11px] text-neutral-gray">
@@ -102,22 +104,22 @@ export function BookingCard({ booking, onClick }: BookingCardProps) {
           </div>
 
           {/* Nights divider */}
-          <div className="flex flex-col items-center justify-center px-2.5 bg-white gap-0.5">
-            <div className="w-px flex-1 bg-gray-100" />
+          <div className="flex flex-col items-center justify-center px-3 bg-white gap-0.5">
+            <div className="w-px flex-1 bg-border" />
             <div className="flex flex-col items-center gap-0.5 py-1">
-              <Moon className="w-3.5 h-3.5 text-gray-400" />
-              <p className="text-[11px] font-bold text-gray-500 leading-none">{nights}</p>
-              <p className="text-[9px] text-gray-400 uppercase tracking-wider leading-none">
+              <Moon className="w-3.5 h-3.5 text-neutral-gray" />
+              <p className="text-[11px] font-bold text-neutral-gray leading-none">{nights}</p>
+              <p className="text-[9px] text-neutral-gray leading-none">
                 {nights === 1 ? 'night' : 'nights'}
               </p>
             </div>
-            <div className="w-px flex-1 bg-gray-100" />
+            <div className="w-px flex-1 bg-border" />
           </div>
 
           {/* Check-out */}
-          <div className="flex-1 bg-accent-orange/[0.05] px-3 py-2.5 text-right">
-            <p className="text-[10px] font-semibold text-accent-orange uppercase tracking-wider mb-0.5">Check-out</p>
-            <p className="text-sm font-bold text-gray-900 leading-tight">
+          <div className="flex-1 bg-accent-orange/[0.05] px-3 py-3 text-right">
+            <p className="text-[10px] font-semibold text-accent-orange mb-0.5">Check-out</p>
+            <p className="text-sm font-bold text-foreground leading-tight">
               {format(new Date(booking.checkOutDate), 'MMM d')}
             </p>
             <p className="text-[11px] text-neutral-gray">
@@ -144,16 +146,16 @@ export function BookingCard({ booking, onClick }: BookingCardProps) {
             {isPending && (
               <span className="flex items-center gap-1 text-amber-600 font-medium">
                 <Hourglass className="w-3.5 h-3.5" />
-                Pay now
+                {role === 'host' || isHost ? 'Action required' : 'Pay now'}
               </span>
             )}
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
-            <p className="text-sm font-bold text-deep-teal">
+            <p className="text-sm font-bold text-deep-teal tabular-nums">
               ฿{booking.totalPrice.toLocaleString()}
             </p>
-            <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-deep-teal transition-colors" />
+            <ChevronRight className="w-4 h-4 text-neutral-gray/40 group-hover:text-deep-teal transition-colors" />
           </div>
         </div>
       </div>

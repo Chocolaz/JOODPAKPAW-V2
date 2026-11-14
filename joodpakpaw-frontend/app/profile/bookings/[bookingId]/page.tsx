@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { getBookingById, cancelBooking } from '@/lib/api'
 import { ApiError } from '@/lib/errorHandling'
@@ -18,9 +18,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 
 function BookingDetailSkeleton() {
   return (
-    <div className="container mx-auto max-w-[550px] px-5 pt-4 pb-10 space-y-4">
+    <div className="container mx-auto max-w-[560px] px-4 sm:px-5 pt-4 pb-10 space-y-4">
       {/* Status banner skeleton */}
-      <div className="animate-pulse rounded-2xl p-3.5 bg-gray-100 flex items-center gap-3">
+      <div className="animate-pulse rounded-2xl p-4 bg-gray-100 flex items-center gap-3">
         <div className="w-5 h-5 rounded-full bg-gray-200" />
         <div className="space-y-1.5 flex-1">
           <div className="h-4 bg-gray-200 rounded w-28" />
@@ -76,7 +76,7 @@ function BookingDetailSkeleton() {
             <div key={i} className="flex justify-between p-3 bg-gray-100 rounded-xl">
               <div className="space-y-1.5">
                 <div className="h-3.5 bg-gray-200 rounded w-20" />
-                <div className="h-3 bg-gray-200 rounded w-32" />
+                <div className="h-3.5 bg-gray-200 rounded w-32" />
               </div>
               <div className="h-3.5 bg-gray-200 rounded w-14" />
             </div>
@@ -137,30 +137,33 @@ export default function BookingDetailPage() {
     }
   }
 
-  useEffect(() => {
-    if (bookingId) {
-      const fetchBookingDetails = async () => {
-        try {
-          setIsLoading(true)
-          const data = await getBookingById(bookingId as string)
-          setBookingDetails(data)
-        } catch (err) {
-          console.error('Failed to fetch booking details:', err)
-          setError('Failed to load booking details.')
-          toast.error('Failed to load booking details.')
-        } finally {
-          setIsLoading(false)
-        }
-      }
-      fetchBookingDetails()
+  const fetchBookingDetails = useCallback(async () => {
+    if (!bookingId) return
+    try {
+      setIsLoading(true)
+      const data = await getBookingById(bookingId as string)
+      setBookingDetails(data)
+    } catch (err) {
+      console.error('Failed to fetch booking details:', err)
+      setError('Failed to load booking details.')
+      toast.error('Failed to load booking details.')
+    } finally {
+      setIsLoading(false)
     }
   }, [bookingId])
+
+  useEffect(() => {
+    if (bookingId) {
+      fetchBookingDetails()
+    }
+  }, [bookingId, fetchBookingDetails])
 
   const status = bookingDetails?.bookingStatus.toUpperCase()
   const isPending = status === 'PENDING'
   const isConfirmed = status === 'CONFIRMED'
   const isSuccessful = status === 'SUCCESSFUL'
 
+  // Bangkok ICT cutoff for cancellation (14:00 ICT on check-in day)
   const canCancelConfirmed = useMemo(() => {
     if (!bookingDetails || status !== 'CONFIRMED') return false
     const checkInCutoff = new Date(
@@ -213,14 +216,20 @@ export default function BookingDetailPage() {
         >
           <BookingDetailDisplay bookingDetails={bookingDetails} />
 
-          <div className="container mx-auto max-w-[550px] px-5 space-y-4 pb-8">
+          <div className="container mx-auto max-w-[560px] px-4 sm:px-5 space-y-4 pb-12">
             {isPending && (
               <PendingPaymentSection
                 bookingId={bookingDetails.id}
                 createdAt={bookingDetails.createdAt}
                 paymentDeadlineAt={bookingDetails.paymentDeadlineAt}
-                onPaymentSuccess={() => {
-                  handleBookingUpdate({ bookingStatus: 'confirmed' })
+                totalPrice={bookingDetails.totalPrice}
+                onPaymentSuccess={async () => {
+                  try {
+                    const refreshed = await getBookingById(String(bookingDetails.id))
+                    setBookingDetails(refreshed)
+                  } catch {
+                    handleBookingUpdate({ bookingStatus: 'confirmed' })
+                  }
                 }}
                 onExpired={() => {
                   handleBookingUpdate({ bookingStatus: 'cancelled' })
@@ -245,7 +254,7 @@ export default function BookingDetailPage() {
             {isSuccessful && bookingDetails.bookingOrders[0]?.propertyId && (
               <button
                 onClick={() => setReportOpen(true)}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-gray-200 text-sm font-medium text-gray-500 hover:border-red-300 hover:text-red-500 hover:bg-red-50 transition cursor-pointer"
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-border text-xs font-medium text-neutral-gray hover:border-red-300 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer bg-white"
               >
                 <Flag className="w-4 h-4" />
                 Report this property
@@ -254,7 +263,7 @@ export default function BookingDetailPage() {
 
             {showCancelButton && (
               <Button
-                className="w-full text-base h-12 bg-white text-red-600 border border-red-200 hover:bg-red-50 rounded-xl"
+                className="w-full text-xs font-medium h-11 bg-white text-red-600 border border-red-200 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
                 onClick={() => setIsCancelModalOpen(true)}
                 disabled={isCancelling}
               >
@@ -264,8 +273,8 @@ export default function BookingDetailPage() {
             )}
 
             {isConfirmedPastCutoff && (
-              <p className="text-center text-xs text-neutral-gray bg-[#f7f2e8]/70 border border-gray-200 rounded-xl px-4 py-3">
-                Online cancellation is closed after check-in time (14:00 UTC+7).
+              <p className="text-center text-xs text-neutral-gray bg-off-white/70 border border-border rounded-xl px-4 py-3">
+                Online cancellation is closed after check-in time (14:00 ICT / UTC+7).
               </p>
             )}
           </div>

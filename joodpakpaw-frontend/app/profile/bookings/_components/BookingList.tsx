@@ -24,12 +24,12 @@ const UPCOMING_FILTERS = [
   {
     value: 'CONFIRMED',
     label: 'Confirmed',
-    color: 'bg-green-100 text-green-700 border-green-300',
+    color: 'bg-deep-teal/10 text-deep-teal border-deep-teal/30',
   },
   {
     value: 'PENDING',
     label: 'Pending',
-    color: 'bg-blue-100 text-blue-700 border-blue-300',
+    color: 'bg-amber-50 text-amber-800 border-amber-200',
   },
 ] as const
 
@@ -38,12 +38,12 @@ const PAST_FILTERS = [
   {
     value: 'SUCCESSFUL',
     label: 'Completed',
-    color: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+    color: 'bg-positive-green/10 text-positive-green border-positive-green/30',
   },
   {
     value: 'CANCELLED',
     label: 'Cancelled',
-    color: 'bg-red-100 text-red-700 border-red-300',
+    color: 'bg-red-50 text-red-700 border-red-200',
   },
 ] as const
 
@@ -93,7 +93,7 @@ function FilterChips({
   onFilterChange: (value: string) => void
 }) {
   return (
-    <div className="flex gap-2 px-3 sm:px-4 py-2.5 overflow-x-auto hide-scrollbar">
+    <div className="flex gap-2 px-3 sm:px-4 py-2 overflow-x-auto hide-scrollbar">
       {filters.map((filter) => {
         const count = counts[filter.value] || 0
         const isActive = activeFilter === filter.value
@@ -103,12 +103,12 @@ function FilterChips({
             key={filter.value}
             onClick={() => onFilterChange(filter.value)}
             className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border whitespace-nowrap transition-all duration-200',
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border whitespace-nowrap transition-colors duration-150',
               isActive
                 ? filter.value === 'ALL'
                   ? 'bg-deep-teal text-white border-deep-teal'
                   : filter.color
-                : 'bg-white text-gray-500 border-gray-200'
+                : 'bg-white text-neutral-gray border-border hover:border-deep-teal/40 hover:text-foreground'
             )}
           >
             {filter.label}
@@ -120,7 +120,7 @@ function FilterChips({
                     ? filter.value === 'ALL'
                       ? 'bg-white/20'
                       : 'bg-black/10'
-                    : 'bg-gray-100'
+                    : 'bg-off-white text-neutral-gray'
                 )}
               >
                 {count}
@@ -169,6 +169,7 @@ export function BookingList() {
   const [totalPages, setTotalPages] = useState(1)
   const [upcomingFilter, setUpcomingFilter] = useState('ALL')
   const [pastFilter, setPastFilter] = useState('ALL')
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming')
 
   useEffect(() => {
     const fetchBookings = async () => {
@@ -279,15 +280,6 @@ export function BookingList() {
     return <ErrorState message={error} />
   }
 
-  // Default tab: show upcoming if there are any, otherwise past
-  const defaultTab =
-    upcomingBookings.length > 0 || pastBookings.length === 0
-      ? 'upcoming'
-      : 'past'
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>(
-    defaultTab as 'upcoming' | 'past'
-  )
-
   return (
     <AnimatePresence mode="wait">
       {loading ? (
@@ -314,7 +306,7 @@ export function BookingList() {
             <div className="animate-pulse h-10 bg-gray-200 rounded-xl w-52" />
           </div>
           {/* Skeleton filter chips */}
-          <div className="flex gap-2 px-3 sm:px-4 py-2.5">
+          <div className="flex gap-2 px-3 sm:px-4 py-2">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="animate-pulse">
                 <div
@@ -457,7 +449,7 @@ export function BookingList() {
                 onFilterChange={setUpcomingFilter}
               />
 
-              <div className="grow overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4 max-w-xl mx-auto w-full">
+              <div className="grow overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4 max-w-[560px] mx-auto w-full">
                 {filteredUpcoming.length > 0 ? (
                   <div className="flex flex-col gap-3">
                     {filteredUpcoming.map((booking) => (
@@ -495,7 +487,7 @@ export function BookingList() {
                 onFilterChange={setPastFilter}
               />
 
-              <div className="grow overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4 max-w-xl mx-auto w-full">
+              <div className="grow overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4 max-w-[560px] mx-auto w-full">
                 {filteredPast.length > 0 ? (
                   <div className="flex flex-col gap-3">
                     {filteredPast.map((booking) => (
@@ -530,7 +522,7 @@ export function BookingList() {
                 <button
                   onClick={handleLoadMore}
                   disabled={loadingMore}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-gray-200 text-sm font-medium text-gray-600 hover:border-deep-teal/40 hover:text-deep-teal transition disabled:opacity-50"
+                  className="flex items-center gap-2 px-5 py-2 rounded-full border border-gray-200 text-sm font-medium text-gray-600 hover:border-deep-teal/40 hover:text-deep-teal transition disabled:opacity-50"
                 >
                   {loadingMore && <Loader2 className="w-4 h-4 animate-spin" />}
                   {loadingMore ? 'Loading…' : 'Load more'}
