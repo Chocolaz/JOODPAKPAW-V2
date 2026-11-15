@@ -163,15 +163,15 @@ export default function ProfilePage() {
       iconColor: 'text-green-600',
       grid: false,
     },
-    ...(isHost ? [{
+    {
       label: 'Verification',
-      description: 'Get a verified badge',
+      description: user?.isVerifiedHost ? 'Verified identity' : 'Get a verified badge',
       icon: ShieldCheck,
       path: '/profile/verification',
       color: 'bg-blue-50',
       iconColor: 'text-blue-500',
       grid: false,
-    }] : []),
+    },
   ]
 
   const ProfileCard = (
@@ -226,9 +226,9 @@ export default function ProfilePage() {
                 : 'Guest'}
             </h3>
             {isAuthenticated && user?.isVerifiedHost && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-500 text-xs font-medium">
-                <BadgeCheck className="w-3 h-3" />
-                Verified
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200/60 text-xs font-medium">
+                <BadgeCheck className="w-3.5 h-3.5" />
+                Verified identity
               </span>
             )}
           </div>

@@ -56,6 +56,13 @@ const STATUS_CONFIG = {
   },
 }
 
+const REJECTION_PRESETS = [
+  'ID photo is blurry or cropped',
+  'Selfie does not clearly show face and ID',
+  'ID document appears expired',
+  'Name on ID does not match account',
+] as const
+
 // ── Side Panel ───────────────────────────────────────────────────────────────
 function VerificationPanel({
   id,
@@ -94,8 +101,8 @@ function VerificationPanel({
       )
       onUpdated()
       onClose()
-    } catch {
-      toast.error('Failed to approve.')
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to approve.')
     } finally {
       setActing(false)
     }
@@ -112,8 +119,8 @@ function VerificationPanel({
       toast.success('Rejected — host has been notified.')
       onUpdated()
       onClose()
-    } catch {
-      toast.error('Failed to reject.')
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to reject.')
     } finally {
       setActing(false)
     }
@@ -306,6 +313,18 @@ function VerificationPanel({
                         rows={3}
                         className="w-full border border-red-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 bg-white resize-none focus:outline-none focus:ring-1 focus:ring-red-300 focus:border-red-300"
                       />
+                      <div className="flex flex-wrap gap-1.5 mt-2.5">
+                        {REJECTION_PRESETS.map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => setRejectReason(preset)}
+                            className="text-xs px-2.5 py-1 rounded-full bg-white border border-red-200 text-red-700 hover:bg-red-50 transition cursor-pointer text-left"
+                          >
+                            {preset}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <button
@@ -394,6 +413,7 @@ export default function AdminVerificationsPage() {
   const [data, setData] = useState<AdminVerificationSummary[]>([])
   const [totalRows, setTotalRows] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
+  const [serverPendingCount, setServerPendingCount] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
@@ -433,6 +453,9 @@ export default function AdminVerificationsPage() {
       })
       setTotalRows(res.totalRows)
       setTotalPages(res.totalPages)
+      if (res.attributes?.pendingCount !== undefined) {
+        setServerPendingCount(res.attributes.pendingCount)
+      }
       const sorted = [...res.data].sort((a, b) => {
         let aVal: string | number
         let bVal: string | number
@@ -472,7 +495,10 @@ export default function AdminVerificationsPage() {
     }
   }, [fetchData])
 
-  const pendingCount = data.filter((d) => d.status === 'pending').length
+  const pendingCount =
+    serverPendingCount !== null
+      ? serverPendingCount
+      : data.filter((d) => d.status === 'pending').length
 
   return (
     <div>

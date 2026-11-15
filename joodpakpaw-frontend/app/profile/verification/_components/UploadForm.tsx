@@ -43,8 +43,8 @@ export function UploadForm({ onSubmitted }: { onSubmitted: () => void }) {
       await submitVerification(idPhoto, selfieWithId)
       toast.success("Verification submitted! We'll review it shortly.")
       onSubmitted()
-    } catch {
-      toast.error('Failed to submit. Please try again.')
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to submit. Please try again.')
     } finally {
       setSubmitting(false)
     }

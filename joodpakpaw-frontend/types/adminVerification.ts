@@ -27,5 +27,10 @@ export interface AdminVerificationsResponse {
   data: AdminVerificationSummary[]
   limit: number
   page: number
-  attributes: { status: string }
+  attributes: {
+    status?: string
+    pendingCount?: number
+    approvedCount?: number
+    rejectedCount?: number
+  }
 }
