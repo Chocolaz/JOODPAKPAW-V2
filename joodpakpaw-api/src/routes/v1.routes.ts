@@ -7,6 +7,8 @@ import { hostRouter } from './host.routes';
 import { petProfileRouter } from './petProfile.routes';
 import { bookingRouter } from './booking.routes';
 import { favoriteFolderRouter, favoritePropertyRouter } from './favorite.routes';
+import { chatRouter } from './chat.routes';
+import { notificationRouter } from './notification.routes';
 
 export const v1Router = Router();
 
@@ -45,3 +47,5 @@ v1Router.use('/properties', propertyRouter);
 v1Router.use('/bookings', bookingRouter);
 v1Router.use('/favorite-folders', favoriteFolderRouter);
 v1Router.use('/favorite-properties', favoritePropertyRouter);
+v1Router.use('/notifications', notificationRouter);
+v1Router.use('/chat-rooms', chatRouter);

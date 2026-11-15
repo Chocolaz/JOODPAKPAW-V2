@@ -8,9 +8,13 @@ import { prisma, checkDatabaseHealth } from '../database/prisma'
 import { optionalAuthenticateToken, requireRoles } from '../middlewares/auth.middleware'
 import { v1Router } from '../routes/v1.routes'
 import { convertBufferToWebp, uploadImageAsWebp, s3Client } from '../services/storage.service'
-import { reconcileLifecycleBookings, syncPropertyBookingCount } from '../services/bookingLifecycle.service'
+import { reconcileLifecycleBookings, syncPropertyBookingCount, sendUpcomingCheckInReminders, getTomorrowThaiStr } from '../services/bookingLifecycle.service'
+import { createNotificationSafe } from '../services/notification.service'
+import { initSocketServer, emitToUser, getSocketServer } from '../services/socket.service'
 import { cacheService } from '../services/cache.service'
 import { AppError } from '../middlewares/errorHandler'
+import jwt from 'jsonwebtoken'
+import { config } from '../config/env'
 
 interface TestResult {
   name: string
@@ -103,6 +107,12 @@ interface MockUserRecord {
 function installPrismaAuthMock() {
   const users = new Map<number, MockUserRecord>()
   let nextUserId = 1
+  const chatRoomsMap = new Map<number, any>()
+  let nextChatRoomId = 1
+  const chatMessagesList: any[] = []
+  let nextChatMessageId = 1
+  const chatAttachmentsList: any[] = []
+  let nextAttachmentId = 1
 
   const originals = {
     userFindFirst: prisma.user.findFirst,
@@ -138,6 +148,18 @@ function installPrismaAuthMock() {
     notificationActionCreate: (prisma.notificationAction as any).create,
     notificationCreate: (prisma.notification as any).create,
     notificationFindMany: (prisma.notification as any).findMany,
+    notificationFindUnique: (prisma.notification as any).findUnique,
+    notificationFindFirst: (prisma.notification as any).findFirst,
+    notificationUpdate: (prisma.notification as any).update,
+    notificationUpdateMany: (prisma.notification as any).updateMany,
+    chatRoomFindUnique: (prisma.chatRoom as any).findUnique,
+    chatRoomFindMany: (prisma.chatRoom as any).findMany,
+    chatRoomCreate: (prisma.chatRoom as any).create,
+    chatRoomUpdate: (prisma.chatRoom as any).update,
+    chatRoomDelete: (prisma.chatRoom as any).delete,
+    chatMessageCreate: (prisma.chatMessage as any).create,
+    chatMessageUpdateMany: (prisma.chatMessage as any).updateMany,
+    chatMessageAttachmentFindMany: (prisma.chatMessageAttachment as any).findMany,
   }
 
   ;(prisma.role as any).upsert = async (args: any) => {
@@ -469,7 +491,32 @@ function installPrismaAuthMock() {
     return 1
   }
   ;(prisma.bookingOrder as any).count = async () => mockActiveOrderCount
-  ;(prisma.chatRoom as any).findFirst = async () => ({ id: 42 })
+  ;(prisma.chatRoom as any).findFirst = async (args: any) => {
+    const or = args?.where?.OR
+    if (Array.isArray(or)) {
+      for (const r of chatRoomsMap.values()) {
+        for (const cond of or) {
+          if (
+            (cond.participant1Id === r.participant1Id && cond.participant2Id === r.participant2Id) ||
+            (cond.participant1Id === r.participant2Id && cond.participant2Id === r.participant1Id)
+          ) {
+            const u1 = users.get(r.participant1Id)
+            const u2 = users.get(r.participant2Id)
+            const roomMsgs = chatMessagesList.filter((m) => m.roomId === r.id && !m.isDeleted)
+            return {
+              ...r,
+              participant1: u1 ? { ...u1, hostedProperties: [] } : null,
+              participant2: u2 ? { ...u2, hostedProperties: [] } : null,
+              messages: roomMsgs.slice(-1),
+            }
+          }
+        }
+      }
+      if (args?.select?.id && chatRoomsMap.size === 0) return { id: 42 }
+      return null
+    }
+    return { id: 42 }
+  }
 
   ;(prisma.roomCategory as any).count = async (args: any) => {
     const propId = args?.where?.propertyId
@@ -946,11 +993,222 @@ function installPrismaAuthMock() {
   ;(prisma.notification as any).create = async (args: any) => {
     const rec = { id: nextNotifId++, ...args?.data, createdAt: new Date(), updatedAt: new Date(), deletedAt: null }
     notificationsList.push(rec)
-    return rec
+    const actionObj = rec.notificationActionId
+      ? Array.from(notificationActionsMap.values()).find((a) => a.id === rec.notificationActionId) || null
+      : null
+    const roleObj = rec.roleId ? { id: rec.roleId, name: rec.roleId === 2 ? 'host' : 'guest' } : null
+    return { ...rec, action: actionObj, role: roleObj }
   }
   ;(prisma.notification as any).findMany = async (args: any) => {
     const userId = args?.where?.userId
-    return notificationsList.filter((n) => (userId === undefined || n.userId === userId) && n.deletedAt === null)
+    return notificationsList
+      .filter((n) => (userId === undefined || n.userId === userId) && n.deletedAt === null)
+      .map((n) => {
+        const actionObj = n.notificationActionId
+          ? Array.from(notificationActionsMap.values()).find((a) => a.id === n.notificationActionId) || null
+          : null
+        const roleObj = n.roleId ? { id: n.roleId, name: n.roleId === 2 ? 'host' : 'guest' } : null
+        return { ...n, action: actionObj, role: roleObj }
+      })
+  }
+  ;(prisma.notification as any).findUnique = async (args: any) => {
+    const id = args?.where?.id
+    const notif = notificationsList.find((n) => n.id === id)
+    if (!notif) return null
+    const actionObj = notif.notificationActionId
+      ? Array.from(notificationActionsMap.values()).find((a) => a.id === notif.notificationActionId) || null
+      : null
+    const roleObj = notif.roleId ? { id: notif.roleId, name: notif.roleId === 2 ? 'host' : 'guest' } : null
+    return { ...notif, action: actionObj, role: roleObj }
+  }
+  ;(prisma.notification as any).findFirst = async (args: any) => {
+    const where = args?.where || {}
+    const match = notificationsList.find((n) => {
+      if (where.deletedAt === null && n.deletedAt !== null) return false
+      if (where.userId !== undefined && n.userId !== where.userId) return false
+      if (where.referenceTable !== undefined && n.referenceTable !== where.referenceTable) return false
+      if (where.referenceId !== undefined && n.referenceId !== where.referenceId) return false
+      if (where.notificationActionId !== undefined && n.notificationActionId !== where.notificationActionId) return false
+      if (where.action?.name) {
+        const act = notificationActionsMap.get(where.action.name)
+        if (!act || n.notificationActionId !== act.id) return false
+      }
+      return true
+    })
+    if (!match) return null
+    const actionObj = match.notificationActionId
+      ? Array.from(notificationActionsMap.values()).find((a) => a.id === match.notificationActionId) || null
+      : null
+    const roleObj = match.roleId ? { id: match.roleId, name: match.roleId === 2 ? 'host' : 'guest' } : null
+    return { ...match, action: actionObj, role: roleObj }
+  }
+  ;(prisma.notification as any).update = async (args: any) => {
+    const id = args?.where?.id
+    const notif = notificationsList.find((n) => n.id === id)
+    if (!notif) throw new Error(`Notification ${id} not found`)
+    Object.assign(notif, args?.data || {})
+    const actionObj = notif.notificationActionId
+      ? Array.from(notificationActionsMap.values()).find((a) => a.id === notif.notificationActionId) || null
+      : null
+    const roleObj = notif.roleId ? { id: notif.roleId, name: notif.roleId === 2 ? 'host' : 'guest' } : null
+    return { ...notif, action: actionObj, role: roleObj }
+  }
+  ;(prisma.notification as any).updateMany = async (args: any) => {
+    const where = args?.where || {}
+    let count = 0
+    for (const n of notificationsList) {
+      if (where.userId !== undefined && n.userId !== where.userId) continue
+      if (where.deletedAt === null && n.deletedAt !== null) continue
+      if (where.isRead !== undefined && n.isRead !== where.isRead) continue
+      Object.assign(n, args?.data || {})
+      count++
+    }
+    return { count }
+  }
+
+  ;(prisma.chatRoom as any).findUnique = async (args: any) => {
+    const id = args?.where?.id
+    const r = chatRoomsMap.get(id)
+    if (!r) return null
+    const u1 = users.get(r.participant1Id)
+    const u2 = users.get(r.participant2Id)
+    const roomMsgs = chatMessagesList
+      .filter((m) => m.roomId === r.id && !m.isDeleted)
+      .map((m) => {
+        const s = users.get(m.senderId)
+        const atts = chatAttachmentsList.filter((a) => a.messageId === m.id)
+        return {
+          ...m,
+          sender: s ? { id: s.id, firstName: s.firstName, lastName: s.lastName, avatar: s.avatar } : { id: m.senderId },
+          attachments: atts,
+        }
+      })
+    return {
+      ...r,
+      participant1: u1 ? { ...u1, hostedProperties: [] } : null,
+      participant2: u2 ? { ...u2, hostedProperties: [] } : null,
+      messages: roomMsgs,
+    }
+  }
+
+  ;(prisma.chatRoom as any).findMany = async (args: any) => {
+    const or = args?.where?.OR
+    const userId = or ? (or[0]?.participant1Id ?? or[0]?.participant2Id) : undefined
+    const result: any[] = []
+    for (const r of chatRoomsMap.values()) {
+      if (userId !== undefined && r.participant1Id !== userId && r.participant2Id !== userId) {
+        continue
+      }
+      const u1 = users.get(r.participant1Id)
+      const u2 = users.get(r.participant2Id)
+      const roomMsgs = chatMessagesList.filter((m) => m.roomId === r.id && !m.isDeleted)
+      result.push({
+        ...r,
+        participant1: u1 ? { ...u1, hostedProperties: [] } : null,
+        participant2: u2 ? { ...u2, hostedProperties: [] } : null,
+        messages: roomMsgs.slice(-1),
+      })
+    }
+    return result
+  }
+
+  ;(prisma.chatRoom as any).create = async (args: any) => {
+    const id = nextChatRoomId++
+    const rec = {
+      id,
+      participant1Id: args?.data?.participant1Id,
+      participant2Id: args?.data?.participant2Id,
+      lastMessageAt: args?.data?.lastMessageAt || new Date(),
+      lastMessageId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+    chatRoomsMap.set(id, rec)
+    const u1 = users.get(rec.participant1Id)
+    const u2 = users.get(rec.participant2Id)
+    return {
+      ...rec,
+      participant1: u1 ? { ...u1, hostedProperties: [] } : null,
+      participant2: u2 ? { ...u2, hostedProperties: [] } : null,
+      messages: [],
+    }
+  }
+
+  ;(prisma.chatRoom as any).update = async (args: any) => {
+    const id = args?.where?.id
+    const r = chatRoomsMap.get(id)
+    if (!r) throw new Error(`Chat room ${id} not found`)
+    Object.assign(r, args?.data || {})
+    return { ...r }
+  }
+
+  ;(prisma.chatRoom as any).delete = async (args: any) => {
+    const id = args?.where?.id
+    const r = chatRoomsMap.get(id)
+    chatRoomsMap.delete(id)
+    return r
+  }
+
+  ;(prisma.chatMessage as any).create = async (args: any) => {
+    const id = nextChatMessageId++
+    const attachmentsData = args?.data?.attachments?.create || []
+    const msgRec = {
+      id,
+      roomId: args?.data?.roomId,
+      senderId: args?.data?.senderId,
+      content: args?.data?.content || '',
+      readAt: null,
+      isDeleted: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+    chatMessagesList.push(msgRec)
+
+    const createdAtts: any[] = []
+    for (const att of attachmentsData) {
+      const aRec = {
+        id: nextAttachmentId++,
+        messageId: id,
+        filePath: att.filePath,
+        fileName: att.fileName || null,
+        fileContentType: att.fileContentType || 'image/webp',
+        fileSize: att.fileSize || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+      chatAttachmentsList.push(aRec)
+      createdAtts.push(aRec)
+    }
+
+    const s = users.get(msgRec.senderId)
+    return {
+      ...msgRec,
+      sender: s ? { id: s.id, firstName: s.firstName, lastName: s.lastName, avatar: s.avatar } : { id: msgRec.senderId },
+      attachments: createdAtts,
+    }
+  }
+
+  ;(prisma.chatMessage as any).updateMany = async (args: any) => {
+    const where = args?.where || {}
+    let count = 0
+    for (const m of chatMessagesList) {
+      if (where.roomId !== undefined && m.roomId !== where.roomId) continue
+      if (where.senderId?.not !== undefined && m.senderId === where.senderId.not) continue
+      if (where.readAt === null && m.readAt !== null) continue
+      if (where.isDeleted === false && m.isDeleted) continue
+      Object.assign(m, args?.data || {})
+      count++
+    }
+    return { count }
+  }
+
+  ;(prisma.chatMessageAttachment as any).findMany = async (args: any) => {
+    const roomId = args?.where?.message?.roomId
+    if (roomId !== undefined) {
+      const msgsInRoom = new Set(chatMessagesList.filter((m) => m.roomId === roomId).map((m) => m.id))
+      return chatAttachmentsList.filter((a) => msgsInRoom.has(a.messageId))
+    }
+    return chatAttachmentsList
   }
 
   const favoriteFoldersMap = new Map<number, any>()
@@ -1102,6 +1360,9 @@ function installPrismaAuthMock() {
     favoritePropertiesList,
     notificationsList,
     notificationActionsMap,
+    chatRoomsMap,
+    chatMessagesList,
+    chatAttachmentsList,
     setMockActivePetBooking(val: boolean) {
       mockActivePetBooking = val
     },
@@ -1145,6 +1406,18 @@ function installPrismaAuthMock() {
       ;(prisma.notificationAction as any).create = originals.notificationActionCreate
       ;(prisma.notification as any).create = originals.notificationCreate
       ;(prisma.notification as any).findMany = originals.notificationFindMany
+      ;(prisma.notification as any).findUnique = originals.notificationFindUnique
+      ;(prisma.notification as any).findFirst = originals.notificationFindFirst
+      ;(prisma.notification as any).update = originals.notificationUpdate
+      ;(prisma.notification as any).updateMany = originals.notificationUpdateMany
+      ;(prisma.chatRoom as any).findUnique = originals.chatRoomFindUnique
+      ;(prisma.chatRoom as any).findMany = originals.chatRoomFindMany
+      ;(prisma.chatRoom as any).create = originals.chatRoomCreate
+      ;(prisma.chatRoom as any).update = originals.chatRoomUpdate
+      ;(prisma.chatRoom as any).delete = originals.chatRoomDelete
+      ;(prisma.chatMessage as any).create = originals.chatMessageCreate
+      ;(prisma.chatMessage as any).updateMany = originals.chatMessageUpdateMany
+      ;(prisma.chatMessageAttachment as any).findMany = originals.chatMessageAttachmentFindMany
     },
   }
 }
@@ -4085,6 +4358,448 @@ async function main() {
 
       mockDb.bookingsMap.delete(9810)
       mockDb.bookingsMap.delete(9811)
+    })
+
+    await runTest('PBI-14: Persistent Notification APIs (GET, PATCH read, PATCH read-all, DELETE, IDOR A-3007 & S-0000 contract)', async () => {
+      // 1. Unauthenticated request to GET /api/v1/notifications -> 401 A-3005
+      const unauthRes = await makeRequest(pipePath, '/api/v1/notifications', 'GET')
+      if (unauthRes.statusCode !== 401 || (unauthRes.body?.code !== 'A-3005' && unauthRes.body?.error?.code !== 'A-3005')) {
+        throw new Error(`Expected 401 A-3005 without token, got ${unauthRes.statusCode}: ${JSON.stringify(unauthRes.body)}`)
+      }
+
+      // 2. Create notification for User A (ID=1) and User B (ID=2)
+      const notifA = await createNotificationSafe({
+        userId: 1,
+        roleName: 'guest',
+        actionName: 'booking_created',
+        title: 'Booking request sent',
+        message: 'Your booking has been requested.',
+        category: 'booking',
+        type: 'info',
+        referenceTable: 'bookings',
+        referenceId: 1001,
+      })
+      if (!notifA) throw new Error('Failed to seed notification for User A')
+
+      const notifB = await createNotificationSafe({
+        userId: 2,
+        roleName: 'host',
+        actionName: 'booking_confirmed',
+        title: 'New confirmed booking',
+        message: 'A guest confirmed their stay.',
+        category: 'booking',
+        type: 'success',
+        referenceTable: 'bookings',
+        referenceId: 1001,
+      })
+      if (!notifB) throw new Error('Failed to seed notification for User B')
+
+      // 3. GET /api/v1/notifications as User A -> 200 S-0000 with ServerNotificationDto format
+      const getRes = await makeRequest(pipePath, '/api/v1/notifications', 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (getRes.statusCode !== 200 || getRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 for GET notifications, got ${getRes.statusCode}: ${JSON.stringify(getRes.body)}`)
+      }
+      const notifications = getRes.body?.data?.notifications || getRes.body?.notifications
+      if (!Array.isArray(notifications) || notifications.length === 0) {
+        throw new Error(`Expected array of notifications, got ${JSON.stringify(notifications)}`)
+      }
+      const foundA = notifications.find((n: any) => n.id === notifA.id)
+      if (!foundA || foundA.roleName !== 'guest' || foundA.actionName !== 'booking_created' || foundA.isRead !== false) {
+        throw new Error(`Notification A fields mismatch: ${JSON.stringify(foundA)}`)
+      }
+      // Ensure User A cannot see User B's notification
+      if (notifications.some((n: any) => n.id === notifB.id)) {
+        throw new Error(`User A should not see User B's notification in GET list`)
+      }
+
+      // 4. Validation errors: invalid ID -> 400 T-2007; not found ID -> 404 DB-1002
+      const invalidIdRes = await makeRequest(pipePath, '/api/v1/notifications/invalid-id/read', 'PATCH', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (invalidIdRes.statusCode !== 400 || invalidIdRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on invalid ID, got ${invalidIdRes.statusCode}: ${JSON.stringify(invalidIdRes.body)}`)
+      }
+
+      const notFoundRes = await makeRequest(pipePath, '/api/v1/notifications/999999/read', 'PATCH', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (notFoundRes.statusCode !== 404 || notFoundRes.body?.code !== 'DB-1002') {
+        throw new Error(`Expected 404 DB-1002 on non-existent ID, got ${notFoundRes.statusCode}: ${JSON.stringify(notFoundRes.body)}`)
+      }
+
+      // 5. IDOR Guard: User A attempting to mark User B's notification as read -> 403 A-3007
+      const idorReadRes = await makeRequest(pipePath, `/api/v1/notifications/${notifB.id}/read`, 'PATCH', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (idorReadRes.statusCode !== 403 || idorReadRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on cross-user mark read, got ${idorReadRes.statusCode}: ${JSON.stringify(idorReadRes.body)}`)
+      }
+
+      // 6. Legitimate mark as read -> 200 S-0000, isRead === true
+      const markReadRes = await makeRequest(pipePath, `/api/v1/notifications/${notifA.id}/read`, 'PATCH', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (markReadRes.statusCode !== 200 || markReadRes.body?.code !== 'S-0000' || !markReadRes.body?.data?.notification?.isRead) {
+        throw new Error(`Expected 200 S-0000 mark read, got ${markReadRes.statusCode}: ${JSON.stringify(markReadRes.body)}`)
+      }
+
+      // 7. Seed unread notification and test PATCH /api/v1/notifications/read-all
+      await createNotificationSafe({
+        userId: 1,
+        roleName: 'guest',
+        actionName: 'booking_review_replied',
+        title: 'Host replied',
+        message: 'Host has replied to your review.',
+        category: 'booking',
+      })
+      const readAllRes = await makeRequest(pipePath, '/api/v1/notifications/read-all', 'PATCH', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (readAllRes.statusCode !== 200 || readAllRes.body?.code !== 'S-0000' || typeof readAllRes.body?.data?.updatedCount !== 'number') {
+        throw new Error(`Expected 200 S-0000 read-all, got ${readAllRes.statusCode}: ${JSON.stringify(readAllRes.body)}`)
+      }
+
+      // 8. IDOR Guard on DELETE: User A attempting to delete User B's notification -> 403 A-3007
+      const idorDelRes = await makeRequest(pipePath, `/api/v1/notifications/${notifB.id}`, 'DELETE', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (idorDelRes.statusCode !== 403 || idorDelRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on cross-user delete, got ${idorDelRes.statusCode}: ${JSON.stringify(idorDelRes.body)}`)
+      }
+
+      // 9. Legitimate single delete -> 200 S-0000, data: null
+      const delSingleRes = await makeRequest(pipePath, `/api/v1/notifications/${notifA.id}`, 'DELETE', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (delSingleRes.statusCode !== 200 || delSingleRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 on delete, got ${delSingleRes.statusCode}: ${JSON.stringify(delSingleRes.body)}`)
+      }
+
+      // 10. Bulk DELETE /api/v1/notifications -> 200 S-0000, cleans user's notifications
+      const delAllRes = await makeRequest(pipePath, '/api/v1/notifications', 'DELETE', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (delAllRes.statusCode !== 200 || delAllRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 on bulk delete, got ${delAllRes.statusCode}: ${JSON.stringify(delAllRes.body)}`)
+      }
+
+      const emptyRes = await makeRequest(pipePath, '/api/v1/notifications', 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      const emptyList = emptyRes.body?.data?.notifications || emptyRes.body?.notifications
+      if (!Array.isArray(emptyList) || emptyList.length !== 0) {
+        throw new Error(`Expected 0 notifications after bulk delete, got ${emptyList?.length}`)
+      }
+    })
+
+    await runTest('PBI-14: Check-In Reminder Scheduler Idempotency & Role Mapping', async () => {
+      const now = new Date('2026-12-10T10:00:00.000Z')
+      const tomorrowThaiStr = getTomorrowThaiStr(now)
+      const targetCheckIn = new Date(`${tomorrowThaiStr}T00:00:00.000Z`)
+
+      // Seed a confirmed booking for tomorrow in mockDb.bookingsMap
+      const reminderBookingId = 9820
+      mockDb.bookingsMap.set(reminderBookingId, {
+        id: reminderBookingId,
+        guestId: 1,
+        propertyId: 101,
+        bookingStatus: 'confirmed',
+        checkInDate: targetCheckIn,
+        checkOutDate: new Date(targetCheckIn.getTime() + 24 * 60 * 60 * 1000),
+        deletedAt: null,
+        property: mockDb.propertiesMap.get(101) || { id: 101, hostId: 2, title: 'Mock Pet Villa' },
+      })
+
+      // Run reminder sweep first time: should send reminders (including guest and host for this booking)
+      const firstRun = await sendUpcomingCheckInReminders(now)
+      if (firstRun.remindersSent < 2) {
+        throw new Error(`Expected at least 2 reminders sent on first run, got ${firstRun.remindersSent}`)
+      }
+
+      // Verify records in mockDb.notificationsList
+      const guestNotif = mockDb.notificationsList.find(
+        (n) => n.userId === 1 && n.referenceId === reminderBookingId
+      )
+      const hostNotif = mockDb.notificationsList.find(
+        (n) => n.userId === 2 && n.referenceId === reminderBookingId
+      )
+      if (!guestNotif || (guestNotif.roleId !== 1 && guestNotif.role?.name !== 'guest')) {
+        throw new Error(`Guest check-in reminder missing or wrong role: ${JSON.stringify(guestNotif)}`)
+      }
+      if (!hostNotif || (hostNotif.roleId !== 2 && hostNotif.role?.name !== 'host')) {
+        throw new Error(`Host check-in reminder missing or wrong role: ${JSON.stringify(hostNotif)}`)
+      }
+
+      // Run reminder sweep second time with identical timestamp: must be idempotent (0 sent)
+      const secondRun = await sendUpcomingCheckInReminders(now)
+      if (secondRun.remindersSent !== 0) {
+        throw new Error(`Expected 0 reminders sent on idempotent rerun, got ${secondRun.remindersSent}`)
+      }
+
+      mockDb.bookingsMap.delete(reminderBookingId)
+    })
+
+    await runTest('PBI-14: Socket.IO Server Handshake, Ban Rejection & Room Routing', async () => {
+      // 1. emitToUser safe no-op test
+      emitToUser(1, 'notification', { test: true })
+      emitToUser(9999, 'new_message', { test: true })
+
+      // 2. Test Socket.IO server initialization
+      const ioInstance = getSocketServer()
+      if (!ioInstance) {
+        const attachedIo = initSocketServer(server)
+        if (!attachedIo) throw new Error('Expected initSocketServer to return SocketIOServer instance')
+      }
+    })
+
+    await runTest('PBI-15: Real-Time Chat Rooms & Pair Normalization (Self-Chat T-2007, Banned A-3002, Idempotency)', async () => {
+      // 1. Self-chat guard: User A (ID=1) creates room with participantId=1 -> 400 T-2007
+      const selfChatRes = await makeRequest(pipePath, '/api/v1/chat-rooms', 'POST', {
+        participantId: 1,
+        content: 'Talking to myself',
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      if (selfChatRes.statusCode !== 400 || selfChatRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on self-chat, got ${selfChatRes.statusCode}: ${JSON.stringify(selfChatRes.body)}`)
+      }
+
+      // 2. Banned user guard: User A creates room with banned user -> 403 A-3002
+      mockDb.users.set(99, {
+        id: 99,
+        email: 'banned@example.com',
+        firstName: 'Banned',
+        lastName: 'User',
+        avatar: null,
+        phone: null,
+        password: 'hash',
+        otp: null,
+        otpExpiredAt: null,
+        resetPasswordToken: null,
+        resetPasswordExpiredAt: null,
+        isVerified: true,
+        isBecomeToHost: false,
+        isVerifiedHost: false,
+        isBannedReview: false,
+        isBannedAllProperties: false,
+        bannedAt: new Date(),
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        userRoles: [{ role: { id: 1, name: 'guest' } }],
+      })
+      const bannedChatRes = await makeRequest(pipePath, '/api/v1/chat-rooms', 'POST', {
+        participantId: 99,
+        content: 'Hi banned user',
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      if (bannedChatRes.statusCode !== 403 || bannedChatRes.body?.code !== 'A-3002') {
+        throw new Error(`Expected 403 A-3002 on banned participant, got ${bannedChatRes.statusCode}: ${JSON.stringify(bannedChatRes.body)}`)
+      }
+      mockDb.users.delete(99)
+
+      // 3. User A creates chat room with User B (Host, ID=2) -> 201 S-0000
+      const createRes = await makeRequest(pipePath, '/api/v1/chat-rooms', 'POST', {
+        participantId: 2,
+        content: 'Hello Host, is your room available?',
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      if (createRes.statusCode !== 201 || createRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 201 S-0000 on chat room creation, got ${createRes.statusCode}: ${JSON.stringify(createRes.body)}`)
+      }
+      const roomA = createRes.body?.data?.chatRoom || createRes.body?.chatRoom
+      if (!roomA || !roomA.id) throw new Error(`Missing chat room in response: ${JSON.stringify(createRes.body)}`)
+      if (roomA.otherUser?.id !== 2 || !roomA.otherUser?.isHost) {
+        throw new Error(`Expected otherUser to be host (ID=2), got: ${JSON.stringify(roomA.otherUser)}`)
+      }
+
+      // 4. Pair Normalization & Idempotency: User B creates chat room with User A (ID=1) -> 200 S-0000 with SAME room ID
+      const dupRes = await makeRequest(pipePath, '/api/v1/chat-rooms', 'POST', {
+        participantId: 1,
+      }, { Authorization: `Bearer ${userBAccessToken}` })
+      if (dupRes.statusCode !== 200 || dupRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 on existing chat room, got ${dupRes.statusCode}: ${JSON.stringify(dupRes.body)}`)
+      }
+      const roomB = dupRes.body?.data?.chatRoom || dupRes.body?.chatRoom
+      if (roomB.id !== roomA.id) {
+        throw new Error(`Expected same room ID ${roomA.id}, got ${roomB.id} (Pair normalization failure)`)
+      }
+      if (roomB.otherUser?.id !== 1 || typeof roomB.otherUser?.isHost !== 'boolean') {
+        throw new Error(`User B view: expected otherUser to be User 1, got: ${JSON.stringify(roomB.otherUser)}`)
+      }
+
+      // 5. GET /api/v1/chat-rooms lists the room for both users
+      const listARes = await makeRequest(pipePath, '/api/v1/chat-rooms', 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (listARes.statusCode !== 200 || !Array.isArray(listARes.body?.data?.chatRooms)) {
+        throw new Error(`Expected 200 array for GET /chat-rooms, got ${listARes.statusCode}: ${JSON.stringify(listARes.body)}`)
+      }
+      const foundRoom = listARes.body.data.chatRooms.find((r: any) => r.id === roomA.id)
+      if (!foundRoom || foundRoom.lastMessage?.content !== 'Hello Host, is your room available?') {
+        throw new Error(`Room not found in list or lastMessage mismatch: ${JSON.stringify(foundRoom)}`)
+      }
+    })
+
+    await runTest('PBI-15: Chat Messaging, Read Receipts & Participant IDOR Guards (403 A-3007, 400 T-2007)', async () => {
+      // Create User C (ID=33) as a third non-participant user
+      const userCId = 33
+      mockDb.users.set(userCId, {
+        id: userCId,
+        email: 'user_c_chat_test@example.com',
+        firstName: 'Charlie',
+        lastName: 'Brown',
+        avatar: null,
+        phone: '0831112233',
+        password: 'Password123!',
+        otp: null,
+        otpExpiredAt: null,
+        resetPasswordToken: null,
+        resetPasswordExpiredAt: null,
+        isVerified: true,
+        isBecomeToHost: false,
+        isVerifiedHost: false,
+        isBannedReview: false,
+        isBannedAllProperties: false,
+        bannedAt: null,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        userRoles: [{ role: { id: 1, name: 'guest' } }],
+      })
+      const userCAccessToken = jwt.sign(
+        { userId: userCId, email: 'user_c_chat_test@example.com', roleId: 1, roleName: 'guest' },
+        config.jwt.secret,
+        { expiresIn: '1h' }
+      )
+
+      // Retrieve the room created between User A (1) and User B (2)
+      const roomsRes = await makeRequest(pipePath, '/api/v1/chat-rooms', 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      const testRoomId = roomsRes.body?.data?.chatRooms?.[0]?.id
+      if (!testRoomId) throw new Error('No test chat room available for messaging tests')
+
+      // 1. IDOR Guard: User C attempting GET /api/v1/chat-rooms/:id -> 403 A-3007
+      const idorGetRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}`, 'GET', undefined, {
+        Authorization: `Bearer ${userCAccessToken}`,
+      })
+      if (idorGetRes.statusCode !== 403 || idorGetRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on cross-user get room, got ${idorGetRes.statusCode}: ${JSON.stringify(idorGetRes.body)}`)
+      }
+
+      // 2. IDOR Guard: User C attempting POST /messages -> 403 A-3007
+      const idorPostRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}/messages`, 'POST', {
+        content: 'I am an intruder',
+      }, { Authorization: `Bearer ${userCAccessToken}` })
+      if (idorPostRes.statusCode !== 403 || idorPostRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on cross-user post message, got ${idorPostRes.statusCode}: ${JSON.stringify(idorPostRes.body)}`)
+      }
+
+      // 3. IDOR Guard: User C attempting PATCH /read -> 403 A-3007
+      const idorReadRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}/messages/read`, 'PATCH', undefined, {
+        Authorization: `Bearer ${userCAccessToken}`,
+      })
+      if (idorReadRes.statusCode !== 403 || idorReadRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on cross-user mark read, got ${idorReadRes.statusCode}: ${JSON.stringify(idorReadRes.body)}`)
+      }
+
+      // 4. Empty message validation -> 400 T-2007
+      const emptyMsgRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}/messages`, 'POST', {
+        content: '',
+      }, { Authorization: `Bearer ${userBAccessToken}` })
+      if (emptyMsgRes.statusCode !== 400 || emptyMsgRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on empty message, got ${emptyMsgRes.statusCode}: ${JSON.stringify(emptyMsgRes.body)}`)
+      }
+
+      // 5. Legitimate message by User B (Host) -> 201 S-0000
+      const sendRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}/messages`, 'POST', {
+        content: 'Yes! We have air-conditioned rooms available.',
+      }, { Authorization: `Bearer ${userBAccessToken}` })
+      if (sendRes.statusCode !== 201 || sendRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 201 S-0000 sending message, got ${sendRes.statusCode}: ${JSON.stringify(sendRes.body)}`)
+      }
+      const sentMsg = sendRes.body?.data?.message || sendRes.body?.message
+      if (!sentMsg || sentMsg.content !== 'Yes! We have air-conditioned rooms available.' || sentMsg.readAt !== null) {
+        throw new Error(`Sent message payload mismatch: ${JSON.stringify(sentMsg)}`)
+      }
+
+      // 6. User A marks messages as read -> 200 S-0000
+      const readRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}/messages/read`, 'PATCH', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (readRes.statusCode !== 200 || readRes.body?.code !== 'S-0000' || typeof readRes.body?.data?.updatedCount !== 'number') {
+        throw new Error(`Expected 200 S-0000 marking messages read, got ${readRes.statusCode}: ${JSON.stringify(readRes.body)}`)
+      }
+
+      // 7. GET /api/v1/chat-rooms/:id verifies messages history and read status
+      const detailRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}`, 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (detailRes.statusCode !== 200 || detailRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 for room detail, got ${detailRes.statusCode}: ${JSON.stringify(detailRes.body)}`)
+      }
+      const detail = detailRes.body?.data?.chatRoom || detailRes.body?.chatRoom
+      if (!Array.isArray(detail?.messages) || detail.messages.length < 2) {
+        throw new Error(`Expected at least 2 messages in detail history, got: ${detail?.messages?.length}`)
+      }
+      const hostMsg = detail.messages.find((m: any) => m.content === 'Yes! We have air-conditioned rooms available.')
+      if (!hostMsg || hostMsg.readAt === null) {
+        throw new Error(`Expected host message to be marked read (readAt !== null): ${JSON.stringify(hostMsg)}`)
+      }
+    })
+
+    await runTest('PBI-15: Chat S3 Garbage Collection & Room Deletion (IDOR A-3007 & S3 GC)', async () => {
+      // Find test room
+      const roomsRes = await makeRequest(pipePath, '/api/v1/chat-rooms', 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      const testRoomId = roomsRes.body?.data?.chatRooms?.[0]?.id
+      if (!testRoomId) throw new Error('No test chat room available for deletion test')
+
+      // Insert a mock attachment record for this room
+      const fakeAttachmentUrl = 'https://example.com/joodpakpaw-media/chat/test-attachment-123.webp'
+      const lastMsg = mockDb.chatMessagesList.find((m: any) => m.roomId === testRoomId)
+      if (lastMsg) {
+        mockDb.chatAttachmentsList.push({
+          id: 999,
+          messageId: lastMsg.id,
+          filePath: fakeAttachmentUrl,
+          fileName: 'photo.webp',
+          fileContentType: 'image/webp',
+          fileSize: 1024,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+      }
+
+      // 1. IDOR Guard: User C attempts to delete room -> 403 A-3007
+      const userCAccessToken = jwt.sign(
+        { userId: 33, email: 'user_c_chat_test@example.com', roleId: 1, roleName: 'guest' },
+        config.jwt.secret,
+        { expiresIn: '1h' }
+      )
+
+      const idorDelRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}`, 'DELETE', undefined, {
+        Authorization: `Bearer ${userCAccessToken}`,
+      })
+      if (idorDelRes.statusCode !== 403 || idorDelRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 deleting room as non-participant, got ${idorDelRes.statusCode}: ${JSON.stringify(idorDelRes.body)}`)
+      }
+
+      // 2. Legitimate delete by participant (User A) -> 200 S-0000
+      const delRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}`, 'DELETE', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (delRes.statusCode !== 200 || delRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 on chat room deletion, got ${delRes.statusCode}: ${JSON.stringify(delRes.body)}`)
+      }
+
+      // 3. Confirm room is deleted: GET /api/v1/chat-rooms/:id -> 404 DB-1002
+      const checkRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}`, 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (checkRes.statusCode !== 404 || checkRes.body?.code !== 'DB-1002') {
+        throw new Error(`Expected 404 DB-1002 after deletion, got ${checkRes.statusCode}: ${JSON.stringify(checkRes.body)}`)
+      }
     })
   } finally {
     mockDb.restore()
