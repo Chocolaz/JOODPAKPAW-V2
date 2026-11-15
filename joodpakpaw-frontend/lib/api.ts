@@ -376,13 +376,23 @@ export const getHostProfile = async (hostId: string): Promise<HostProfileRespons
 }
 
 // --- Verification ---
-export const getVerificationStatus = (): Promise<VerificationResponse> =>
-  request<VerificationResponse>({
+export const getVerificationStatus = async (): Promise<VerificationResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/user-verifications/me',
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Verification Status',
   })
+  const verification =
+    res?.data?.verification !== undefined
+      ? res.data.verification
+      : res?.verification !== undefined
+      ? res.verification
+      : res?.data !== undefined
+      ? res.data
+      : null
+  return { verification }
+}
 
 export const submitVerification = async (
   idPhoto: File,
@@ -1597,59 +1607,114 @@ export interface AdminDashboardData {
   bannedHosts: { total: number; thisMonth: number }
 }
 
-export const getAdminDashboard = (): Promise<AdminDashboardData> =>
-  request({ endpoint: 'api/v1/admin/dashboard', method: 'GET', requiresAuth: true, errorContext: 'Admin Dashboard' })
+export const getAdminDashboard = async (): Promise<AdminDashboardData> => {
+  const res = await request<any>({
+    endpoint: 'api/v1/admin/dashboard',
+    method: 'GET',
+    requiresAuth: true,
+    errorContext: 'Admin Dashboard',
+  })
+  return res?.data ?? res
+}
 
 // --- Reporter: Report Functions ---
-export const getMyReports = (params?: {
+export const getMyReports = async (params?: {
   page?: number
   limit?: number
 }): Promise<import('@/types/report').ReporterReportsResponse> => {
   const query = new URLSearchParams()
   if (params?.page) query.set('page', String(params.page))
   if (params?.limit) query.set('limit', String(params.limit))
-  return request({
+  const res = await request<any>({
     endpoint: `api/v1/reports/me/paginate?${query}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get My Reports',
   })
+  const rows = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.reports)
+    ? res.reports
+    : Array.isArray(res?.data?.reports)
+    ? res.data.reports
+    : []
+  const pagination = res?.pagination || {}
+  return {
+    data: rows,
+    totalRows: pagination.totalRows ?? res?.totalRows ?? rows.length,
+    totalPages: pagination.totalPages ?? res?.totalPages ?? (rows.length > 0 ? 1 : 0),
+    page: pagination.page ?? res?.page ?? params?.page ?? 1,
+    limit: pagination.limit ?? res?.limit ?? params?.limit ?? 10,
+    orderBy: res?.orderBy ?? 'createdAt',
+    sort: res?.sort ?? 'desc',
+    attributes: res?.attributes ?? { type: 'all' },
+  }
 }
 
-export const getMyReportById = (id: number): Promise<import('@/types/report').ReporterReportDetail> => {
-  return request({
+export const getMyReportById = async (
+  id: number
+): Promise<import('@/types/report').ReporterReportDetail> => {
+  const res = await request<any>({
     endpoint: `api/v1/reports/me/${id}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Report Detail',
   })
+  return res?.data?.report ?? res?.data ?? res?.report ?? res
 }
 
 // --- Admin: Report Functions ---
-export const getAdminReports = (params?: {
+export const getAdminReports = async (params?: {
   type?: string
   status?: string
   page?: number
   limit?: number
+  orderBy?: string
+  sort?: string
 }): Promise<AdminReportsResponse> => {
   const query = new URLSearchParams()
   if (params?.type) query.set('type', params.type)
   if (params?.status) query.set('status', params.status)
   if (params?.page) query.set('page', String(params.page))
   if (params?.limit) query.set('limit', String(params.limit))
-  return request<AdminReportsResponse>({
+  if (params?.orderBy) query.set('orderBy', params.orderBy)
+  if (params?.sort) query.set('sort', params.sort)
+  const res = await request<any>({
     endpoint: `api/v1/admin/reports/paginate?${query}`,
     requiresAuth: true,
     errorContext: 'Admin Reports',
   })
+  const rows = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.reports)
+    ? res.reports
+    : Array.isArray(res?.data?.reports)
+    ? res.data.reports
+    : []
+  const pagination = res?.pagination || {}
+  return {
+    data: rows,
+    totalRows: pagination.totalRows ?? res?.totalRows ?? rows.length,
+    totalPages: pagination.totalPages ?? res?.totalPages ?? (rows.length > 0 ? 1 : 0),
+    page: pagination.page ?? res?.page ?? params?.page ?? 1,
+    limit: pagination.limit ?? res?.limit ?? params?.limit ?? 10,
+    orderBy: res?.orderBy ?? params?.orderBy ?? 'createdAt',
+    sort: res?.sort ?? params?.sort ?? 'desc',
+    attributes: res?.attributes ?? {
+      type: params?.type ?? 'all',
+      status: params?.status ?? 'all',
+      pendingCount: res?.attributes?.pendingCount,
+    },
+  }
 }
 
-export const getAdminReportById = (id: number): Promise<AdminReportDetail> => {
-  return request<AdminReportDetail>({
+export const getAdminReportById = async (id: number): Promise<AdminReportDetail> => {
+  const res = await request<any>({
     endpoint: `api/v1/admin/reports/${id}`,
     requiresAuth: true,
     errorContext: 'Admin Report Detail',
   })
+  return res?.data?.report ?? res?.data ?? res?.report ?? res
 }
 
 export const takeReportAction = (
@@ -1667,7 +1732,7 @@ export const takeReportAction = (
 }
 
 // --- Admin: Verification Functions ---
-export const getAdminVerifications = (params?: {
+export const getAdminVerifications = async (params?: {
   status?: string
   page?: number
   limit?: number
@@ -1680,14 +1745,35 @@ export const getAdminVerifications = (params?: {
   if (params?.limit) query.set('limit', String(params.limit))
   if (params?.orderBy) query.set('orderBy', params.orderBy)
   if (params?.sort) query.set('sort', params.sort)
-  return request<AdminVerificationsResponse>({
+  const res = await request<any>({
     endpoint: `api/v1/admin/user-verifications/paginate?${query}`,
     requiresAuth: true,
     errorContext: 'Admin Verifications',
   })
+  const rows = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.verifications)
+    ? res.verifications
+    : Array.isArray(res?.data?.verifications)
+    ? res.data.verifications
+    : []
+  const pagination = res?.pagination || {}
+  return {
+    data: rows,
+    totalRows: pagination.totalRows ?? res?.totalRows ?? rows.length,
+    totalPages: pagination.totalPages ?? res?.totalPages ?? (rows.length > 0 ? 1 : 0),
+    page: pagination.page ?? res?.page ?? params?.page ?? 1,
+    limit: pagination.limit ?? res?.limit ?? params?.limit ?? 10,
+    attributes: res?.attributes ?? {
+      status: params?.status ?? 'all',
+      pendingCount: res?.attributes?.pendingCount,
+      approvedCount: res?.attributes?.approvedCount,
+      rejectedCount: res?.attributes?.rejectedCount,
+    },
+  }
 }
 
-export const getAdminActionLogs = (params?: {
+export const getAdminActionLogs = async (params?: {
   page?: number
   limit?: number
   action?: string
@@ -1696,21 +1782,45 @@ export const getAdminActionLogs = (params?: {
   if (params?.page) query.set('page', String(params.page))
   if (params?.limit) query.set('limit', String(params.limit))
   if (params?.action) query.set('action', params.action)
-  return request<AdminActionLogsResponse>({
+  const res = await request<any>({
     endpoint: `api/v1/admin/action-logs/paginate?${query}`,
     requiresAuth: true,
     errorContext: 'Admin Action Logs',
   })
+  const rows = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.actionLogs)
+    ? res.actionLogs
+    : Array.isArray(res?.data?.actionLogs)
+    ? res.data.actionLogs
+    : []
+  const pagination = res?.pagination || {}
+  return {
+    data: rows,
+    totalRows: pagination.totalRows ?? res?.totalRows ?? rows.length,
+    totalPages: pagination.totalPages ?? res?.totalPages ?? (rows.length > 0 ? 1 : 0),
+    page: pagination.page ?? res?.page ?? params?.page ?? 1,
+    limit: pagination.limit ?? res?.limit ?? params?.limit ?? 10,
+    orderBy: res?.orderBy ?? 'createdAt',
+    sort: res?.sort ?? 'desc',
+  }
 }
 
-export const getAdminVerificationById = (
+export const getAdminVerificationById = async (
   id: number
 ): Promise<{ code: string; message: string; verification: AdminVerificationDetail }> => {
-  return request({
+  const res = await request<any>({
     endpoint: `api/v1/admin/user-verifications/${id}`,
     requiresAuth: true,
     errorContext: 'Admin Verification Detail',
   })
+  const verification =
+    res?.data?.verification ?? res?.verification ?? res?.data ?? res
+  return {
+    code: res?.code ?? 'S-0000',
+    message: res?.message ?? 'Success',
+    verification,
+  }
 }
 
 export const approveVerification = (id: number): Promise<void> => {

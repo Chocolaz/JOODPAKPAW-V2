@@ -11,6 +11,7 @@ import {
   TrendingUp,
   Minus,
   ArrowRight,
+  UserX,
 } from 'lucide-react'
 
 const POLL_INTERVAL = 30_000 // 30s
@@ -54,17 +55,23 @@ function StatCard({
   thisMonth,
   icon: Icon,
   accent,
+  href,
 }: {
   label: string
   value: number
   thisMonth?: number
   icon: React.ElementType
   accent?: boolean
+  href?: string
 }) {
   const isUp = thisMonth != null && thisMonth > 0
 
-  return (
-    <div className={`rounded-xl border p-5 flex flex-col gap-3 ${accent ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-100'}`}>
+  const inner = (
+    <div
+      className={`rounded-xl border p-5 flex flex-col gap-3 transition-all ${
+        href ? 'hover:shadow-md hover:border-gray-300 cursor-pointer' : ''
+      } ${accent ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-100'}`}
+    >
       <div className="flex items-start justify-between">
         <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${accent ? 'bg-gray-200' : 'bg-gray-100'}`}>
           <Icon className="w-4.5 h-4.5 text-gray-600" strokeWidth={1.75} />
@@ -84,6 +91,11 @@ function StatCard({
       </div>
     </div>
   )
+
+  if (href) {
+    return <Link href={href}>{inner}</Link>
+  }
+  return inner
 }
 
 export default function AdminDashboardPage() {
@@ -126,8 +138,8 @@ export default function AdminDashboardPage() {
   if (loading) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+          {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="h-32 rounded-xl bg-gray-100" />
           ))}
         </div>
@@ -144,12 +156,13 @@ export default function AdminDashboardPage() {
       <RefreshBar lastUpdated={lastUpdated} refreshing={refreshing} onRefresh={fetchData} />
       {/* Stat Cards */}
       {stats && (
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
           <StatCard
             label="Pending Reports"
             value={stats.pendingReports.total}
             thisMonth={stats.pendingReports.thisMonth}
             icon={Flag}
+            href="/admin/reports"
           />
           <StatCard
             label="Total Users"
@@ -169,7 +182,17 @@ export default function AdminDashboardPage() {
             value={stats.pendingVerifications.total}
             thisMonth={stats.pendingVerifications.thisMonth}
             icon={ShieldCheck}
+            href="/admin/verifications"
           />
+          {stats.bannedHosts && (
+            <StatCard
+              label="Banned Hosts"
+              value={stats.bannedHosts.total}
+              thisMonth={stats.bannedHosts.thisMonth}
+              icon={UserX}
+              href="/admin/reports"
+            />
+          )}
         </div>
       )}
 

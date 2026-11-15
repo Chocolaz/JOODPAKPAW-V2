@@ -27,7 +27,11 @@ export interface AdminReportsResponse {
   page: number
   orderBy: string
   sort: string
-  attributes: { type: string }
+  attributes: {
+    type?: string
+    status?: string
+    pendingCount?: number
+  }
 }
 
 export interface AdminReportImage {
@@ -62,4 +66,21 @@ export interface AdminReportDetail {
   reporter: AdminReportUser & { email: string }
   propOwner?: AdminReportUser & { email: string }
   reviewAuthor?: AdminReportUser & { email: string }
+  reportedReview?: {
+    bookingId: number
+    rating: number | null
+    comment: string | null
+    reviewedAt: string | null
+    hostReply?: string | null
+    hostRepliedAt?: string | null
+    images?: string[]
+  } | null
+  suspensionContext?: {
+    priorBanReason?: string | null
+    priorBannedAt?: string | null
+    appealAttempt: number
+    maxAppeals: number
+  } | null
+  suspensionReason?: string | null
+  lastAppealNote?: string | null
 }

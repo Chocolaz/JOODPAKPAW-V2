@@ -26,5 +26,7 @@ export interface UserProfile {
   isBannedAllProperties?: boolean
   unbanAllPropertiesRequestCount?: number
   hasPendingUnbanAllPropertiesRequest?: boolean
+  suspensionReason?: string | null
+  lastAppealNote?: string | null
   role: Role[]
 }

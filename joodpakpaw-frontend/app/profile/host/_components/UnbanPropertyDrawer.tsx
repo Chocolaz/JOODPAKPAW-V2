@@ -15,6 +15,9 @@ interface UnbanPropertyDrawerProps {
   isOpen: boolean
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void
+  quota?: number
+  suspensionReason?: string | null
+  lastAppealNote?: string | null
 }
 
 function AppealContent({
@@ -22,17 +25,25 @@ function AppealContent({
   reportCategoryId = 10,
   onClose,
   onSuccess,
+  quota,
+  suspensionReason,
+  lastAppealNote,
 }: {
   propertyId?: number
   reportCategoryId?: number
   onClose: () => void
   onSuccess?: () => void
+  quota?: number
+  suspensionReason?: string | null
+  lastAppealNote?: string | null
 }) {
   const [description, setDescription] = useState('')
   const [images, setImages] = useState<File[]>([])
   const [previews, setPreviews] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const isQuotaExceeded = quota !== undefined && quota >= 2
 
   const handleImagePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
@@ -50,15 +61,15 @@ function AppealContent({
   }
 
   const handleSubmit = async () => {
-    if (!description.trim()) return
+    if (!description.trim() || isQuotaExceeded) return
     setSubmitting(true)
     try {
       await submitUnbanPropertyRequest(reportCategoryId, description.trim(), propertyId, images)
       toast.success('Appeal submitted. We will review it shortly.')
       onSuccess?.()
       onClose()
-    } catch {
-      toast.error('Failed to submit appeal. Please try again.')
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to submit appeal. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -70,8 +81,23 @@ function AppealContent({
       <div className="shrink-0 px-5 pt-6 pb-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-[20px] font-bold text-gray-900 leading-snug">Submit Appeal</h2>
-            <p className="text-sm text-gray-400 mt-1">Request a review of your suspended property.</p>
+            <div className="flex items-center gap-2">
+              <h2 className="text-[20px] font-bold text-gray-900 leading-snug">Submit Appeal</h2>
+              {quota !== undefined && (
+                <span
+                  className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                    isQuotaExceeded
+                      ? 'bg-gray-800 text-white'
+                      : 'bg-red-50 text-red-600 border border-red-200'
+                  }`}
+                >
+                  {Math.max(0, 2 - quota)}/2 remaining
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-gray-400 mt-1">
+              Request a review of your suspended {propertyId ? 'property' : 'account'}.
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -83,13 +109,37 @@ function AppealContent({
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto scrollbar-modern px-5 pb-5 flex flex-col gap-5">
-        {/* Info */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-          <p className="text-xs text-amber-700 leading-relaxed">
-            Explain why you believe your property should be reinstated. Provide as much detail as possible to help us review your appeal fairly.
-          </p>
-        </div>
+      <div className="flex-1 overflow-y-auto scrollbar-modern px-5 pb-5 flex flex-col gap-4">
+        {/* Suspension Reason Card */}
+        {suspensionReason && (
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+            <p className="text-xs font-semibold text-red-800">Suspension Reason:</p>
+            <p className="text-xs text-red-700 mt-0.5 leading-relaxed">{suspensionReason}</p>
+          </div>
+        )}
+
+        {/* Previous Appeal Note Card */}
+        {lastAppealNote && (
+          <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+            <p className="text-xs font-semibold text-gray-800">Previous Appeal Decision:</p>
+            <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">{lastAppealNote}</p>
+          </div>
+        )}
+
+        {/* Quota Exceeded Warning or Info */}
+        {isQuotaExceeded ? (
+          <div className="bg-gray-100 border border-gray-300 rounded-xl px-4 py-3">
+            <p className="text-xs text-gray-700 leading-relaxed font-medium">
+              Maximum appeal limit (2/2) has been reached for this suspension. You cannot submit further appeals in this cycle.
+            </p>
+          </div>
+        ) : (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <p className="text-xs text-amber-700 leading-relaxed">
+              Explain why you believe your {propertyId ? 'property' : 'account'} should be reinstated. Provide as much detail as possible to help us review your appeal fairly.
+            </p>
+          </div>
+        )}
 
         {/* Description */}
         <div>
@@ -99,9 +149,14 @@ function AppealContent({
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Describe why your property should be reinstated..."
+            disabled={isQuotaExceeded}
+            placeholder={
+              isQuotaExceeded
+                ? 'Maximum appeal attempts reached.'
+                : 'Describe why your suspension should be reconsidered...'
+            }
             rows={5}
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 bg-white resize-none focus:outline-none focus:ring-2 focus:ring-deep-teal/20 focus:border-deep-teal transition"
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 bg-white resize-none focus:outline-none focus:ring-2 focus:ring-deep-teal/20 focus:border-deep-teal transition disabled:opacity-50 disabled:bg-gray-50"
           />
           <p className="text-xs text-gray-400 mt-1 text-right">{description.length} characters</p>
         </div>
@@ -123,7 +178,7 @@ function AppealContent({
                 </button>
               </div>
             ))}
-            {images.length < 3 && (
+            {!isQuotaExceeded && images.length < 3 && (
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-deep-teal hover:text-deep-teal transition-colors"
@@ -148,18 +203,27 @@ function AppealContent({
       <div className="shrink-0 px-5 py-4 border-t border-gray-100">
         <button
           onClick={handleSubmit}
-          disabled={submitting || !description.trim()}
+          disabled={submitting || !description.trim() || isQuotaExceeded}
           className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-deep-teal text-white text-sm font-semibold transition hover:bg-deep-teal/90 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-          {submitting ? 'Submitting...' : 'Submit Appeal'}
+          {submitting ? 'Submitting...' : isQuotaExceeded ? 'Appeals Limit Reached' : 'Submit Appeal'}
         </button>
       </div>
     </div>
   )
 }
 
-export function UnbanPropertyDrawer({ propertyId, reportCategoryId, isOpen, onOpenChange, onSuccess }: UnbanPropertyDrawerProps) {
+export function UnbanPropertyDrawer({
+  propertyId,
+  reportCategoryId,
+  isOpen,
+  onOpenChange,
+  onSuccess,
+  quota,
+  suspensionReason,
+  lastAppealNote,
+}: UnbanPropertyDrawerProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)')
   const handleClose = () => onOpenChange(false)
 
@@ -170,7 +234,15 @@ export function UnbanPropertyDrawer({ propertyId, reportCategoryId, isOpen, onOp
           <VisuallyHidden>
             <DialogTitle>Submit Appeal</DialogTitle>
           </VisuallyHidden>
-          <AppealContent propertyId={propertyId} reportCategoryId={reportCategoryId} onClose={handleClose} onSuccess={onSuccess} />
+          <AppealContent
+            propertyId={propertyId}
+            reportCategoryId={reportCategoryId}
+            onClose={handleClose}
+            onSuccess={onSuccess}
+            quota={quota}
+            suspensionReason={suspensionReason}
+            lastAppealNote={lastAppealNote}
+          />
         </DialogContent>
       </Dialog>
     )
@@ -183,7 +255,15 @@ export function UnbanPropertyDrawer({ propertyId, reportCategoryId, isOpen, onOp
           <DrawerTitle>Submit Appeal</DrawerTitle>
         </VisuallyHidden>
         <div className="flex-1 min-h-0 flex flex-col">
-          <AppealContent propertyId={propertyId} reportCategoryId={reportCategoryId} onClose={handleClose} onSuccess={onSuccess} />
+          <AppealContent
+            propertyId={propertyId}
+            reportCategoryId={reportCategoryId}
+            onClose={handleClose}
+            onSuccess={onSuccess}
+            quota={quota}
+            suspensionReason={suspensionReason}
+            lastAppealNote={lastAppealNote}
+          />
         </div>
       </DrawerContent>
     </Drawer>

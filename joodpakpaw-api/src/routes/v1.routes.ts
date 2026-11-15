@@ -9,6 +9,9 @@ import { bookingRouter } from './booking.routes';
 import { favoriteFolderRouter, favoritePropertyRouter } from './favorite.routes';
 import { chatRouter } from './chat.routes';
 import { notificationRouter } from './notification.routes';
+import { verificationRouter } from './verification.routes';
+import { reportRouter } from './report.routes';
+import { adminRouter } from './admin.routes';
 
 export const v1Router = Router();
 
@@ -33,6 +36,9 @@ v1Router.get('/', (_req: Request, res: Response) => {
       favoriteProperties: '/api/v1/favorite-properties',
       chat: '/api/v1/chat-rooms',
       notifications: '/api/v1/notifications',
+      verifications: '/api/v1/user-verifications',
+      reports: '/api/v1/reports',
+      admin: '/api/v1/admin',
       recommendations: '/api/v1/properties/recommend',
     },
   });
@@ -49,3 +55,6 @@ v1Router.use('/favorite-folders', favoriteFolderRouter);
 v1Router.use('/favorite-properties', favoritePropertyRouter);
 v1Router.use('/notifications', notificationRouter);
 v1Router.use('/chat-rooms', chatRouter);
+v1Router.use('/user-verifications', verificationRouter);
+v1Router.use('/reports', reportRouter);
+v1Router.use('/admin', adminRouter);

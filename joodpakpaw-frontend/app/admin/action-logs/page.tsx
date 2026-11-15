@@ -17,6 +17,8 @@ const ACTION_CONFIG: Record<string, { label: string; className: string }> = {
   dismiss_report:           { label: 'Dismiss Report',            className: 'bg-gray-100 text-gray-600' },
   unban_property:           { label: 'Unban Property',            className: 'bg-green-100 text-green-700' },
   unban_all_properties:     { label: 'Unban All Properties',      className: 'bg-green-100 text-green-700' },
+  approve_verification:     { label: 'Approve Verification',      className: 'bg-blue-100 text-blue-700' },
+  reject_verification:      { label: 'Reject Verification',       className: 'bg-rose-100 text-rose-700' },
 }
 
 
