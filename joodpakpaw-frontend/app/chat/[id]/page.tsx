@@ -6,7 +6,8 @@ import 'yet-another-react-lightbox/styles.css'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Send, Check, CheckCheck, Trash2, ImagePlus, ArrowLeft, X } from 'lucide-react'
+import { Send, Check, CheckCheck, Trash2, ImagePlus, ArrowLeft, X, BadgeCheck, Calendar, Building } from 'lucide-react'
+import { toast } from 'sonner'
 import { useChat } from '@/app/_components/ChatContext'
 import { useAuth } from '@/app/_components/AuthContext'
 import { ConfirmationModal } from '@/app/_components/ConfirmationModal'
@@ -266,15 +267,19 @@ export default function ChatRoomPage() {
   async function handleSend() {
     const content = input.trim()
     if ((!content && pendingImages.length === 0) || isSending) return
+    const prevInput = input
+    const prevImages = pendingImages
     setInput('')
     if (textareaRef.current) textareaRef.current.style.height = '40px'
-    const images = pendingImages
     setPendingImages([])
     setIsSending(true)
     try {
-      await sendMessage(roomId, content, images.length > 0 ? images : undefined)
+      await sendMessage(roomId, content, prevImages.length > 0 ? prevImages : undefined)
     } catch (e) {
       console.error(e)
+      setInput(prevInput)
+      setPendingImages(prevImages)
+      toast.error(e instanceof Error ? e.message : 'Failed to send message. Please try again.')
     } finally {
       setIsSending(false)
     }
@@ -358,12 +363,19 @@ export default function ChatRoomPage() {
 
         {/* Name */}
         <div className="flex-1 min-w-0">
-          <p
-            className="font-semibold text-deep-teal text-base lg:text-lg truncate cursor-pointer hover:underline"
-            onClick={() => room && router.push(`/hosts/${room.otherUser.id}?from=${encodeURIComponent(`/chat/${roomId}`)}`)}
-          >
-            {otherUserName}
-          </p>
+          {room?.otherUser?.isHost ? (
+            <p
+              className="font-semibold text-deep-teal text-base lg:text-lg truncate cursor-pointer hover:underline inline-flex items-center gap-1.5"
+              onClick={() => router.push(`/hosts/${room.otherUser.id}?from=${encodeURIComponent(`/chat/${roomId}`)}`)}
+            >
+              <span>{otherUserName}</span>
+              {room.otherUser.isVerifiedHost && <BadgeCheck className="w-4 h-4 text-blue-500 shrink-0" />}
+            </p>
+          ) : (
+            <p className="font-semibold text-deep-teal text-base lg:text-lg truncate text-gray-800">
+              {otherUserName}
+            </p>
+          )}
         </div>
 
         {/* Delete */}
@@ -374,6 +386,66 @@ export default function ChatRoomPage() {
           <Trash2 className="w-4.5 h-4.5" />
         </button>
       </div>
+
+      {/* ── Sticky Context Banner (Active Booking or Context Property) ── */}
+      {room?.activeBooking ? (
+        <div className="shrink-0 bg-orange-50/80 border-b border-orange-100 px-3 lg:px-5 py-2.5 flex items-center justify-between gap-3 text-xs md:text-sm">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-accent-orange/15 flex items-center justify-center shrink-0">
+              <Calendar className="w-4 h-4 text-accent-orange" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-deep-teal truncate">{room.activeBooking.propertyTitle}</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-accent-orange/15 text-accent-orange capitalize">
+                  {room.activeBooking.bookingStatus}
+                </span>
+              </div>
+              <p className="text-neutral-gray text-[11px] mt-0.5 truncate">
+                {new Date(room.activeBooking.checkInDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} –{' '}
+                {new Date(room.activeBooking.checkOutDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const isHostView = user?.role?.some((r) => r.name === 'host') && !room.otherUser?.isHost
+              router.push(isHostView ? `/profile/host/booking/${room.activeBooking!.id}` : `/profile/bookings/${room.activeBooking!.id}`)
+            }}
+            className="shrink-0 font-medium text-accent-orange hover:text-accent-orange/80 bg-white border border-accent-orange/30 hover:border-accent-orange rounded-lg px-3 py-1 transition-all"
+          >
+            View Booking
+          </button>
+        </div>
+      ) : room?.contextProperty ? (
+        <div className="shrink-0 bg-teal-50/70 border-b border-teal-100 px-3 lg:px-5 py-2.5 flex items-center justify-between gap-3 text-xs md:text-sm">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {room.contextProperty.thumbnail ? (
+              <img
+                src={room.contextProperty.thumbnail}
+                alt={room.contextProperty.title}
+                className="w-8 h-8 rounded-lg object-cover shrink-0"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-lg bg-deep-teal/10 flex items-center justify-center shrink-0">
+                <Building className="w-4 h-4 text-deep-teal" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <span className="text-[11px] text-neutral-gray block">Inquiring about listing</span>
+              <span className="font-semibold text-deep-teal truncate block">{room.contextProperty.title}</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => router.push(`/detail/${room.contextProperty!.id}`)}
+            className="shrink-0 font-medium text-deep-teal hover:text-deep-teal/80 bg-white border border-deep-teal/30 hover:border-deep-teal rounded-lg px-3 py-1 transition-all"
+          >
+            View Listing
+          </button>
+        </div>
+      ) : null}
 
       <ConfirmationModal
         isOpen={showDeleteModal}

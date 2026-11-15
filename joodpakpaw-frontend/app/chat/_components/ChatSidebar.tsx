@@ -32,7 +32,11 @@ function RoomItem({
   currentUserId?: number
 }) {
   const name = `${room.otherUser.firstName} ${room.otherUser.lastName}`
-  const isUnread = room.lastMessage.senderId !== currentUserId && !room.lastMessage.readAt
+  const isUnread = Boolean(
+    room.lastMessage &&
+    room.lastMessage.senderId !== currentUserId &&
+    !room.lastMessage.readAt
+  )
 
   return (
     <motion.button
@@ -69,15 +73,19 @@ function RoomItem({
             {name}
           </span>
           <span className={`text-[10px] lg:text-xs shrink-0 ${isUnread ? 'text-accent-orange font-medium' : 'text-neutral-gray'}`}>
-            {formatTime(room.lastMessageAt)}
+            {room.lastMessageAt ? formatTime(room.lastMessageAt) : ''}
           </span>
         </div>
         <p className={`text-xs lg:text-sm truncate mt-0.5 flex items-center gap-1 ${isUnread ? 'text-gray-700 font-medium' : 'text-neutral-gray'}`}>
-          {room.lastMessage.content || (
-            <>
-              <ImageIcon className="w-3.5 h-3.5 shrink-0" />
-              <span>Photo</span>
-            </>
+          {room.lastMessage ? (
+            room.lastMessage.content || (
+              <>
+                <ImageIcon className="w-3.5 h-3.5 shrink-0" />
+                <span>Photo</span>
+              </>
+            )
+          ) : (
+            <span className="italic text-gray-400">Start a conversation</span>
           )}
         </p>
       </div>
@@ -110,17 +118,26 @@ export function ChatSidebar({ activeRoomId }: ChatSidebarProps) {
   const searchParams = useSearchParams()
   const from = searchParams.get('from')
   const [query, setQuery] = useState('')
+  const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all')
+
+  const totalUnreadCount = rooms.filter(
+    (r) => r.lastMessage && r.lastMessage.senderId !== user?.id && !r.lastMessage.readAt
+  ).length
 
   const sorted = [...rooms].sort(
     (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
   )
 
+  const byTab = activeTab === 'unread'
+    ? sorted.filter((r) => r.lastMessage && r.lastMessage.senderId !== user?.id && !r.lastMessage.readAt)
+    : sorted
+
   const filtered = query.trim()
-    ? sorted.filter((r) => {
+    ? byTab.filter((r) => {
         const name = `${r.otherUser.firstName} ${r.otherUser.lastName}`.toLowerCase()
         return name.includes(query.toLowerCase())
       })
-    : sorted
+    : byTab
 
   return (
     <div className="flex flex-col h-full">
@@ -135,6 +152,38 @@ export function ChatSidebar({ activeRoomId }: ChatSidebarProps) {
             placeholder="Search..."
             className="w-full pl-9 pr-3 py-2 lg:py-2.5 text-sm lg:text-base rounded-full bg-gray-100 border-none outline-none focus:ring-2 focus:ring-accent-orange/30 transition-all"
           />
+        </div>
+        {/* All / Unread Filter Pills */}
+        <div className="flex gap-2 mt-3">
+          <button
+            type="button"
+            onClick={() => setActiveTab('all')}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              activeTab === 'all'
+                ? 'bg-deep-teal text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('unread')}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 ${
+              activeTab === 'unread'
+                ? 'bg-accent-orange text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            <span>Unread</span>
+            {totalUnreadCount > 0 && (
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                activeTab === 'unread' ? 'bg-white text-accent-orange' : 'bg-accent-orange text-white'
+              }`}>
+                {totalUnreadCount}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 

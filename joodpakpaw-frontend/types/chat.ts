@@ -3,6 +3,8 @@ export interface ChatUser {
   firstName: string
   lastName: string
   avatar: string
+  isHost?: boolean
+  isVerifiedHost?: boolean
 }
 
 export interface ChatMessage {
@@ -17,13 +19,26 @@ export interface ChatMessage {
 export interface ChatRoom {
   id: number
   lastMessageAt: string
-  lastMessage: {
+  lastMessage?: {
     id: number
     content: string
     readAt: string | null
     senderId: number
-  }
+  } | null
   otherUser: ChatUser
+  activeBooking?: {
+    id: number
+    bookingStatus: string
+    checkInDate: string
+    checkOutDate: string
+    propertyId: number
+    propertyTitle: string
+  } | null
+  contextProperty?: {
+    id: number
+    title: string
+    thumbnail?: string | null
+  } | null
 }
 
 export interface ChatRoomsResponse {
@@ -35,4 +50,17 @@ export interface ChatRoomDetail {
   lastMessageAt: string
   otherUser: ChatUser
   messages: ChatMessage[]
+  activeBooking?: {
+    id: number
+    bookingStatus: string
+    checkInDate: string
+    checkOutDate: string
+    propertyId: number
+    propertyTitle: string
+  } | null
+  contextProperty?: {
+    id: number
+    title: string
+    thumbnail?: string | null
+  } | null
 }

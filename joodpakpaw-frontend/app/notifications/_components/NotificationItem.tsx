@@ -84,7 +84,7 @@ export function NotificationItem({ notification, onRead, onDelete }: Props) {
         <div
           onClick={handleClick}
           className={cn(
-            'flex items-start gap-3 md:gap-4 px-4 md:px-6 py-3.5 md:py-5 cursor-pointer select-none flex-1 min-w-0',
+            'group flex items-start gap-3 md:gap-4 px-4 md:px-6 py-3.5 md:py-5 cursor-pointer select-none flex-1 min-w-0',
             notification.isRead ? 'bg-white' : 'bg-orange-50'
           )}
         >
@@ -118,6 +118,17 @@ export function NotificationItem({ notification, onRead, onDelete }: Props) {
 
           {/* Right side */}
           <div className="flex flex-col items-center gap-1.5 shrink-0 mt-1">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete(notification.id)
+              }}
+              className="hidden md:flex opacity-0 group-hover:opacity-100 p-1.5 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all shrink-0"
+              title="Delete notification"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
             <AnimatePresence>
               {!notification.isRead && (
                 <motion.span

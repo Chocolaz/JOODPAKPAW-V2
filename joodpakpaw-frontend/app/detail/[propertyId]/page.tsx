@@ -274,6 +274,10 @@ export default function PropertyDetailPage() {
                 hostAvgRating={property.hostAvgRating}
                 chatRoomId={property.chatRoomId}
                 onChatSuccess={refreshProperty}
+                propertyId={property.id}
+                propertyTitle={property.title}
+                propertyThumbnail={property.images?.[0]?.filePath}
+                startingPrice={startingPrice}
               />
             </motion.div>
           )}

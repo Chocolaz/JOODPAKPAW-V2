@@ -627,40 +627,55 @@ export const getAllPetSizeCategories = getPetSizeCategories
 export const createChatRoom = async (
   participantId: number,
   content?: string,
+  propertyIdOrImages?: number | File[],
   images?: File[]
 ): Promise<ChatRoom> => {
+  let propertyId: number | undefined
+  let actualImages: File[] | undefined = images
+
+  if (typeof propertyIdOrImages === 'number') {
+    propertyId = propertyIdOrImages
+  } else if (Array.isArray(propertyIdOrImages)) {
+    actualImages = propertyIdOrImages
+  }
+
   const formData = new FormData()
   formData.append('participantId', String(participantId))
   if (content) formData.append('content', content)
-  if (images && images.length > 0) {
-    const compressedImages = await compressImagesToWebP(images)
+  if (propertyId) formData.append('propertyId', String(propertyId))
+  if (actualImages && actualImages.length > 0) {
+    const compressedImages = await compressImagesToWebP(actualImages)
     compressedImages.forEach((img) => formData.append('images', img))
   }
-  return request<ChatRoom>({
+  const res = await request<any>({
     endpoint: 'api/v1/chat-rooms',
     method: 'POST',
     body: formData,
     requiresAuth: true,
     errorContext: 'Create Chat Room',
   })
+  return res?.data?.chatRoom ?? res?.chatRoom ?? res?.data ?? res
 }
 
-export const getChatRooms = (): Promise<ChatRoomsResponse> => {
-  return request<ChatRoomsResponse>({
+export const getChatRooms = async (): Promise<ChatRoomsResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/chat-rooms',
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Chat Rooms',
   })
+  const rooms = res?.data?.chatRooms ?? res?.chatRooms ?? (Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [])
+  return { chatRooms: rooms }
 }
 
-export const getChatRoomById = (id: number): Promise<ChatRoomDetail> => {
-  return request<ChatRoomDetail>({
+export const getChatRoomById = async (id: number): Promise<ChatRoomDetail> => {
+  const res = await request<any>({
     endpoint: `api/v1/chat-rooms/${id}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Chat Room',
   })
+  return res?.data?.chatRoom ?? res?.chatRoom ?? res?.data ?? res
 }
 
 export const sendChatMessage = async (
@@ -668,26 +683,29 @@ export const sendChatMessage = async (
   content: string,
   images?: File[]
 ): Promise<ChatMessage> => {
+  let res: any
   if (images && images.length > 0) {
     const compressedImages = await compressImagesToWebP(images)
     const formData = new FormData()
     if (content) formData.append('content', content)
     compressedImages.forEach((img) => formData.append('images', img))
-    return request<ChatMessage>({
+    res = await request<any>({
       endpoint: `api/v1/chat-rooms/${roomId}/messages`,
       method: 'POST',
       body: formData,
       requiresAuth: true,
       errorContext: 'Send Message',
     })
+  } else {
+    res = await request<any>({
+      endpoint: `api/v1/chat-rooms/${roomId}/messages`,
+      method: 'POST',
+      body: { content },
+      requiresAuth: true,
+      errorContext: 'Send Message',
+    })
   }
-  return request<ChatMessage>({
-    endpoint: `api/v1/chat-rooms/${roomId}/messages`,
-    method: 'POST',
-    body: { content },
-    requiresAuth: true,
-    errorContext: 'Send Message',
-  })
+  return res?.data?.message ?? res?.message ?? res?.data ?? res
 }
 
 export const markChatMessagesAsRead = (roomId: number): Promise<void> => {
@@ -1422,12 +1440,32 @@ export const replyToBookingReview = async (
 }
 
 // --- Notification Functions ---
-export const getNotifications = (): Promise<NotificationsResponse> => {
-  return request<NotificationsResponse>({
+export const getNotifications = async (): Promise<NotificationsResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/notifications',
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Notifications',
+  })
+  const notifs = res?.data?.notifications ?? res?.notifications ?? (Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [])
+  return { notifications: notifs }
+}
+
+export const markNotificationAsRead = (id: number | string): Promise<void> => {
+  return request<void>({
+    endpoint: `api/v1/notifications/${id}/read`,
+    method: 'PATCH',
+    requiresAuth: true,
+    errorContext: 'Mark Notification Read',
+  })
+}
+
+export const markAllNotificationsAsRead = (): Promise<void> => {
+  return request<void>({
+    endpoint: 'api/v1/notifications/read-all',
+    method: 'PATCH',
+    requiresAuth: true,
+    errorContext: 'Mark All Notifications Read',
   })
 }
 

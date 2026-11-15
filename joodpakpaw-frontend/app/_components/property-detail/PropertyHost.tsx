@@ -12,9 +12,22 @@ interface PropertyHostProps {
   hostAvgRating?: number
   chatRoomId?: number | null
   onChatSuccess?: () => void
+  propertyId?: number
+  propertyTitle?: string
+  propertyThumbnail?: string | null
+  startingPrice?: number
 }
 
-export function PropertyHost({ host, hostAvgRating, chatRoomId, onChatSuccess }: PropertyHostProps) {
+export function PropertyHost({
+  host,
+  hostAvgRating,
+  chatRoomId,
+  onChatSuccess,
+  propertyId,
+  propertyTitle,
+  propertyThumbnail,
+  startingPrice,
+}: PropertyHostProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -80,7 +93,16 @@ export function PropertyHost({ host, hostAvgRating, chatRoomId, onChatSuccess }:
         </div>
 
         {/* Message button */}
-        <ContactHostButton hostId={host.id} compact chatRoomId={chatRoomId} onSuccess={onChatSuccess} />
+        <ContactHostButton
+          hostId={host.id}
+          compact
+          chatRoomId={chatRoomId}
+          onSuccess={onChatSuccess}
+          propertyId={propertyId}
+          propertyTitle={propertyTitle}
+          propertyThumbnail={propertyThumbnail}
+          startingPrice={startingPrice}
+        />
       </div>
     </div>
   )
