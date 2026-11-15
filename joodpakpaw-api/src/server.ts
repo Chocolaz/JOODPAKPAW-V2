@@ -6,9 +6,29 @@ import {
   startBookingLifecycleScheduler,
   stopBookingLifecycleScheduler,
 } from './services/bookingLifecycle.service';
+import {
+  initSocketServer,
+  closeSocketServer,
+} from './services/socket.service';
 
 const app = createApp();
 const server = http.createServer(app);
+
+// Pre-rewrite listener for legacy socket path compatibility
+server.prependListener('request', (req: http.IncomingMessage) => {
+  if (req.url && req.url.startsWith('/capstone25/cp25nk2/api/socket.io')) {
+    req.url = req.url.replace('/capstone25/cp25nk2/api/socket.io', '/api/socket.io');
+  }
+});
+
+server.prependListener('upgrade', (req: http.IncomingMessage) => {
+  if (req.url && req.url.startsWith('/capstone25/cp25nk2/api/socket.io')) {
+    req.url = req.url.replace('/capstone25/cp25nk2/api/socket.io', '/api/socket.io');
+  }
+});
+
+// Initialize Socket.IO v4 server attached to the HTTP server
+initSocketServer(server);
 
 const PORT = config.port;
 
@@ -33,6 +53,12 @@ async function handleShutdown(signal: string) {
     console.error('[JoodPakPaw API] Forced shutdown due to timeout.');
     process.exit(1);
   }, 10000);
+
+  try {
+    await closeSocketServer();
+  } catch (socketErr) {
+    console.error('[JoodPakPaw API] Error closing Socket.IO server:', socketErr);
+  }
 
   server.close(async () => {
     console.log('[JoodPakPaw API] HTTP server closed.');

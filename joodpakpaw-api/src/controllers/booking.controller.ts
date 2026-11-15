@@ -783,6 +783,7 @@ export async function createBooking(
 
     await createNotificationSafe({
       userId: property.hostId,
+      roleName: 'host',
       actionName: 'booking_created',
       title: 'New booking request',
       message: `You have a new pending booking #${newBooking.id} for "${property.title}".`,
@@ -892,6 +893,7 @@ export async function confirmBookingPayment(
 
         await createNotificationSafe({
           userId: booking.guestId,
+          roleName: 'guest',
           actionName: 'booking_cancelled',
           title: 'Booking expired',
           message: `Booking #${booking.id} was automatically cancelled because the payment window expired.`,
@@ -1038,6 +1040,7 @@ export async function confirmBookingPayment(
     if (prop?.hostId) {
       await createNotificationSafe({
         userId: prop.hostId,
+        roleName: 'host',
         actionName: 'payment_confirmed',
         title: 'Payment confirmed',
         message: `Payment slip received for booking #${booking.id} at "${prop.title}".`,
@@ -1185,6 +1188,7 @@ export async function cancelBooking(
     if (counterpartyId) {
       await createNotificationSafe({
         userId: counterpartyId,
+        roleName: cancelledBy === 'guest' ? 'host' : 'guest',
         actionName: 'booking_cancelled',
         title: 'Booking cancelled',
         message: `Booking #${booking.id} was cancelled by the ${cancelledBy}.${
@@ -1705,6 +1709,7 @@ export async function completeHostBooking(
 
     await createNotificationSafe({
       userId: updated.guestId,
+      roleName: 'guest',
       actionName: 'booking_completed',
       title: 'Stay completed',
       message: `Your stay for booking #${updated.id} is complete! You have ${REVIEW_WINDOW_DAYS} days to leave a review.`,
@@ -1868,6 +1873,7 @@ export async function acceptHostBooking(
         }
         await createNotificationSafe({
           userId: result.guestId,
+          roleName: 'guest',
           actionName: 'booking_cancelled',
           title: 'Booking expired',
           message: `Booking #${bookingId} was automatically cancelled because the payment window expired.`,
@@ -1891,6 +1897,7 @@ export async function acceptHostBooking(
     // Notify guest
     await createNotificationSafe({
       userId: updated.guestId,
+      roleName: 'guest',
       actionName: 'booking_confirmed',
       title: 'Booking request accepted',
       message: `Your booking #${updated.id} at "${updated.property?.title}" was accepted by the host.`,
@@ -2054,6 +2061,7 @@ export async function submitBookingReview(
     if (hostId) {
       await createNotificationSafe({
         userId: hostId,
+        roleName: 'host',
         actionName: 'booking_review_submitted',
         title: 'New guest review',
         message: `You received a ${ratingNum}-star review for booking #${booking.id}.`,
@@ -2204,6 +2212,7 @@ export async function replyToBookingReview(
 
     await createNotificationSafe({
       userId: booking.guestId,
+      roleName: 'guest',
       actionName: 'booking_review_replied',
       title: 'Host replied to your review',
       message: `The host replied to your review on booking #${booking.id}.`,

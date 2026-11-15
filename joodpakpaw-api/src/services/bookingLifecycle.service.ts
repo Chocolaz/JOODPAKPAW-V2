@@ -51,6 +51,15 @@ export function getTodayThaiStr(now: Date = new Date()): string {
 }
 
 /**
+ * Returns tomorrow's YYYY-MM-DD calendar date in Asia/Bangkok (UTC+7).
+ */
+export function getTomorrowThaiStr(now: Date = new Date()): string {
+  const bangkokNow = new Date(now.getTime() + BANGKOK_OFFSET_MS);
+  const tomorrowBangkok = new Date(bangkokNow.getTime() + DAY_MS);
+  return tomorrowBangkok.toISOString().slice(0, 10);
+}
+
+/**
  * Returns an array of YYYY-MM-DD date strings for each night in [startDate, endDate).
  */
 export function getDatesInRange(startDateStr: string | Date, endDateStr: string | Date): string[] {
@@ -384,6 +393,7 @@ async function expireOverduePendingBooking(
   await syncPropertyBookingCountSafe(booking.propertyId);
   await createNotificationSafe({
     userId: booking.guestId,
+    roleName: 'guest',
     actionName: 'booking_cancelled',
     title: 'Booking expired',
     message: `Booking #${booking.id} was automatically cancelled because the payment window expired.`,
@@ -441,6 +451,7 @@ async function completeOverdueConfirmedBooking(booking: any, now: Date): Promise
 
   await createNotificationSafe({
     userId: booking.guestId,
+    roleName: 'guest',
     actionName: 'booking_completed',
     title: 'Stay completed',
     message: `Your stay for booking #${booking.id} is complete! You have ${REVIEW_WINDOW_DAYS} days to leave a review.`,
@@ -454,6 +465,7 @@ async function completeOverdueConfirmedBooking(booking: any, now: Date): Promise
   if (hostId) {
     await createNotificationSafe({
       userId: hostId,
+      roleName: 'host',
       actionName: 'booking_completed',
       title: 'Booking auto-completed',
       message: `Booking #${booking.id} was automatically marked as completed after check-out.`,
@@ -468,12 +480,141 @@ async function completeOverdueConfirmedBooking(booking: any, now: Date): Promise
 }
 
 /**
+ * Sweeps upcoming confirmed bookings for tomorrow (Asia/Bangkok) and sends
+ * check-in reminders to both guest and host idempotently (once per booking).
+ */
+export async function sendUpcomingCheckInReminders(
+  now: Date = new Date()
+): Promise<{ remindersSent: number }> {
+  let remindersSent = 0;
+  try {
+    const tomorrowThaiStr = getTomorrowThaiStr(now);
+    const targetStart = new Date(`${tomorrowThaiStr}T00:00:00.000Z`);
+    const targetEnd = new Date(targetStart.getTime() + DAY_MS);
+
+    const upcomingBookings = await prisma.booking.findMany({
+      where: {
+        bookingStatus: 'confirmed',
+        deletedAt: null,
+        checkInDate: {
+          gte: targetStart,
+          lt: targetEnd,
+        },
+      },
+      include: {
+        property: true,
+      },
+    });
+
+    if (!Array.isArray(upcomingBookings) || upcomingBookings.length === 0) {
+      return { remindersSent: 0 };
+    }
+
+    const actionModel = (prisma as any)?.notificationAction;
+    let actionRecord: { id: number } | null = null;
+    if (actionModel && typeof actionModel.findUnique === 'function') {
+      try {
+        actionRecord = await actionModel.findUnique({ where: { name: 'check_in_reminder' } });
+      } catch {
+        // Safe fallback
+      }
+    }
+    const notifActionId = actionRecord?.id;
+
+    for (const booking of upcomingBookings) {
+      if (!booking || booking.deletedAt !== null || booking.bookingStatus !== 'confirmed') {
+        continue;
+      }
+
+      // Guest reminder idempotency
+      let existingGuestNotif = null;
+      try {
+        const notifModel = (prisma as any)?.notification;
+        if (notifModel && typeof notifModel.findFirst === 'function') {
+          existingGuestNotif = await notifModel.findFirst({
+            where: {
+              userId: booking.guestId,
+              referenceTable: 'bookings',
+              referenceId: booking.id,
+              deletedAt: null,
+              ...(notifActionId
+                ? { notificationActionId: notifActionId }
+                : { action: { name: 'check_in_reminder' } }),
+            },
+          });
+        }
+      } catch (err) {
+        console.warn(`[BookingLifecycle] Idempotency check failed for guest ${booking.guestId}:`, err);
+      }
+
+      if (!existingGuestNotif) {
+        const sent = await createNotificationSafe({
+          userId: booking.guestId,
+          roleName: 'guest',
+          actionName: 'check_in_reminder',
+          title: 'Upcoming check-in tomorrow',
+          message: `Reminder: Your stay at "${booking.property?.title ?? 'your booked property'}" begins tomorrow (${tomorrowThaiStr}).`,
+          category: 'booking',
+          type: 'reminder',
+          referenceTable: 'bookings',
+          referenceId: booking.id,
+        });
+        if (sent) remindersSent++;
+      }
+
+      // Host reminder idempotency
+      const hostId = booking.property?.hostId;
+      if (hostId) {
+        let existingHostNotif = null;
+        try {
+          const notifModel = (prisma as any)?.notification;
+          if (notifModel && typeof notifModel.findFirst === 'function') {
+            existingHostNotif = await notifModel.findFirst({
+              where: {
+                userId: hostId,
+                referenceTable: 'bookings',
+                referenceId: booking.id,
+                deletedAt: null,
+                ...(notifActionId
+                  ? { notificationActionId: notifActionId }
+                  : { action: { name: 'check_in_reminder' } }),
+              },
+            });
+          }
+        } catch (err) {
+          console.warn(`[BookingLifecycle] Idempotency check failed for host ${hostId}:`, err);
+        }
+
+        if (!existingHostNotif) {
+          const sent = await createNotificationSafe({
+            userId: hostId,
+            roleName: 'host',
+            actionName: 'check_in_reminder',
+            title: 'Guest checking in tomorrow',
+            message: `Reminder: Booking #${booking.id} check-in is scheduled for tomorrow (${tomorrowThaiStr}) at "${booking.property?.title ?? 'your property'}".`,
+            category: 'booking',
+            type: 'reminder',
+            referenceTable: 'bookings',
+            referenceId: booking.id,
+          });
+          if (sent) remindersSent++;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[BookingLifecycle] Error in sendUpcomingCheckInReminders:', err);
+  }
+
+  return { remindersSent };
+}
+
+/**
  * Reconciles overdue pending (auto-expire) and confirmed (auto-complete) bookings.
  * Safe against mocked/unavailable DBs and concurrent global sweeps.
  */
 export async function reconcileLifecycleBookings(
   scope?: LifecycleReconcileScope
-): Promise<{ expiredCount: number; completedCount: number }> {
+): Promise<{ expiredCount: number; completedCount: number; remindersCount?: number }> {
   const isGlobal =
     !scope ||
     (scope.guestId === undefined &&
@@ -491,6 +632,7 @@ export async function reconcileLifecycleBookings(
 
   let expiredCount = 0;
   let completedCount = 0;
+  let remindersCount = 0;
 
   try {
     const now = new Date();
@@ -543,6 +685,12 @@ export async function reconcileLifecycleBookings(
         if (completed) completedCount++;
       }
     }
+
+    // 3. Send upcoming check-in reminders (only during global sweeps)
+    if (isGlobal) {
+      const res = await sendUpcomingCheckInReminders(now);
+      remindersCount = res.remindersSent;
+    }
   } catch (err) {
     console.warn('[BookingLifecycle] Sweep error (non-blocking):', err);
   } finally {
@@ -551,7 +699,7 @@ export async function reconcileLifecycleBookings(
     }
   }
 
-  return { expiredCount, completedCount };
+  return { expiredCount, completedCount, ...(isGlobal ? { remindersCount } : {}) };
 }
 
 /**
