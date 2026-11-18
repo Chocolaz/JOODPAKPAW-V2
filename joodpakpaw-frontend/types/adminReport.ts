@@ -55,6 +55,7 @@ export type ReportAction =
 export interface AdminReportDetail {
   id: number
   type: 'property' | 'review' | 'unban_property'
+  isVerifiedGuest?: boolean
   status: 'pending' | 'resolved' | 'dismissed'
   resolvedAction: string | null
   adminNote: string | null

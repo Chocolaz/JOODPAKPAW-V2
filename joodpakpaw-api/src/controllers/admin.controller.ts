@@ -374,8 +374,24 @@ export async function getAdminReportById(
       reportCategoryLabel = 'Unban All Properties';
     }
 
+    const reportType = report.reportCategory?.type || 'property';
+    let isVerifiedGuest = false;
+    if (reportType === 'property' && report.propertyId) {
+      const verifiedStay = await prisma.booking.findFirst({
+        where: {
+          guestId: report.reporterId,
+          propertyId: report.propertyId,
+          bookingStatus: { in: ['confirmed', 'successful', 'completed', 'success'] },
+        },
+        select: { id: true },
+      });
+      isVerifiedGuest = Boolean(verifiedStay);
+    }
+
     const enrichedReport: any = {
       ...report,
+      type: reportType,
+      isVerifiedGuest,
       reportCategoryLabel,
     };
 
@@ -496,6 +512,7 @@ export async function handleReportAction(
 
     let updatedReport: any = null;
     let targetUserId: number | null = null;
+    let isReviewReport = false;
     let affectedPropertyIds: number[] = [];
     let reviewImageUrlsToDelete: string[] = [];
     let cancelledBookingsList: Array<{ id: number; guestId: number; propertyId: number }> = [];
@@ -533,8 +550,12 @@ export async function handleReportAction(
         );
       }
 
-      // Determine target user (host or review author or reporter)
-      if (report.property) {
+      isReviewReport = report.reportCategory?.type === 'review';
+
+      // Determine target user (review author for review reports, host for property/unban reports)
+      if (isReviewReport && report.booking) {
+        targetUserId = report.booking.guestId;
+      } else if (report.property) {
         targetUserId = report.property.hostId;
       } else if (report.booking) {
         targetUserId = report.booking.guestId;
@@ -942,11 +963,15 @@ export async function handleReportAction(
       if (canonicalAction === 'warn_user') {
         void createNotificationSafe({
           userId: targetUserId,
-          roleName: 'host',
-          actionName: 'property_warned',
-          title: 'Warning from Administration',
-          message: note || 'Your property has received a formal warning regarding marketplace standards.',
-          category: 'property',
+          roleName: isReviewReport ? 'user' : 'host',
+          actionName: isReviewReport ? 'user_warned' : 'property_warned',
+          title: isReviewReport ? 'Review Policy Warning' : 'Warning from Administration',
+          message:
+            note ||
+            (isReviewReport
+              ? 'Your review has received a formal warning regarding community guidelines.'
+              : 'Your property has received a formal warning regarding marketplace standards.'),
+          category: isReviewReport ? 'account' : 'property',
           type: 'warning',
           referenceTable: 'reports',
           referenceId: id,

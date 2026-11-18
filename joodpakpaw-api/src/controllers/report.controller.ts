@@ -678,12 +678,23 @@ export async function getMyReports(
       prisma.report.count({ where }),
     ]);
 
+    const mappedRows = rows.map((r) => {
+      const reportType = r.reportCategory?.type || 'property';
+      const isAppeal = ['unban', 'unban_property'].includes(reportType);
+      return {
+        ...r,
+        adminNote: isAppeal ? r.adminNote : null,
+        type: reportType,
+        reportCategoryLabel: r.reportCategory?.label || r.reportCategory?.name || 'Report',
+      };
+    });
+
     const totalPages = Math.ceil(totalRows / limit) || 1;
 
     res.status(200).json({
       code: 'S-0000',
       message: 'Success',
-      data: rows,
+      data: mappedRows,
       pagination: {
         page,
         limit,
@@ -744,11 +755,20 @@ export async function getMyReportById(
       throw new AppError('Access forbidden. You do not own this report.', 403, 'A-3007');
     }
 
+    const reportType = report.reportCategory?.type || 'property';
+    const isAppeal = ['unban', 'unban_property'].includes(reportType);
+
     res.status(200).json({
       code: 'S-0000',
       message: 'Success',
       data: {
-        report,
+        report: {
+          ...report,
+          adminNote: isAppeal ? report.adminNote : null,
+          type: reportType,
+          reportCategoryLabel:
+            report.reportCategory?.label || report.reportCategory?.name || 'Report',
+        },
       },
     });
   } catch (error) {

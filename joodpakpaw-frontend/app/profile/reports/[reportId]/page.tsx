@@ -76,7 +76,13 @@ export default function ReportDetailPage() {
     )
   }
 
-  const statusCfg = STATUS_CONFIG[report.status]
+  const statusCfg = STATUS_CONFIG[report.status] ?? {
+    label: report.status || 'Unknown',
+    Icon: Clock,
+    color: 'text-gray-600',
+    bg: 'bg-gray-50',
+    border: 'border-gray-200',
+  }
   const StatusIcon = statusCfg.Icon
 
   const subject = report.type === 'review'
@@ -128,14 +134,33 @@ export default function ReportDetailPage() {
         </div>
       )}
 
-      {/* Admin note */}
-      {report.adminNote && (
+      {/* Appeal Admin Decision Note (for Host appeals only) */}
+      {report.type === 'unban_property' && report.adminNote && (
         <div className="bg-amber-50 rounded-2xl border border-amber-200 p-4">
           <div className="flex items-center gap-2 mb-2">
             <NotebookText className="w-4 h-4 text-amber-600" />
-            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Admin Note</p>
+            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
+              Admin Decision Note
+            </p>
           </div>
           <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{report.adminNote}</p>
+        </div>
+      )}
+
+      {/* Privacy-safe Outcome Summary (for Property & Review reporters) */}
+      {report.type !== 'unban_property' && report.status !== 'pending' && (
+        <div className="bg-gray-50 rounded-2xl border border-gray-200 p-4">
+          <div className="flex items-center gap-2 mb-1.5">
+            <NotebookText className="w-4 h-4 text-gray-600" />
+            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+              Review Outcome
+            </p>
+          </div>
+          <p className="text-sm text-gray-600 leading-relaxed">
+            {report.status === 'resolved'
+              ? 'Thank you for your report. Our Trust & Safety team has reviewed it and taken appropriate action in accordance with our community guidelines.'
+              : 'Thank you for your report. Our Trust & Safety team has reviewed it and found no policy violation requiring action at this time.'}
+          </p>
         </div>
       )}
 

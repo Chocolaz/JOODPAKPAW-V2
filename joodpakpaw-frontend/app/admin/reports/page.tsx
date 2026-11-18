@@ -1,12 +1,15 @@
 'use client'
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
   getAdminReports,
   getAdminReportById,
   takeReportAction,
+  createChatRoom,
 } from '@/lib/api'
+import { useAuth } from '@/app/_components/AuthContext'
 import type {
   AdminReportSummary,
   AdminReportDetail,
@@ -26,6 +29,7 @@ import {
   ChevronUp,
   ChevronDown,
   Star,
+  MessageCircle,
 } from 'lucide-react'
 import { formatDate, formatDateRelative } from '../_utils'
 import { StatusBadge } from '../_components/StatusBadge'
@@ -96,12 +100,12 @@ const ACTION_CONFIG: Record<
   warn_user: {
     label: 'Warn User',
     description:
-      'Send a warning notification to the reporter and property owner.',
+      'Send a warning notification to the responsible user.',
     icon: AlertTriangle,
     buttonClass:
       'border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100',
     confirmClass: 'bg-amber-600 text-white hover:bg-amber-700',
-    appliesTo: ['property'],
+    appliesTo: ['property', 'review'],
   },
   deactivate_property: {
     label: 'Deactivate Property',
@@ -192,6 +196,25 @@ const ACTION_PRESETS: Record<ReportAction, string[]> = {
   ],
 }
 
+function normalizeReportType(
+  rawType?: string | null,
+  detail?: Partial<AdminReportDetail>
+): 'property' | 'review' | 'unban_property' {
+  const t = (rawType ?? '').toLowerCase().trim()
+  if (t === 'property' || t === 'report_property' || t === 'property_report') {
+    return 'property'
+  }
+  if (t === 'review' || t === 'report_review' || t === 'review_report') {
+    return 'review'
+  }
+  if (t === 'unban' || t === 'unban_property' || t === 'appeal') {
+    return 'unban_property'
+  }
+  if (detail?.reportedReview) return 'review'
+  if (detail?.property) return 'property'
+  return 'unban_property'
+}
+
 // ── Report Detail Panel ───────────────────────────────────────────────────────
 function ReportPanel({
   id,
@@ -202,7 +225,10 @@ function ReportPanel({
   onClose: () => void
   onUpdated: () => void
 }) {
+  const router = useRouter()
+  const { user } = useAuth()
   const [detail, setDetail] = useState<AdminReportDetail | null>(null)
+  const [contacting, setContacting] = useState(false)
   const [loading, setLoading] = useState(true)
   const [lightbox, setLightbox] = useState<{
     src: string
@@ -216,10 +242,31 @@ function ReportPanel({
   useEffect(() => {
     setLoading(true)
     getAdminReportById(id)
-      .then(setDetail)
+      .then((res) =>
+        setDetail({
+          ...res,
+          type: normalizeReportType(res.type, res),
+        })
+      )
       .catch(() => toast.error('Failed to load report.'))
       .finally(() => setLoading(false))
   }, [id])
+
+  const handleContactReporter = async () => {
+    if (!detail || contacting) return
+    setContacting(true)
+    try {
+      const room = await createChatRoom(
+        detail.reporter.id,
+        `Hi ${detail.reporter.firstName}, I'm reaching out from JoodPakPaw Admin regarding Report #${detail.id} (${detail.reportCategoryLabel}).`
+      )
+      router.push(`/chat/${room.id}?from=/admin/reports`)
+    } catch {
+      toast.error('Failed to open chat with reporter.')
+    } finally {
+      setContacting(false)
+    }
+  }
 
   const handleConfirmAction = async () => {
     if (!detail || !pendingAction) return
@@ -309,14 +356,32 @@ function ReportPanel({
               </p>
               <div className="flex items-center gap-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
                 <UserAvatar user={detail.reporter} size="md" />
-                <div className="min-w-0">
-                  <p className="text-[13.5px] font-semibold text-gray-900">
-                    {detail.reporter.firstName} {detail.reporter.lastName}
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-[13.5px] font-semibold text-gray-900">
+                      {detail.reporter.firstName} {detail.reporter.lastName}
+                    </p>
+                    {detail.type === 'property' && detail.isVerifiedGuest && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700">
+                        Verified Guest
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-400 truncate">
                     {detail.reporter.email} · #{detail.reporter.id}
                   </p>
                 </div>
+                {detail.reporter.id !== user?.id && (
+                  <button
+                    type="button"
+                    onClick={handleContactReporter}
+                    disabled={contacting}
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-deep-teal hover:bg-gray-100 transition cursor-pointer disabled:opacity-50"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    {contacting ? 'Opening...' : 'Message'}
+                  </button>
+                )}
               </div>
             </section>
 
@@ -594,10 +659,16 @@ function ReportPanel({
                     ) : (
                       <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
                         <p className="text-sm font-semibold text-gray-800 mb-1">
-                          {ACTION_CONFIG[pendingAction].label}
+                          {pendingAction === 'dismiss_report' && detail.type === 'unban_property'
+                            ? 'Reject Appeal'
+                            : pendingAction === 'warn_user' && detail.type === 'review'
+                              ? 'Warn Review Author'
+                              : ACTION_CONFIG[pendingAction].label}
                         </p>
                         <p className="text-xs text-gray-500 leading-relaxed">
-                          {ACTION_CONFIG[pendingAction].description}
+                          {pendingAction === 'dismiss_report' && detail.type === 'unban_property'
+                            ? 'Reject this unban appeal. The host will be notified and their appeal quota (1/2, 2/2) will be updated.'
+                            : ACTION_CONFIG[pendingAction].description}
                         </p>
                       </div>
                     )}
@@ -680,6 +751,12 @@ function ReportPanel({
                       .map(([action, cfg]) => {
                         const Icon = cfg.icon
                         const isDanger = action === 'deactivate_all_properties'
+                        const displayLabel =
+                          action === 'dismiss_report' && detail.type === 'unban_property'
+                            ? 'Reject Appeal'
+                            : action === 'warn_user' && detail.type === 'review'
+                              ? 'Warn Author'
+                              : cfg.label
                         return (
                           <button
                             key={action}
@@ -687,7 +764,7 @@ function ReportPanel({
                             className={`flex items-center gap-2 w-full px-4 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${isDanger ? 'bg-red-600 text-white hover:bg-red-700 border-2 border-red-800/30' : cfg.buttonClass}`}
                           >
                             <Icon className="w-4 h-4 shrink-0" />
-                            <span className="text-left">{cfg.label}</span>
+                            <span className="text-left">{displayLabel}</span>
                           </button>
                         )
                       })}

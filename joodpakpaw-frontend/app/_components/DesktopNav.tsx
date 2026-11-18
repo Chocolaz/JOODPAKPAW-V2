@@ -7,7 +7,7 @@ import { useNotifications } from '@/app/_components/NotificationContext'
 import { useChat } from '@/app/_components/ChatContext'
 import { useAuth } from '@/app/_components/AuthContext'
 import { useAuthModal } from '@/app/_context/AuthModalContext'
-import { Home, Heart, Bell, User, MessageCircle } from 'lucide-react'
+import { Home, Heart, Bell, User, MessageCircle, ShieldCheck } from 'lucide-react'
 import { assetPath } from '@/lib/utils'
 
 const navItems = [
@@ -24,8 +24,9 @@ export function DesktopNav() {
   const normalizedPath = useNormalizedPathname()
   const { unreadCount } = useNotifications()
   const { unreadCount: chatUnreadCount } = useChat()
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
   const { openAuthModal } = useAuthModal()
+  const isAdmin = Boolean(user?.role?.some((r) => r.name === 'admin'))
 
   if (
     !VISIBLE_PATHS.includes(normalizedPath) &&
@@ -100,6 +101,19 @@ export function DesktopNav() {
               </Link>
             )
           })}
+          {isAdmin && (
+            <Link
+              href="/admin/dashboard"
+              className={`relative flex items-center gap-2 px-4 py-2 rounded-full text-sm lg:text-base xl:text-lg font-medium transition-colors duration-200 ${
+                normalizedPath.startsWith('/admin')
+                  ? 'bg-deep-teal/10 text-deep-teal'
+                  : 'text-neutral-gray hover:bg-gray-50 hover:text-deep-teal'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              Admin Center
+            </Link>
+          )}
         </div>
       </div>
     </nav>

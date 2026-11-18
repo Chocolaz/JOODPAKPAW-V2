@@ -125,8 +125,22 @@ export default function ProfilePage() {
   }
 
   const isHost = user?.role?.some((roleItem) => roleItem.name === 'host')
+  const isAdmin = user?.role?.some((roleItem) => roleItem.name === 'admin')
 
   const featureItems = [
+    ...(isAdmin
+      ? [
+          {
+            label: 'Admin Center',
+            description: 'Manage reports, KYC, and platform safety',
+            icon: ShieldCheck,
+            path: '/admin/dashboard',
+            color: 'bg-purple-50',
+            iconColor: 'text-purple-600',
+            grid: false,
+          },
+        ]
+      : []),
     {
       label: 'Pets',
       description: 'Manage your pet profiles',
