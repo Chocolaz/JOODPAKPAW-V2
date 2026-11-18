@@ -68,8 +68,8 @@ function ReportContent({
       await submitPropertyReport(propertyId, selectedCategory.id, description.trim(), images)
       toast.success("Report submitted. We'll review it shortly.")
       onClose()
-    } catch {
-      toast.error('Failed to submit report.')
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to submit report.')
     } finally {
       setSubmitting(false)
     }

@@ -22,6 +22,7 @@ import { useState } from 'react'
 import { ConfirmationModal } from '@/app/_components/ConfirmationModal'
 import { normalizeRoomCategories } from '@/lib/utils'
 import type { RoomCategories } from '@/types'
+import { useAuth } from '@/app/_components/AuthContext'
 import { useUserProfile } from '@/app/profile/_hooks/useUserProfile'
 import { PropertyBookingsSection } from './_components/PropertyBookingsSection'
 import { AddRoomCategoryForm } from '../_components/AddRoomCategoryForm'
@@ -38,6 +39,7 @@ import {
   Pencil,
   Ban,
   Clock,
+  ShieldCheck,
 } from 'lucide-react'
 import {
   Drawer,
@@ -71,6 +73,7 @@ const fadeUp = {
 export default function HostPropertyDetailPage() {
   const { property, loading, error, refreshProperty } =
     usePropertyLoader(getHostPropertyById)
+  const { user } = useAuth()
   const { profile } = useUserProfile()
   const router = useRouter()
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
@@ -205,6 +208,9 @@ export default function HostPropertyDetailPage() {
         isOpen={isAppealOpen}
         onOpenChange={setIsAppealOpen}
         onSuccess={refreshProperty}
+        quota={property.unbanRequestCount ?? 0}
+        suspensionReason={property.suspensionReason}
+        lastAppealNote={property.lastAppealNote}
       />
 
       <RoomCalendarDrawer
@@ -214,6 +220,29 @@ export default function HostPropertyDetailPage() {
         onOpenChange={(open) => !open && setCalendarRoom(null)}
         onSuccess={refreshProperty}
       />
+
+      {/* Identity Verification Trust Banner */}
+      {!user?.isVerifiedHost && !profile?.isVerifiedHost && (
+        <div className="mx-4 md:mx-8 lg:mx-2 mb-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-xl bg-blue-100 text-blue-600 shrink-0">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-deep-teal">Verify Your Host Identity</h4>
+              <p className="text-xs text-neutral-gray mt-0.5">
+                Build trust with pet owners and get a verified badge by completing government ID verification.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => router.push('/profile/verification')}
+            className="shrink-0 px-4 py-2 bg-deep-teal hover:bg-deep-teal/90 text-white rounded-xl text-xs font-semibold transition-colors shadow-sm self-start sm:self-auto cursor-pointer"
+          >
+            Verify Identity
+          </button>
+        </div>
+      )}
 
       {/* Gallery */}
       <motion.div
@@ -235,38 +264,84 @@ export default function HostPropertyDetailPage() {
           {/* Banned banner */}
           {property.isBannedByAdmin && (
             profile?.isBannedAllProperties ? (
-              <div className="mt-4 bg-red-50 border border-red-200 rounded-2xl px-5 py-4 flex items-start gap-3 lg:hidden">
-                <Ban className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-red-700">Your account has been suspended</p>
-                  <p className="text-xs text-red-500 mt-0.5">Submit an account-level appeal from your host dashboard.</p>
+              <div className="mt-4 bg-red-50 border border-red-200 rounded-2xl px-5 py-4 flex flex-col gap-2 lg:hidden">
+                <div className="flex items-start gap-3">
+                  <Ban className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-red-700">Your account has been suspended</p>
+                    <p className="text-xs text-red-500 mt-0.5">Submit an account-level appeal from your host dashboard.</p>
+                  </div>
                 </div>
+                {profile?.suspensionReason && (
+                  <div className="text-xs bg-red-100/70 text-red-800 rounded-lg p-2.5 border border-red-200">
+                    <span className="font-semibold">Reason: </span>
+                    {profile.suspensionReason}
+                  </div>
+                )}
+                {profile?.lastAppealNote && (
+                  <div className="text-xs bg-gray-100 text-gray-700 rounded-lg p-2.5 border border-gray-200">
+                    <span className="font-semibold">Previous Appeal Decision: </span>
+                    {profile.lastAppealNote}
+                  </div>
+                )}
               </div>
             ) : property.hasPendingUnbanRequest ? (
-              <div className="mt-4 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 flex items-center gap-3 lg:hidden">
-                <Clock className="w-5 h-5 text-amber-500 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-amber-700">Appeal Under Review</p>
-                  <p className="text-xs text-amber-600 mt-0.5">We'll notify you once it's been reviewed.</p>
+              <div className="mt-4 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 flex flex-col gap-2 lg:hidden">
+                <div className="flex items-center gap-3">
+                  <Clock className="w-5 h-5 text-amber-500 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-amber-700">Appeal Under Review</p>
+                    <p className="text-xs text-amber-600 mt-0.5">We'll notify you once it's been reviewed.</p>
+                  </div>
                 </div>
+                {property.suspensionReason && (
+                  <div className="text-xs bg-amber-100/70 text-amber-900 rounded-lg p-2.5 border border-amber-200">
+                    <span className="font-semibold">Reason: </span>
+                    {property.suspensionReason}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="mt-4 bg-red-50 border border-red-200 rounded-2xl px-5 py-4 flex flex-col gap-3 lg:hidden">
                 <div className="flex items-start gap-3">
                   <Ban className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-red-700">This property has been suspended</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-red-700">This property has been suspended</p>
+                      <span
+                        className={`shrink-0 inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          (property.unbanRequestCount ?? 0) >= 2
+                            ? 'bg-gray-800 text-white'
+                            : 'bg-white text-red-600 border border-red-200'
+                        }`}
+                      >
+                        <Clock className="w-3 h-3" />
+                        {2 - (property.unbanRequestCount ?? 0)}/2
+                      </span>
+                    </div>
                     <p className="text-xs text-red-500 mt-0.5">
                       {(property.unbanRequestCount ?? 0) >= 2
                         ? 'Maximum appeals reached.'
                         : 'It is no longer visible to guests. You may submit an appeal to request a review.'}
                     </p>
+                    {property.suspensionReason && (
+                      <div className="mt-2 text-xs bg-red-100/70 text-red-800 rounded-lg p-2.5 border border-red-200">
+                        <span className="font-semibold">Reason: </span>
+                        {property.suspensionReason}
+                      </div>
+                    )}
+                    {property.lastAppealNote && (
+                      <div className="mt-1.5 text-xs bg-gray-100 text-gray-700 rounded-lg p-2.5 border border-gray-200">
+                        <span className="font-semibold">Previous Appeal Decision: </span>
+                        {property.lastAppealNote}
+                      </div>
+                    )}
                   </div>
                 </div>
                 {(property.unbanRequestCount ?? 0) < 2 && (
                   <button
                     onClick={() => setIsAppealOpen(true)}
-                    className="w-full text-sm font-semibold text-red-600 border border-red-300 rounded-xl py-2.5 hover:bg-red-100 transition-colors"
+                    className="w-full text-sm font-semibold text-red-600 border border-red-300 rounded-xl py-2.5 hover:bg-red-100 transition-colors cursor-pointer"
                   >
                     Submit Appeal
                   </button>
@@ -478,32 +553,79 @@ export default function HostPropertyDetailPage() {
               {/* Suspended info + appeal (desktop, banned only) */}
               {property.isBannedByAdmin && (
                 profile?.isBannedAllProperties ? (
-                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
-                    <Ban className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-red-700">Your account has been suspended</p>
-                      <p className="text-xs text-red-500 mt-1">Submit an account-level appeal from your host dashboard.</p>
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex flex-col gap-2">
+                    <div className="flex items-start gap-3">
+                      <Ban className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-red-700">Your account has been suspended</p>
+                        <p className="text-xs text-red-500 mt-1">Submit an account-level appeal from your host dashboard.</p>
+                      </div>
                     </div>
+                    {profile?.suspensionReason && (
+                      <div className="text-xs bg-red-100/70 text-red-800 rounded-lg p-2.5 border border-red-200 mt-1">
+                        <span className="font-semibold">Reason: </span>
+                        {profile.suspensionReason}
+                      </div>
+                    )}
+                    {profile?.lastAppealNote && (
+                      <div className="text-xs bg-gray-100 text-gray-700 rounded-lg p-2.5 border border-gray-200">
+                        <span className="font-semibold">Previous Appeal Decision: </span>
+                        {profile.lastAppealNote}
+                      </div>
+                    )}
                   </div>
                 ) : property.hasPendingUnbanRequest ? (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
-                    <Clock className="w-4 h-4 text-amber-500 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-amber-700">Appeal Under Review</p>
-                      <p className="text-xs text-amber-600 mt-0.5">We'll notify you once it's been reviewed.</p>
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col gap-2">
+                    <div className="flex items-center gap-3">
+                      <Clock className="w-4 h-4 text-amber-500 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-amber-700">Appeal Under Review</p>
+                        <p className="text-xs text-amber-600 mt-0.5">We'll notify you once it's been reviewed.</p>
+                      </div>
                     </div>
+                    {property.suspensionReason && (
+                      <div className="text-xs bg-amber-100/70 text-amber-900 rounded-lg p-2.5 border border-amber-200 mt-1">
+                        <span className="font-semibold">Reason: </span>
+                        {property.suspensionReason}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-red-700">Suspended Property</p>
+                      <span
+                        className={`shrink-0 inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          (property.unbanRequestCount ?? 0) >= 2
+                            ? 'bg-gray-800 text-white'
+                            : 'bg-white text-red-600 border border-red-200'
+                        }`}
+                      >
+                        <Clock className="w-3 h-3" />
+                        {2 - (property.unbanRequestCount ?? 0)}/2
+                      </span>
+                    </div>
                     <p className="text-xs text-red-500 leading-relaxed">
                       {(property.unbanRequestCount ?? 0) >= 2
                         ? 'Maximum appeals reached.'
                         : 'It is no longer visible to guests. You may submit an appeal to request a review.'}
                     </p>
+                    {property.suspensionReason && (
+                      <div className="text-xs bg-red-100/70 text-red-800 rounded-lg p-2.5 border border-red-200">
+                        <span className="font-semibold">Reason: </span>
+                        {property.suspensionReason}
+                      </div>
+                    )}
+                    {property.lastAppealNote && (
+                      <div className="text-xs bg-gray-100 text-gray-700 rounded-lg p-2.5 border border-gray-200">
+                        <span className="font-semibold">Previous Appeal Decision: </span>
+                        {property.lastAppealNote}
+                      </div>
+                    )}
                     {(property.unbanRequestCount ?? 0) < 2 && (
                       <button
                         onClick={() => setIsAppealOpen(true)}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold border border-red-300 text-red-600 hover:bg-red-100 transition"
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold border border-red-300 text-red-600 hover:bg-red-100 transition cursor-pointer"
                       >
                         <Ban className="w-4 h-4" />
                         Submit Appeal

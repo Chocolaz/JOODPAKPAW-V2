@@ -10,5 +10,5 @@ export interface VerificationData {
 }
 
 export interface VerificationResponse {
-  verification: VerificationData
+  verification: VerificationData | null
 }

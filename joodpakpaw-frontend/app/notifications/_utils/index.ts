@@ -3,8 +3,22 @@ import { Bell } from 'lucide-react'
 import { AppNotification } from '@/types'
 import { ACTION_CONFIG, BOOKING_DETAIL_ACTIONS, Tab } from '../_constants'
 
+export function normalizeActionName(actionName?: string): string {
+  if (!actionName) return ''
+  const name = actionName.toLowerCase()
+  if (name.includes('cancel')) return 'cancel'
+  if (name.includes('reminder')) return 'reminder'
+  if (name.includes('payment') || name.includes('slip')) return 'payment'
+  if (name.includes('review')) return 'review'
+  if (name.includes('booking')) return 'booking'
+  if (name.includes('kyc') || name.includes('verification') || name.includes('identity')) return 'verification'
+  if (name.includes('report') || name.includes('ban') || name.includes('appeal') || name.includes('ticket')) return 'report'
+  return name
+}
+
 export function getActionConfig(actionName?: string, roleName?: string) {
-  const entry = ACTION_CONFIG[actionName ?? '']
+  const normalized = normalizeActionName(actionName)
+  const entry = ACTION_CONFIG[normalized] ?? ACTION_CONFIG[actionName ?? '']
   if (!entry) return { Icon: Bell, color: 'text-deep-teal', bg: 'bg-deep-teal/10' }
   return roleName === 'host' ? entry.host : entry.guest
 }
@@ -28,10 +42,11 @@ export function groupByDate(
 }
 
 export function getNotificationRoute(notification: AppNotification): string | null {
-  const { actionName, roleName, referenceId, referenceTable } = notification
+  const { roleName, referenceId, referenceTable } = notification
+  const actionName = normalizeActionName(notification.actionName)
 
   if (
-    (BOOKING_DETAIL_ACTIONS.has(actionName ?? '') || referenceTable === 'bookings') &&
+    (BOOKING_DETAIL_ACTIONS.has(actionName) || referenceTable === 'bookings' || referenceTable === 'booking') &&
     referenceId
   ) {
     return roleName === 'host'
@@ -39,12 +54,10 @@ export function getNotificationRoute(notification: AppNotification): string | nu
       : `/profile/bookings/${referenceId}`
   }
 
-  if (actionName === 'report' && roleName === 'host') {
-    return '/profile/host'
-  }
-
-  if (actionName === 'report' && roleName === 'guest' && referenceId) {
-    return `/profile/reports/${referenceId}`
+  if (actionName === 'report') {
+    if (roleName === 'host') return '/profile/host'
+    if (referenceId) return `/profile/reports/${referenceId}`
+    return '/profile/reports'
   }
 
   if (actionName === 'verification') {

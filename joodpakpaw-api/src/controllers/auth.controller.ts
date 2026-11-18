@@ -7,6 +7,7 @@ import { config } from '../config/env';
 import { AppError, FieldValidationError } from '../middlewares/errorHandler';
 import { UserRoleInfo } from '../middlewares/auth.middleware';
 import { uploadImageAsWebp, deleteObjectFromS3 } from '../services/storage.service';
+import { getAccountAppealCycleStats } from './report.controller';
 
 // In-memory store for OTP reference codes & active refresh tokens (cloud free-tier compatible)
 const otpRefCodeStore = new Map<string, { refCode: string; expiresAt: number }>();
@@ -248,7 +249,7 @@ export async function signUp(
       update: {},
       create: {
         name: 'guest',
-        label: 'ผู้ใช้ทั่วไป / ผู้ฝากเลี้ยง',
+        label: 'General User / Pet Owner',
         description: 'Guest / Pet Owner role',
       },
     });
@@ -882,26 +883,8 @@ export async function getProfile(
       throw new AppError('User not found.', 404, 'DB-1002');
     }
 
-    // Calculate unbanAllPropertiesRequestCount and hasPendingUnbanAllPropertiesRequest
-    const unbanAllReports = await prisma.report.findMany({
-      where: {
-        reporterId: user.id,
-        propertyId: null,
-        deletedAt: null,
-        reportCategory: {
-          type: 'unban_property',
-        },
-      },
-      select: {
-        id: true,
-        status: true,
-      },
-    });
-
-    const unbanAllPropertiesRequestCount = unbanAllReports.length;
-    const hasPendingUnbanAllPropertiesRequest = unbanAllReports.some(
-      (r) => r.status === 'pending'
-    );
+    // Cycle-aware unban quota, suspension reason, and last appeal note
+    const appealStats = await getAccountAppealCycleStats(user.id);
 
     const roles = formatUserRoles(user.userRoles, user.isBecomeToHost);
 
@@ -917,8 +900,10 @@ export async function getProfile(
       isVerifiedHost: user.isVerifiedHost,
       isBannedReview: user.isBannedReview,
       isBannedAllProperties: user.isBannedAllProperties,
-      unbanAllPropertiesRequestCount,
-      hasPendingUnbanAllPropertiesRequest,
+      unbanAllPropertiesRequestCount: appealStats.unbanAllPropertiesRequestCount,
+      hasPendingUnbanAllPropertiesRequest: appealStats.hasPendingUnbanAllPropertiesRequest,
+      suspensionReason: appealStats.suspensionReason,
+      lastAppealNote: appealStats.lastAppealNote,
       role: roles,
     };
 
@@ -1259,26 +1244,8 @@ export async function updateUserProfile(
       },
     });
 
-    // Calculate unbanAllPropertiesRequestCount and hasPendingUnbanAllPropertiesRequest
-    const unbanAllReports = await prisma.report.findMany({
-      where: {
-        reporterId: updatedUser.id,
-        propertyId: null,
-        deletedAt: null,
-        reportCategory: {
-          type: 'unban_property',
-        },
-      },
-      select: {
-        id: true,
-        status: true,
-      },
-    });
-
-    const unbanAllPropertiesRequestCount = unbanAllReports.length;
-    const hasPendingUnbanAllPropertiesRequest = unbanAllReports.some(
-      (r) => r.status === 'pending'
-    );
+    // Cycle-aware unban quota, suspension reason, and last appeal note
+    const appealStats = await getAccountAppealCycleStats(updatedUser.id);
 
     const roles = formatUserRoles(
       updatedUser.userRoles,
@@ -1297,8 +1264,10 @@ export async function updateUserProfile(
       isVerifiedHost: updatedUser.isVerifiedHost,
       isBannedReview: updatedUser.isBannedReview,
       isBannedAllProperties: updatedUser.isBannedAllProperties,
-      unbanAllPropertiesRequestCount,
-      hasPendingUnbanAllPropertiesRequest,
+      unbanAllPropertiesRequestCount: appealStats.unbanAllPropertiesRequestCount,
+      hasPendingUnbanAllPropertiesRequest: appealStats.hasPendingUnbanAllPropertiesRequest,
+      suspensionReason: appealStats.suspensionReason,
+      lastAppealNote: appealStats.lastAppealNote,
       role: roles,
     };
 

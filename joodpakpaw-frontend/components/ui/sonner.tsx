@@ -25,7 +25,7 @@ export function Toaster({ ...props }: ToasterProps) {
         classNames: {
           toast:
             'flex items-start gap-3 text-sm font-medium leading-tight transition-opacity duration-300 ease-in-out',
-          description: 'text-sm text-neutral-500 mt-0.5',
+          description: '!text-sm !text-gray-700 mt-0.5 leading-snug',
           icon: 'w-6 h-6 flex items-center justify-center',
           actionButton: 'bg-black text-white px-3 py-1 rounded-md text-sm',
           cancelButton:

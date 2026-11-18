@@ -125,8 +125,22 @@ export default function ProfilePage() {
   }
 
   const isHost = user?.role?.some((roleItem) => roleItem.name === 'host')
+  const isAdmin = user?.role?.some((roleItem) => roleItem.name === 'admin')
 
   const featureItems = [
+    ...(isAdmin
+      ? [
+          {
+            label: 'Admin Center',
+            description: 'Manage reports, KYC, and platform safety',
+            icon: ShieldCheck,
+            path: '/admin/dashboard',
+            color: 'bg-purple-50',
+            iconColor: 'text-purple-600',
+            grid: false,
+          },
+        ]
+      : []),
     {
       label: 'Pets',
       description: 'Manage your pet profiles',
@@ -163,15 +177,15 @@ export default function ProfilePage() {
       iconColor: 'text-green-600',
       grid: false,
     },
-    ...(isHost ? [{
+    {
       label: 'Verification',
-      description: 'Get a verified badge',
+      description: user?.isVerifiedHost ? 'Verified identity' : 'Get a verified badge',
       icon: ShieldCheck,
       path: '/profile/verification',
       color: 'bg-blue-50',
       iconColor: 'text-blue-500',
       grid: false,
-    }] : []),
+    },
   ]
 
   const ProfileCard = (
@@ -226,9 +240,9 @@ export default function ProfilePage() {
                 : 'Guest'}
             </h3>
             {isAuthenticated && user?.isVerifiedHost && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-500 text-xs font-medium">
-                <BadgeCheck className="w-3 h-3" />
-                Verified
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200/60 text-xs font-medium">
+                <BadgeCheck className="w-3.5 h-3.5" />
+                Verified identity
               </span>
             )}
           </div>

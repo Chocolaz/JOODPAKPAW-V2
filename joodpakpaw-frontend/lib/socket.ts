@@ -5,6 +5,13 @@ function getSocketUrl(): string {
   if (process.env.NEXT_PUBLIC_SOCKET_URL) {
     return process.env.NEXT_PUBLIC_SOCKET_URL
   }
+  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+    try {
+      return new URL(process.env.NEXT_PUBLIC_API_BASE_URL).origin
+    } catch {
+      // fallback
+    }
+  }
   if (typeof window !== 'undefined') {
     return window.location.origin
   }
@@ -44,7 +51,7 @@ export function connectSocket(): Socket | null {
     path: SOCKET_PATH,
     query: { token },
     auth: { token },
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'],
     upgrade: true,
     reconnection: true,
     reconnectionAttempts: Infinity,

@@ -23,6 +23,7 @@ import {
   Star,
   Ban,
   Clock,
+  ShieldCheck,
 } from 'lucide-react'
 import { HostBanner } from '@/app/profile/_components/HostBanner'
 import { useUserProfile } from '@/app/profile/_hooks/useUserProfile'
@@ -97,7 +98,33 @@ export default function HostPage() {
         onOpenChange={setIsAppealOpen}
         reportCategoryId={UNBAN_ALL_CATEGORY_ID}
         onSuccess={refreshProfile}
+        quota={profile?.unbanAllPropertiesRequestCount ?? 0}
+        suspensionReason={profile?.suspensionReason}
+        lastAppealNote={profile?.lastAppealNote}
       />
+
+      {/* Identity Verification Trust Banner */}
+      {!user?.isVerifiedHost && !profile?.isVerifiedHost && (
+        <div className="shrink-0 mx-4 lg:mx-12 mt-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-xl bg-blue-100 text-blue-600 shrink-0">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-deep-teal">Verify Your Host Identity</h4>
+              <p className="text-xs text-neutral-gray mt-0.5">
+                Build trust with pet owners and get a verified badge by completing government ID verification.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => router.push('/profile/verification')}
+            className="shrink-0 px-4 py-2 bg-deep-teal hover:bg-deep-teal/90 text-white rounded-xl text-xs font-semibold transition-colors shadow-sm self-start sm:self-auto cursor-pointer"
+          >
+            Verify Identity
+          </button>
+        </div>
+      )}
 
       {/* Mobile banner — shrink-0 so it takes its natural height */}
       <div className="lg:hidden shrink-0">
@@ -113,16 +140,24 @@ export default function HostPage() {
       {/* Banned all properties banner */}
       {profile?.isBannedAllProperties &&
         (profile.hasPendingUnbanAllPropertiesRequest ? (
-          <div className="shrink-0 mx-4 lg:mx-12 mt-4 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 flex items-center gap-3">
-            <Clock className="w-5 h-5 text-amber-500 shrink-0" />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-amber-700">
-                Appeal Under Review
-              </p>
-              <p className="text-xs text-amber-600 mt-0.5">
-                We'll notify you once it's been reviewed.
-              </p>
+          <div className="shrink-0 mx-4 lg:mx-12 mt-4 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 flex flex-col gap-2">
+            <div className="flex items-center gap-3">
+              <Clock className="w-5 h-5 text-amber-500 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-amber-700">
+                  Appeal Under Review
+                </p>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  We'll notify you once it's been reviewed.
+                </p>
+              </div>
             </div>
+            {profile.suspensionReason && (
+              <div className="text-xs bg-amber-100/70 text-amber-900 rounded-lg p-2.5 border border-amber-200 mt-1">
+                <span className="font-semibold">Reason: </span>
+                {profile.suspensionReason}
+              </div>
+            )}
           </div>
         ) : (
           <div className="shrink-0 mx-4 lg:mx-12 mt-4 bg-red-50 border border-red-200 rounded-2xl px-5 py-4 flex flex-col gap-3">
@@ -149,6 +184,18 @@ export default function HostPage() {
                     ? 'Maximum appeals reached. No further appeals can be submitted.'
                     : 'All your properties have been deactivated and are no longer visible to guests. You may submit an appeal to request a review.'}
                 </p>
+                {profile.suspensionReason && (
+                  <div className="mt-2 text-xs bg-red-100/70 text-red-800 rounded-lg p-2.5 border border-red-200">
+                    <span className="font-semibold">Reason: </span>
+                    {profile.suspensionReason}
+                  </div>
+                )}
+                {profile.lastAppealNote && (
+                  <div className="mt-1.5 text-xs bg-gray-100 text-gray-700 rounded-lg p-2.5 border border-gray-200">
+                    <span className="font-semibold">Previous Appeal Decision: </span>
+                    {profile.lastAppealNote}
+                  </div>
+                )}
               </div>
             </div>
             {(profile.unbanAllPropertiesRequestCount ?? 0) < 2 && (

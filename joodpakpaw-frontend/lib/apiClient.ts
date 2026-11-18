@@ -80,18 +80,24 @@ async function request<T>({
         if (!silentAuth) authErrorEmitter.emit(error)
         throw error
       }
-    } else if (response.status === 403) {
-      throw new Error('Access forbidden.')
-    } else if (response.status === 404) {
-      throw new Error('Resource not found.')
     }
 
     const text = await response.text()
-    const data = text ? JSON.parse(text) : null
+    let data: any = null
+    try {
+      data = text ? JSON.parse(text) : null
+    } catch {
+      data = text
+    }
 
     if (!response.ok) {
       throw new ApiError(
-        data?.message || 'Something went wrong',
+        data?.message ||
+          (response.status === 403
+            ? 'Access forbidden.'
+            : response.status === 404
+            ? 'Resource not found.'
+            : 'Something went wrong'),
         data?.code,
         data?.errors
       )

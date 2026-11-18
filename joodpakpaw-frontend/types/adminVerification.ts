@@ -17,6 +17,9 @@ export interface AdminVerificationSummary {
 export interface AdminVerificationDetail extends AdminVerificationSummary {
   rejectDescription: string | null
   previousRejectDescription: string | null
+  autoScreenReason?: string | null
+  isAutoApproved?: boolean
+  autoApprovedReason?: string | null
   idPhoto: string
   selfieWithId: string
 }
@@ -27,5 +30,10 @@ export interface AdminVerificationsResponse {
   data: AdminVerificationSummary[]
   limit: number
   page: number
-  attributes: { status: string }
+  attributes: {
+    status?: string
+    pendingCount?: number
+    approvedCount?: number
+    rejectedCount?: number
+  }
 }

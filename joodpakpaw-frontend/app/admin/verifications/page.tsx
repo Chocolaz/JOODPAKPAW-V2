@@ -24,6 +24,7 @@ import {
   Clock,
   ShieldCheck,
   ShieldX,
+  ImageOff,
 } from 'lucide-react'
 import { formatDate, formatDateRelative } from '../_utils'
 import { RefreshBar } from '../_components/RefreshBar'
@@ -56,6 +57,13 @@ const STATUS_CONFIG = {
   },
 }
 
+const REJECTION_PRESETS = [
+  'ID photo is blurry or cropped',
+  'Selfie does not clearly show face and ID',
+  'ID document appears expired',
+  'Name on ID does not match account',
+] as const
+
 // ── Side Panel ───────────────────────────────────────────────────────────────
 function VerificationPanel({
   id,
@@ -75,9 +83,11 @@ function VerificationPanel({
     src: string
     label: string
   } | null>(null)
+  const [failedPhotos, setFailedPhotos] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     setLoading(true)
+    setFailedPhotos({})
     getAdminVerificationById(id)
       .then((res) => setDetail(res.verification))
       .catch(() => toast.error('Failed to load verification.'))
@@ -94,8 +104,8 @@ function VerificationPanel({
       )
       onUpdated()
       onClose()
-    } catch {
-      toast.error('Failed to approve.')
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to approve.')
     } finally {
       setActing(false)
     }
@@ -112,8 +122,8 @@ function VerificationPanel({
       toast.success('Rejected — host has been notified.')
       onUpdated()
       onClose()
-    } catch {
-      toast.error('Failed to reject.')
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to reject.')
     } finally {
       setActing(false)
     }
@@ -218,6 +228,39 @@ function VerificationPanel({
               </dl>
             </section>
 
+            {/* Auto-Approved by System */}
+            {detail.status === 'approved' && detail.isAutoApproved && (
+              <section>
+                <p className="text-[10px] font-semibold text-emerald-600 uppercase tracking-widest mb-3">
+                  System Auto-Approval
+                </p>
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                  <p className="text-sm font-medium text-emerald-800">
+                    Approved automatically by system
+                  </p>
+                  {detail.autoApprovedReason && (
+                    <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
+                      {detail.autoApprovedReason}
+                    </p>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* AI Pre-Screen Flag */}
+            {detail.status === 'pending' && detail.autoScreenReason && (
+              <section>
+                <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-widest mb-3">
+                  Auto-Screen Flag
+                </p>
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                  <p className="text-sm text-amber-800 leading-relaxed">
+                    {detail.autoScreenReason}
+                  </p>
+                </div>
+              </section>
+            )}
+
             {/* Previous rejection */}
             {detail.previousRejectDescription && (
               <section>
@@ -255,31 +298,49 @@ function VerificationPanel({
                 {[
                   { label: 'ID Photo', src: detail.idPhoto },
                   { label: 'Selfie with ID', src: detail.selfieWithId },
-                ].map((photo) => (
-                  <div key={photo.label} className="flex flex-col gap-1.5">
-                    <span className="text-xs font-medium text-gray-500">
-                      {photo.label}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLightbox({ src: photo.src, label: photo.label })
-                      }
-                      className="relative aspect-[4/3] rounded-xl overflow-hidden bg-gray-100 group cursor-zoom-in w-full"
-                    >
-                      <Image
-                        src={photo.src}
-                        alt={photo.label}
-                        fill
-                        className="object-cover transition-transform duration-300 group-hover:scale-105"
-                        unoptimized
-                      />
-                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <ZoomIn className="w-5 h-5 text-white" />
-                      </div>
-                    </button>
-                  </div>
-                ))}
+                ].map((photo) => {
+                  const isUnavailable = !photo.src || failedPhotos[photo.label]
+                  return (
+                    <div key={photo.label} className="flex flex-col gap-1.5">
+                      <span className="text-xs font-medium text-gray-500">
+                        {photo.label}
+                      </span>
+                      {isUnavailable ? (
+                        <div className="aspect-[4/3] rounded-xl bg-gray-50 border border-dashed border-gray-200 flex flex-col items-center justify-center gap-1.5 px-3 text-center">
+                          <ImageOff className="w-5 h-5 text-gray-300" />
+                          <span className="text-[11px] font-medium text-gray-400">
+                            Purged after resubmission
+                          </span>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setLightbox({ src: photo.src, label: photo.label })
+                          }
+                          className="relative aspect-[4/3] rounded-xl overflow-hidden bg-gray-100 group cursor-zoom-in w-full"
+                        >
+                          <Image
+                            src={photo.src}
+                            alt={photo.label}
+                            fill
+                            className="object-cover transition-transform duration-300 group-hover:scale-105"
+                            unoptimized
+                            onError={() =>
+                              setFailedPhotos((prev) => ({
+                                ...prev,
+                                [photo.label]: true,
+                              }))
+                            }
+                          />
+                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <ZoomIn className="w-5 h-5 text-white" />
+                          </div>
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </section>
 
@@ -306,6 +367,18 @@ function VerificationPanel({
                         rows={3}
                         className="w-full border border-red-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 bg-white resize-none focus:outline-none focus:ring-1 focus:ring-red-300 focus:border-red-300"
                       />
+                      <div className="flex flex-wrap gap-1.5 mt-2.5">
+                        {REJECTION_PRESETS.map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => setRejectReason(preset)}
+                            className="text-xs px-2.5 py-1 rounded-full bg-white border border-red-200 text-red-700 hover:bg-red-50 transition cursor-pointer text-left"
+                          >
+                            {preset}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <button
@@ -394,6 +467,7 @@ export default function AdminVerificationsPage() {
   const [data, setData] = useState<AdminVerificationSummary[]>([])
   const [totalRows, setTotalRows] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
+  const [serverPendingCount, setServerPendingCount] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
@@ -433,6 +507,9 @@ export default function AdminVerificationsPage() {
       })
       setTotalRows(res.totalRows)
       setTotalPages(res.totalPages)
+      if (res.attributes?.pendingCount !== undefined) {
+        setServerPendingCount(res.attributes.pendingCount)
+      }
       const sorted = [...res.data].sort((a, b) => {
         let aVal: string | number
         let bVal: string | number
@@ -472,7 +549,10 @@ export default function AdminVerificationsPage() {
     }
   }, [fetchData])
 
-  const pendingCount = data.filter((d) => d.status === 'pending').length
+  const pendingCount =
+    serverPendingCount !== null
+      ? serverPendingCount
+      : data.filter((d) => d.status === 'pending').length
 
   return (
     <div>

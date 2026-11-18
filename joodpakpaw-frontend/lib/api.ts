@@ -376,18 +376,28 @@ export const getHostProfile = async (hostId: string): Promise<HostProfileRespons
 }
 
 // --- Verification ---
-export const getVerificationStatus = (): Promise<VerificationResponse> =>
-  request<VerificationResponse>({
+export const getVerificationStatus = async (): Promise<VerificationResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/user-verifications/me',
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Verification Status',
   })
+  const verification =
+    res?.data?.verification !== undefined
+      ? res.data.verification
+      : res?.verification !== undefined
+      ? res.verification
+      : res?.data !== undefined
+      ? res.data
+      : null
+  return { verification }
+}
 
 export const submitVerification = async (
   idPhoto: File,
   selfieWithId: File
-): Promise<void> => {
+): Promise<{ verification: VerificationData; autoApproved?: boolean }> => {
   const [compressedIdPhoto, compressedSelfie] = await Promise.all([
     compressImageToWebP(idPhoto),
     compressImageToWebP(selfieWithId),
@@ -395,7 +405,7 @@ export const submitVerification = async (
   const formData = new FormData()
   formData.append('idPhoto', compressedIdPhoto)
   formData.append('selfieWithId', compressedSelfie)
-  return request<void>({
+  return request<{ verification: VerificationData; autoApproved?: boolean }>({
     endpoint: 'api/v1/user-verifications',
     method: 'POST',
     body: formData,
@@ -627,40 +637,55 @@ export const getAllPetSizeCategories = getPetSizeCategories
 export const createChatRoom = async (
   participantId: number,
   content?: string,
+  propertyIdOrImages?: number | File[],
   images?: File[]
 ): Promise<ChatRoom> => {
+  let propertyId: number | undefined
+  let actualImages: File[] | undefined = images
+
+  if (typeof propertyIdOrImages === 'number') {
+    propertyId = propertyIdOrImages
+  } else if (Array.isArray(propertyIdOrImages)) {
+    actualImages = propertyIdOrImages
+  }
+
   const formData = new FormData()
   formData.append('participantId', String(participantId))
   if (content) formData.append('content', content)
-  if (images && images.length > 0) {
-    const compressedImages = await compressImagesToWebP(images)
+  if (propertyId) formData.append('propertyId', String(propertyId))
+  if (actualImages && actualImages.length > 0) {
+    const compressedImages = await compressImagesToWebP(actualImages)
     compressedImages.forEach((img) => formData.append('images', img))
   }
-  return request<ChatRoom>({
+  const res = await request<any>({
     endpoint: 'api/v1/chat-rooms',
     method: 'POST',
     body: formData,
     requiresAuth: true,
     errorContext: 'Create Chat Room',
   })
+  return res?.data?.chatRoom ?? res?.chatRoom ?? res?.data ?? res
 }
 
-export const getChatRooms = (): Promise<ChatRoomsResponse> => {
-  return request<ChatRoomsResponse>({
+export const getChatRooms = async (): Promise<ChatRoomsResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/chat-rooms',
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Chat Rooms',
   })
+  const rooms = res?.data?.chatRooms ?? res?.chatRooms ?? (Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [])
+  return { chatRooms: rooms }
 }
 
-export const getChatRoomById = (id: number): Promise<ChatRoomDetail> => {
-  return request<ChatRoomDetail>({
+export const getChatRoomById = async (id: number): Promise<ChatRoomDetail> => {
+  const res = await request<any>({
     endpoint: `api/v1/chat-rooms/${id}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Chat Room',
   })
+  return res?.data?.chatRoom ?? res?.chatRoom ?? res?.data ?? res
 }
 
 export const sendChatMessage = async (
@@ -668,26 +693,29 @@ export const sendChatMessage = async (
   content: string,
   images?: File[]
 ): Promise<ChatMessage> => {
+  let res: any
   if (images && images.length > 0) {
     const compressedImages = await compressImagesToWebP(images)
     const formData = new FormData()
     if (content) formData.append('content', content)
     compressedImages.forEach((img) => formData.append('images', img))
-    return request<ChatMessage>({
+    res = await request<any>({
       endpoint: `api/v1/chat-rooms/${roomId}/messages`,
       method: 'POST',
       body: formData,
       requiresAuth: true,
       errorContext: 'Send Message',
     })
+  } else {
+    res = await request<any>({
+      endpoint: `api/v1/chat-rooms/${roomId}/messages`,
+      method: 'POST',
+      body: { content },
+      requiresAuth: true,
+      errorContext: 'Send Message',
+    })
   }
-  return request<ChatMessage>({
-    endpoint: `api/v1/chat-rooms/${roomId}/messages`,
-    method: 'POST',
-    body: { content },
-    requiresAuth: true,
-    errorContext: 'Send Message',
-  })
+  return res?.data?.message ?? res?.message ?? res?.data ?? res
 }
 
 export const markChatMessagesAsRead = (roomId: number): Promise<void> => {
@@ -1422,12 +1450,32 @@ export const replyToBookingReview = async (
 }
 
 // --- Notification Functions ---
-export const getNotifications = (): Promise<NotificationsResponse> => {
-  return request<NotificationsResponse>({
+export const getNotifications = async (): Promise<NotificationsResponse> => {
+  const res = await request<any>({
     endpoint: 'api/v1/notifications',
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Notifications',
+  })
+  const notifs = res?.data?.notifications ?? res?.notifications ?? (Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [])
+  return { notifications: notifs }
+}
+
+export const markNotificationAsRead = (id: number | string): Promise<void> => {
+  return request<void>({
+    endpoint: `api/v1/notifications/${id}/read`,
+    method: 'PATCH',
+    requiresAuth: true,
+    errorContext: 'Mark Notification Read',
+  })
+}
+
+export const markAllNotificationsAsRead = (): Promise<void> => {
+  return request<void>({
+    endpoint: 'api/v1/notifications/read-all',
+    method: 'PATCH',
+    requiresAuth: true,
+    errorContext: 'Mark All Notifications Read',
   })
 }
 
@@ -1559,59 +1607,114 @@ export interface AdminDashboardData {
   bannedHosts: { total: number; thisMonth: number }
 }
 
-export const getAdminDashboard = (): Promise<AdminDashboardData> =>
-  request({ endpoint: 'api/v1/admin/dashboard', method: 'GET', requiresAuth: true, errorContext: 'Admin Dashboard' })
+export const getAdminDashboard = async (): Promise<AdminDashboardData> => {
+  const res = await request<any>({
+    endpoint: 'api/v1/admin/dashboard',
+    method: 'GET',
+    requiresAuth: true,
+    errorContext: 'Admin Dashboard',
+  })
+  return res?.data ?? res
+}
 
 // --- Reporter: Report Functions ---
-export const getMyReports = (params?: {
+export const getMyReports = async (params?: {
   page?: number
   limit?: number
 }): Promise<import('@/types/report').ReporterReportsResponse> => {
   const query = new URLSearchParams()
   if (params?.page) query.set('page', String(params.page))
   if (params?.limit) query.set('limit', String(params.limit))
-  return request({
+  const res = await request<any>({
     endpoint: `api/v1/reports/me/paginate?${query}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get My Reports',
   })
+  const rows = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.reports)
+    ? res.reports
+    : Array.isArray(res?.data?.reports)
+    ? res.data.reports
+    : []
+  const pagination = res?.pagination || {}
+  return {
+    data: rows,
+    totalRows: pagination.totalRows ?? res?.totalRows ?? rows.length,
+    totalPages: pagination.totalPages ?? res?.totalPages ?? (rows.length > 0 ? 1 : 0),
+    page: pagination.page ?? res?.page ?? params?.page ?? 1,
+    limit: pagination.limit ?? res?.limit ?? params?.limit ?? 10,
+    orderBy: res?.orderBy ?? 'createdAt',
+    sort: res?.sort ?? 'desc',
+    attributes: res?.attributes ?? { type: 'all' },
+  }
 }
 
-export const getMyReportById = (id: number): Promise<import('@/types/report').ReporterReportDetail> => {
-  return request({
+export const getMyReportById = async (
+  id: number
+): Promise<import('@/types/report').ReporterReportDetail> => {
+  const res = await request<any>({
     endpoint: `api/v1/reports/me/${id}`,
     method: 'GET',
     requiresAuth: true,
     errorContext: 'Get Report Detail',
   })
+  return res?.data?.report ?? res?.data ?? res?.report ?? res
 }
 
 // --- Admin: Report Functions ---
-export const getAdminReports = (params?: {
+export const getAdminReports = async (params?: {
   type?: string
   status?: string
   page?: number
   limit?: number
+  orderBy?: string
+  sort?: string
 }): Promise<AdminReportsResponse> => {
   const query = new URLSearchParams()
   if (params?.type) query.set('type', params.type)
   if (params?.status) query.set('status', params.status)
   if (params?.page) query.set('page', String(params.page))
   if (params?.limit) query.set('limit', String(params.limit))
-  return request<AdminReportsResponse>({
+  if (params?.orderBy) query.set('orderBy', params.orderBy)
+  if (params?.sort) query.set('sort', params.sort)
+  const res = await request<any>({
     endpoint: `api/v1/admin/reports/paginate?${query}`,
     requiresAuth: true,
     errorContext: 'Admin Reports',
   })
+  const rows = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.reports)
+    ? res.reports
+    : Array.isArray(res?.data?.reports)
+    ? res.data.reports
+    : []
+  const pagination = res?.pagination || {}
+  return {
+    data: rows,
+    totalRows: pagination.totalRows ?? res?.totalRows ?? rows.length,
+    totalPages: pagination.totalPages ?? res?.totalPages ?? (rows.length > 0 ? 1 : 0),
+    page: pagination.page ?? res?.page ?? params?.page ?? 1,
+    limit: pagination.limit ?? res?.limit ?? params?.limit ?? 10,
+    orderBy: res?.orderBy ?? params?.orderBy ?? 'createdAt',
+    sort: res?.sort ?? params?.sort ?? 'desc',
+    attributes: res?.attributes ?? {
+      type: params?.type ?? 'all',
+      status: params?.status ?? 'all',
+      pendingCount: res?.attributes?.pendingCount,
+    },
+  }
 }
 
-export const getAdminReportById = (id: number): Promise<AdminReportDetail> => {
-  return request<AdminReportDetail>({
+export const getAdminReportById = async (id: number): Promise<AdminReportDetail> => {
+  const res = await request<any>({
     endpoint: `api/v1/admin/reports/${id}`,
     requiresAuth: true,
     errorContext: 'Admin Report Detail',
   })
+  return res?.data?.report ?? res?.data ?? res?.report ?? res
 }
 
 export const takeReportAction = (
@@ -1629,7 +1732,7 @@ export const takeReportAction = (
 }
 
 // --- Admin: Verification Functions ---
-export const getAdminVerifications = (params?: {
+export const getAdminVerifications = async (params?: {
   status?: string
   page?: number
   limit?: number
@@ -1642,14 +1745,35 @@ export const getAdminVerifications = (params?: {
   if (params?.limit) query.set('limit', String(params.limit))
   if (params?.orderBy) query.set('orderBy', params.orderBy)
   if (params?.sort) query.set('sort', params.sort)
-  return request<AdminVerificationsResponse>({
+  const res = await request<any>({
     endpoint: `api/v1/admin/user-verifications/paginate?${query}`,
     requiresAuth: true,
     errorContext: 'Admin Verifications',
   })
+  const rows = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.verifications)
+    ? res.verifications
+    : Array.isArray(res?.data?.verifications)
+    ? res.data.verifications
+    : []
+  const pagination = res?.pagination || {}
+  return {
+    data: rows,
+    totalRows: pagination.totalRows ?? res?.totalRows ?? rows.length,
+    totalPages: pagination.totalPages ?? res?.totalPages ?? (rows.length > 0 ? 1 : 0),
+    page: pagination.page ?? res?.page ?? params?.page ?? 1,
+    limit: pagination.limit ?? res?.limit ?? params?.limit ?? 10,
+    attributes: res?.attributes ?? {
+      status: params?.status ?? 'all',
+      pendingCount: res?.attributes?.pendingCount,
+      approvedCount: res?.attributes?.approvedCount,
+      rejectedCount: res?.attributes?.rejectedCount,
+    },
+  }
 }
 
-export const getAdminActionLogs = (params?: {
+export const getAdminActionLogs = async (params?: {
   page?: number
   limit?: number
   action?: string
@@ -1658,21 +1782,45 @@ export const getAdminActionLogs = (params?: {
   if (params?.page) query.set('page', String(params.page))
   if (params?.limit) query.set('limit', String(params.limit))
   if (params?.action) query.set('action', params.action)
-  return request<AdminActionLogsResponse>({
+  const res = await request<any>({
     endpoint: `api/v1/admin/action-logs/paginate?${query}`,
     requiresAuth: true,
     errorContext: 'Admin Action Logs',
   })
+  const rows = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.actionLogs)
+    ? res.actionLogs
+    : Array.isArray(res?.data?.actionLogs)
+    ? res.data.actionLogs
+    : []
+  const pagination = res?.pagination || {}
+  return {
+    data: rows,
+    totalRows: pagination.totalRows ?? res?.totalRows ?? rows.length,
+    totalPages: pagination.totalPages ?? res?.totalPages ?? (rows.length > 0 ? 1 : 0),
+    page: pagination.page ?? res?.page ?? params?.page ?? 1,
+    limit: pagination.limit ?? res?.limit ?? params?.limit ?? 10,
+    orderBy: res?.orderBy ?? 'createdAt',
+    sort: res?.sort ?? 'desc',
+  }
 }
 
-export const getAdminVerificationById = (
+export const getAdminVerificationById = async (
   id: number
 ): Promise<{ code: string; message: string; verification: AdminVerificationDetail }> => {
-  return request({
+  const res = await request<any>({
     endpoint: `api/v1/admin/user-verifications/${id}`,
     requiresAuth: true,
     errorContext: 'Admin Verification Detail',
   })
+  const verification =
+    res?.data?.verification ?? res?.verification ?? res?.data ?? res
+  return {
+    code: res?.code ?? 'S-0000',
+    message: res?.message ?? 'Success',
+    verification,
+  }
 }
 
 export const approveVerification = (id: number): Promise<void> => {

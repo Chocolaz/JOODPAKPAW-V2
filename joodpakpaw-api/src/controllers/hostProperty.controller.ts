@@ -4,6 +4,7 @@ import { prisma } from '../database/prisma';
 import { AppError, FieldValidationError } from '../middlewares/errorHandler';
 import { uploadMultipleImagesAsWebp, deleteObjectFromS3 } from '../services/storage.service';
 import { formatPropertyDto, syncPropertyMinPrice } from './property.controller';
+import { getPropertyAppealCycleStats } from './report.controller';
 import { normalizePetName } from './lookup.controller';
 import { cacheService } from '../services/cache.service';
 import {
@@ -159,19 +160,17 @@ async function fetchFullHostProperty(propertyId: number) {
   });
 }
 
-function formatHostPropertyWithUnbanStats(prop: any) {
+async function formatHostPropertyWithUnbanStats(prop: any) {
   const { _bookingCount, ...baseDto } = formatPropertyDto(prop, new Map(), {
     includeReviews: true,
   });
-  const unbanReports = Array.isArray(prop.reports) ? prop.reports : [];
-  const unbanRequestCount = unbanReports.length;
-  const hasPendingUnbanRequest = unbanReports.some(
-    (r: any) => r.status === 'pending'
-  );
+  const cycleStats = await getPropertyAppealCycleStats(prop.id);
   return {
     ...baseDto,
-    unbanRequestCount,
-    hasPendingUnbanRequest,
+    unbanRequestCount: cycleStats.unbanRequestCount,
+    hasPendingUnbanRequest: cycleStats.hasPendingUnbanRequest,
+    suspensionReason: cycleStats.suspensionReason,
+    lastAppealNote: cycleStats.lastAppealNote,
   };
 }
 
@@ -319,7 +318,9 @@ export async function getHostProperties(
       orderBy: { createdAt: 'desc' },
     });
 
-    const properties = dbProperties.map((p) => formatHostPropertyWithUnbanStats(p));
+    const properties = await Promise.all(
+      dbProperties.map((p) => formatHostPropertyWithUnbanStats(p))
+    );
 
     res.status(200).json({
       code: 'S-0000',
@@ -364,7 +365,7 @@ export async function getHostPropertyById(
       );
     }
 
-    const propertyDto = formatHostPropertyWithUnbanStats(prop);
+    const propertyDto = await formatHostPropertyWithUnbanStats(prop);
 
     res.status(200).json({
       code: 'S-0000',
@@ -536,7 +537,7 @@ export async function createHostProperty(
       update: {},
       create: {
         name: 'host',
-        label: 'เจ้าของที่พัก (Host)',
+        label: 'Property Host',
         description: 'Property Host role',
       },
     });
@@ -597,7 +598,7 @@ export async function createHostProperty(
 
     const fullProp = await fetchFullHostProperty(created.id);
     const propertyDto = fullProp
-      ? formatHostPropertyWithUnbanStats(fullProp)
+      ? await formatHostPropertyWithUnbanStats(fullProp)
       : { id: created.id, title: created.title };
 
     await cacheService.delByPrefix('properties:');
@@ -786,7 +787,7 @@ export async function updateHostProperty(
 
     const fullProp = await fetchFullHostProperty(propertyId);
     const propertyDto = fullProp
-      ? formatHostPropertyWithUnbanStats(fullProp)
+      ? await formatHostPropertyWithUnbanStats(fullProp)
       : { id: propertyId };
 
     await cacheService.delByPrefix('properties:');
@@ -989,7 +990,7 @@ export async function updateHostPropertyIsActive(
 
     const fullProp = await fetchFullHostProperty(propertyId);
     const propertyDto = fullProp
-      ? formatHostPropertyWithUnbanStats(fullProp)
+      ? await formatHostPropertyWithUnbanStats(fullProp)
       : { id: propertyId, isActive: updated.isActive };
 
     await cacheService.delByPrefix('properties:');

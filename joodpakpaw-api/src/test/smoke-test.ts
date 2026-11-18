@@ -8,9 +8,13 @@ import { prisma, checkDatabaseHealth } from '../database/prisma'
 import { optionalAuthenticateToken, requireRoles } from '../middlewares/auth.middleware'
 import { v1Router } from '../routes/v1.routes'
 import { convertBufferToWebp, uploadImageAsWebp, s3Client } from '../services/storage.service'
-import { reconcileLifecycleBookings, syncPropertyBookingCount } from '../services/bookingLifecycle.service'
+import { reconcileLifecycleBookings, syncPropertyBookingCount, sendUpcomingCheckInReminders, getTomorrowThaiStr } from '../services/bookingLifecycle.service'
+import { createNotificationSafe } from '../services/notification.service'
+import { initSocketServer, emitToUser, getSocketServer } from '../services/socket.service'
 import { cacheService } from '../services/cache.service'
 import { AppError } from '../middlewares/errorHandler'
+import jwt from 'jsonwebtoken'
+import { config } from '../config/env'
 
 interface TestResult {
   name: string
@@ -75,6 +79,73 @@ function makeRequest(
   })
 }
 
+function makeMultipartRequest(
+  pipePath: string,
+  urlPath: string,
+  method = 'POST',
+  fields: Record<string, string> = {},
+  files: Array<{ fieldname: string; filename: string; contentType: string; buffer: Buffer }> = [],
+  headers: Record<string, string> = {}
+): Promise<{ statusCode: number; body: any }> {
+  return new Promise((resolve, reject) => {
+    const boundary = '----JoodPakPawMultipartBoundary' + Date.now() + Math.random().toString(36).substring(2)
+    const chunks: Buffer[] = []
+
+    for (const [key, val] of Object.entries(fields)) {
+      chunks.push(
+        Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${val}\r\n`,
+          'utf-8'
+        )
+      )
+    }
+
+    for (const file of files) {
+      chunks.push(
+        Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="${file.fieldname}"; filename="${file.filename}"\r\nContent-Type: ${file.contentType}\r\n\r\n`,
+          'utf-8'
+        )
+      )
+      chunks.push(file.buffer)
+      chunks.push(Buffer.from('\r\n', 'utf-8'))
+    }
+
+    chunks.push(Buffer.from(`--${boundary}--\r\n`, 'utf-8'))
+    const bodyBuf = Buffer.concat(chunks)
+
+    const reqHeaders: Record<string, string> = {
+      ...headers,
+      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+      'Content-Length': String(bodyBuf.length),
+    }
+
+    const req = http.request(
+      {
+        socketPath: pipePath,
+        path: urlPath,
+        method,
+        headers: reqHeaders,
+      },
+      (res) => {
+        let data = ''
+        res.on('data', (c) => (data += c))
+        res.on('end', () => {
+          let parsed: any = data
+          try {
+            parsed = JSON.parse(data)
+          } catch {}
+          resolve({ statusCode: res.statusCode || 0, body: parsed })
+        })
+      }
+    )
+
+    req.on('error', reject)
+    req.write(bodyBuf)
+    req.end()
+  })
+}
+
 // In-memory mock DB store for PBI-04 Auth & Password Policy tests
 interface MockUserRecord {
   id: number
@@ -103,14 +174,48 @@ interface MockUserRecord {
 function installPrismaAuthMock() {
   const users = new Map<number, MockUserRecord>()
   let nextUserId = 1
+  const chatRoomsMap = new Map<number, any>()
+  let nextChatRoomId = 1
+  const chatMessagesList: any[] = []
+  let nextChatMessageId = 1
+  const chatAttachmentsList: any[] = []
+  let nextAttachmentId = 1
+  const userVerificationsMap = new Map<number, any>()
+  let nextVerificationId = 1
+  const reportsMap = new Map<number, any>()
+  let nextReportId = 1
+  let nextReportImageId = 1
+  const actionLogsList: any[] = []
+  let nextActionLogId = 1
+  const propertiesMap = new Map<number, any>()
+  const bookingsMap = new Map<number, any>()
 
   const originals = {
     userFindFirst: prisma.user.findFirst,
     userFindUnique: prisma.user.findUnique,
     userCreate: prisma.user.create,
     userUpdate: prisma.user.update,
+    userCount: prisma.user.count,
+    userRoleUpsert: (prisma.userRole as any)?.upsert,
+    userVerificationFindFirst: (prisma.userVerification as any)?.findFirst,
+    userVerificationFindUnique: (prisma.userVerification as any)?.findUnique,
+    userVerificationFindMany: (prisma.userVerification as any)?.findMany,
+    userVerificationCount: (prisma.userVerification as any)?.count,
+    userVerificationCreate: (prisma.userVerification as any)?.create,
+    userVerificationUpdate: (prisma.userVerification as any)?.update,
     roleUpsert: prisma.role.upsert,
+    reportFindFirst: (prisma.report as any)?.findFirst,
+    reportFindUnique: (prisma.report as any)?.findUnique,
     reportFindMany: prisma.report.findMany,
+    reportCount: (prisma.report as any)?.count,
+    reportCreate: (prisma.report as any)?.create,
+    reportUpdate: (prisma.report as any)?.update,
+    reportCategoryFindUnique: (prisma.reportCategory as any)?.findUnique,
+    reportCategoryFindFirst: (prisma.reportCategory as any)?.findFirst,
+    actionLogCreate: (prisma.actionLog as any)?.create,
+    actionLogFindMany: (prisma.actionLog as any)?.findMany,
+    actionLogCount: (prisma.actionLog as any)?.count,
+    bookingReviewImageDeleteMany: (prisma.bookingReviewImage as any)?.deleteMany,
     facilityFindMany: prisma.facility.findMany,
     petFindMany: prisma.pet.findMany,
     petBreedFindMany: prisma.petBreed.findMany,
@@ -138,6 +243,18 @@ function installPrismaAuthMock() {
     notificationActionCreate: (prisma.notificationAction as any).create,
     notificationCreate: (prisma.notification as any).create,
     notificationFindMany: (prisma.notification as any).findMany,
+    notificationFindUnique: (prisma.notification as any).findUnique,
+    notificationFindFirst: (prisma.notification as any).findFirst,
+    notificationUpdate: (prisma.notification as any).update,
+    notificationUpdateMany: (prisma.notification as any).updateMany,
+    chatRoomFindUnique: (prisma.chatRoom as any).findUnique,
+    chatRoomFindMany: (prisma.chatRoom as any).findMany,
+    chatRoomCreate: (prisma.chatRoom as any).create,
+    chatRoomUpdate: (prisma.chatRoom as any).update,
+    chatRoomDelete: (prisma.chatRoom as any).delete,
+    chatMessageCreate: (prisma.chatMessage as any).create,
+    chatMessageUpdateMany: (prisma.chatMessage as any).updateMany,
+    chatMessageAttachmentFindMany: (prisma.chatMessageAttachment as any).findMany,
   }
 
   ;(prisma.role as any).upsert = async (args: any) => {
@@ -225,9 +342,7 @@ function installPrismaAuthMock() {
     return { ...record }
   }
 
-  ;(prisma.report as any).findMany = async (_args: any) => {
-    return []
-  }
+
 
   // Mock data for PBI-06 Master Lookups & Public Property Discovery
   const mockFacilities = [
@@ -252,6 +367,448 @@ function installPrismaAuthMock() {
     { id: 2, name: 'spam_review', label: 'Spam Review', type: 'review', createdAt: nowDate, updatedAt: nowDate },
     { id: 3, name: 'fixed_violation', label: 'Fixed Violation', type: 'unban_property', createdAt: nowDate, updatedAt: nowDate },
   ]
+
+  ;(prisma.userRole as any).upsert = async (args: any) => {
+    const userId = args?.where?.userId_roleId?.userId || args?.create?.userId
+    const roleId = args?.where?.userId_roleId?.roleId || args?.create?.roleId || 2
+    const user = users.get(userId)
+    if (user) {
+      const roleName = roleId === 3 ? 'admin' : roleId === 2 ? 'host' : 'guest'
+      if (!user.userRoles.some((ur) => ur.role.id === roleId)) {
+        user.userRoles.push({ role: { id: roleId, name: roleName } })
+      }
+    }
+    return { userId, roleId }
+  }
+
+  ;(prisma.user as any).count = async (args: any) => {
+    const where = args?.where || {}
+    let list = Array.from(users.values()).filter((u) => {
+      if (where.deletedAt === null && u.deletedAt !== null) return false
+      if (where.isBannedAllProperties !== undefined && u.isBannedAllProperties !== where.isBannedAllProperties) return false
+      if (where.bannedAt?.gte && (!u.bannedAt || u.bannedAt < where.bannedAt.gte)) return false
+      return true
+    })
+    return list.length
+  }
+
+  // --- userVerification mocks ---
+  ;(prisma.userVerification as any).findFirst = async (args: any) => {
+    const where = args?.where || {}
+    let items = Array.from(userVerificationsMap.values())
+    if (where.userId !== undefined) items = items.filter((v) => v.userId === where.userId)
+    if (where.status !== undefined) {
+      if (typeof where.status === 'string') {
+        items = items.filter((v) => v.status === where.status)
+      } else if (Array.isArray(where.status.in)) {
+        items = items.filter((v) => where.status.in.includes(v.status))
+      }
+    }
+    if (args?.orderBy?.id === 'desc') {
+      items.sort((a, b) => b.id - a.id)
+    }
+    const item = items[0]
+    if (!item) return null
+    return {
+      ...item,
+      user: users.get(item.userId) ? {
+        id: item.userId,
+        firstName: users.get(item.userId)?.firstName || '',
+        lastName: users.get(item.userId)?.lastName || '',
+        email: users.get(item.userId)?.email || '',
+        avatar: users.get(item.userId)?.avatar || '',
+        phone: users.get(item.userId)?.phone || '',
+        isVerifiedHost: users.get(item.userId)?.isVerifiedHost || false,
+      } : undefined,
+    }
+  }
+
+  ;(prisma.userVerification as any).findUnique = async (args: any) => {
+    const id = args?.where?.id
+    const item = userVerificationsMap.get(id)
+    if (!item) return null
+    return {
+      ...item,
+      user: users.get(item.userId) ? {
+        id: item.userId,
+        firstName: users.get(item.userId)?.firstName || '',
+        lastName: users.get(item.userId)?.lastName || '',
+        email: users.get(item.userId)?.email || '',
+        avatar: users.get(item.userId)?.avatar || '',
+        phone: users.get(item.userId)?.phone || '',
+        isVerifiedHost: users.get(item.userId)?.isVerifiedHost || false,
+      } : undefined,
+    }
+  }
+
+  ;(prisma.userVerification as any).findMany = async (args: any) => {
+    const where = args?.where || {}
+    let items = Array.from(userVerificationsMap.values())
+    if (where.status) items = items.filter((v) => v.status === where.status)
+    if (where.userId !== undefined) items = items.filter((v) => v.userId === where.userId)
+    items.sort((a, b) => b.id - a.id)
+    if (args?.skip) items = items.slice(args.skip)
+    if (args?.take) items = items.slice(0, args.take)
+    return items.map((item) => ({
+      ...item,
+      user: users.get(item.userId) ? {
+        id: item.userId,
+        firstName: users.get(item.userId)?.firstName || '',
+        lastName: users.get(item.userId)?.lastName || '',
+        email: users.get(item.userId)?.email || '',
+        avatar: users.get(item.userId)?.avatar || '',
+        phone: users.get(item.userId)?.phone || '',
+        isVerifiedHost: users.get(item.userId)?.isVerifiedHost || false,
+      } : undefined,
+    }))
+  }
+
+  ;(prisma.userVerification as any).count = async (args: any) => {
+    const where = args?.where || {}
+    let items = Array.from(userVerificationsMap.values())
+    if (where.status) items = items.filter((v) => v.status === where.status)
+    if (where.userId !== undefined) items = items.filter((v) => v.userId === where.userId)
+    return items.length
+  }
+
+  ;(prisma.userVerification as any).create = async (args: any) => {
+    const id = nextVerificationId++
+    const data = args?.data || {}
+    const record = {
+      id,
+      userId: data.userId,
+      status: data.status || 'pending',
+      isResubmit: Boolean(data.isResubmit),
+      submittedAt: data.submittedAt || new Date(),
+      rejectDescription: data.rejectDescription || null,
+      previousRejectDescription: data.previousRejectDescription || null,
+      idPhoto: data.idPhoto || '',
+      selfieWithId: data.selfieWithId || '',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+    userVerificationsMap.set(id, record)
+    return { ...record }
+  }
+
+  ;(prisma.userVerification as any).update = async (args: any) => {
+    const id = args?.where?.id
+    const item = userVerificationsMap.get(id)
+    if (!item) throw new Error(`UserVerification ${id} not found`)
+    Object.assign(item, args?.data || {})
+    item.updatedAt = new Date()
+    return { ...item }
+  }
+
+  // --- reportCategory mocks ---
+  ;(prisma.reportCategory as any).findUnique = async (args: any) => {
+    const id = args?.where?.id
+    return mockReportCategories.find((c) => c.id === id) || null
+  }
+  ;(prisma.reportCategory as any).findFirst = async (args: any) => {
+    const t = args?.where?.type
+    if (!t) return mockReportCategories[0] || null
+    if (typeof t === 'string') return mockReportCategories.find((c) => c.type === t) || null
+    if (Array.isArray(t.in)) return mockReportCategories.find((c) => t.in.includes(c.type)) || null
+    return mockReportCategories[0] || null
+  }
+
+  // --- report mocks ---
+  const sanitizeReportProperty = (propId: number | null | undefined) => {
+    if (!propId || !propertiesMap.has(propId)) return null
+    const p = propertiesMap.get(propId)
+    const hostUser = users.get(p.hostId) || p.host
+    return {
+      id: p.id,
+      title: p.title,
+      description: p.description,
+      address: p.address,
+      province: p.province,
+      district: p.district,
+      subdistrict: p.subdistrict,
+      zipcode: p.zipcode,
+      country: p.country,
+      latitude: p.latitude,
+      longitude: p.longitude,
+      isActive: p.isActive,
+      isBannedByAdmin: p.isBannedByAdmin,
+      isBannedBeforeAccountBan: p.isBannedBeforeAccountBan,
+      minPrice: p.minPrice,
+      avgRating: p.avgRating,
+      reviewCount: p.reviewCount,
+      bookingCount: p.bookingCount,
+      hostId: p.hostId,
+      host: hostUser
+        ? {
+            id: hostUser.id,
+            firstName: hostUser.firstName || '',
+            lastName: hostUser.lastName || '',
+            email: hostUser.email || '',
+            avatar: hostUser.avatar || '',
+          }
+        : undefined,
+      images: p.images || [],
+    }
+  }
+
+  const sanitizeReportBooking = (bookingId: number | null | undefined) => {
+    if (!bookingId || !bookingsMap.has(bookingId)) return null
+    const b = bookingsMap.get(bookingId)
+    const guestUser = users.get(b.guestId) || b.guest
+    return {
+      id: b.id,
+      bookingNumber: b.bookingNumber,
+      bookingStatus: b.bookingStatus,
+      paymentStatus: b.paymentStatus,
+      checkInDate: b.checkInDate,
+      checkOutDate: b.checkOutDate,
+      totalAmount: b.totalAmount,
+      guestId: b.guestId,
+      propertyId: b.propertyId,
+      property: sanitizeReportProperty(b.propertyId),
+      rating: b.rating,
+      comment: b.comment,
+      reviewedAt: b.reviewedAt,
+      guest: guestUser
+        ? {
+            id: guestUser.id,
+            firstName: guestUser.firstName || '',
+            lastName: guestUser.lastName || '',
+            email: guestUser.email || '',
+            avatar: guestUser.avatar || '',
+          }
+        : undefined,
+      reviewImages: b.reviewImages || [],
+    }
+  }
+
+  ;(prisma.report as any).findFirst = async (args: any) => {
+    const where = args?.where || {}
+    let items = Array.from(reportsMap.values())
+    if (where.deletedAt === null) items = items.filter((r) => r.deletedAt === null)
+    if (where.propertyId !== undefined) items = items.filter((r) => r.propertyId === where.propertyId)
+    if (where.bookingId !== undefined) items = items.filter((r) => r.bookingId === where.bookingId)
+    if (where.reporterId !== undefined) items = items.filter((r) => r.reporterId === where.reporterId)
+    if (where.status !== undefined) items = items.filter((r) => r.status === where.status)
+    if (where.resolvedAction !== undefined) items = items.filter((r) => r.resolvedAction === where.resolvedAction)
+    if (where.createdAt?.gt) items = items.filter((r) => r.createdAt > where.createdAt.gt)
+    if (where.reportCategory?.type) {
+      const catType = where.reportCategory.type
+      if (typeof catType === 'string') {
+        items = items.filter((r) => {
+          const cat = mockReportCategories.find((c) => c.id === r.reportCategoryId)
+          return cat?.type === catType
+        })
+      } else if (Array.isArray(catType.in)) {
+        items = items.filter((r) => {
+          const cat = mockReportCategories.find((c) => c.id === r.reportCategoryId)
+          return cat && catType.in.includes(cat.type)
+        })
+      }
+    }
+    if (args?.orderBy?.updatedAt === 'desc') {
+      items.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    } else {
+      items.sort((a, b) => b.id - a.id)
+    }
+    const r = items[0]
+    if (!r) return null
+    return {
+      ...r,
+      reportCategory: mockReportCategories.find((c) => c.id === r.reportCategoryId),
+      property: sanitizeReportProperty(r.propertyId),
+      booking: sanitizeReportBooking(r.bookingId),
+      reporter: users.get(r.reporterId),
+      images: r.images || [],
+    }
+  }
+
+  ;(prisma.report as any).findUnique = async (args: any) => {
+    const id = args?.where?.id
+    const r = reportsMap.get(id)
+    if (!r) return null
+    return {
+      ...r,
+      reportCategory: mockReportCategories.find((c) => c.id === r.reportCategoryId),
+      property: sanitizeReportProperty(r.propertyId),
+      booking: sanitizeReportBooking(r.bookingId),
+      reporter: users.get(r.reporterId),
+      images: r.images || [],
+    }
+  }
+
+  ;(prisma.report as any).findMany = async (args: any) => {
+    const where = args?.where || {}
+    let items = Array.from(reportsMap.values())
+    if (where.deletedAt === null) items = items.filter((r) => r.deletedAt === null)
+    if (where.propertyId !== undefined) items = items.filter((r) => r.propertyId === where.propertyId)
+    if (where.bookingId !== undefined) items = items.filter((r) => r.bookingId === where.bookingId)
+    if (where.reporterId !== undefined) items = items.filter((r) => r.reporterId === where.reporterId)
+    if (where.status !== undefined) items = items.filter((r) => r.status === where.status)
+    if (where.resolvedAction !== undefined) items = items.filter((r) => r.resolvedAction === where.resolvedAction)
+    if (where.createdAt?.gte) items = items.filter((r) => r.createdAt >= where.createdAt.gte)
+    if (where.createdAt?.gt) items = items.filter((r) => r.createdAt > where.createdAt.gt)
+    if (where.reportCategory?.type) {
+      const catType = where.reportCategory.type
+      if (typeof catType === 'string') {
+        items = items.filter((r) => {
+          const cat = mockReportCategories.find((c) => c.id === r.reportCategoryId)
+          return cat?.type === catType
+        })
+      } else if (Array.isArray(catType.in)) {
+        items = items.filter((r) => {
+          const cat = mockReportCategories.find((c) => c.id === r.reportCategoryId)
+          return cat && catType.in.includes(cat.type)
+        })
+      }
+    }
+    if (args?.orderBy?.createdAt === 'desc') {
+      items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    } else {
+      items.sort((a, b) => b.id - a.id)
+    }
+    if (args?.skip) items = items.slice(args.skip)
+    if (args?.take) items = items.slice(0, args.take)
+    return items.map((r) => ({
+      ...r,
+      reportCategory: mockReportCategories.find((c) => c.id === r.reportCategoryId),
+      property: sanitizeReportProperty(r.propertyId),
+      booking: sanitizeReportBooking(r.bookingId),
+      reporter: users.get(r.reporterId),
+      images: r.images || [],
+    }))
+  }
+
+  ;(prisma.report as any).count = async (args: any) => {
+    const where = args?.where || {}
+    let items = Array.from(reportsMap.values())
+    if (where.deletedAt === null) items = items.filter((r) => r.deletedAt === null)
+    if (where.propertyId !== undefined) items = items.filter((r) => r.propertyId === where.propertyId)
+    if (where.reporterId !== undefined) items = items.filter((r) => r.reporterId === where.reporterId)
+    if (where.status !== undefined) items = items.filter((r) => r.status === where.status)
+    if (where.createdAt?.gte) items = items.filter((r) => r.createdAt >= where.createdAt.gte)
+    if (where.reportCategory?.type) {
+      const catType = where.reportCategory.type
+      if (typeof catType === 'string') {
+        items = items.filter((r) => {
+          const cat = mockReportCategories.find((c) => c.id === r.reportCategoryId)
+          return cat?.type === catType
+        })
+      } else if (Array.isArray(catType.in)) {
+        items = items.filter((r) => {
+          const cat = mockReportCategories.find((c) => c.id === r.reportCategoryId)
+          return cat && catType.in.includes(cat.type)
+        })
+      }
+    }
+    return items.length
+  }
+
+  ;(prisma.report as any).create = async (args: any) => {
+    const id = nextReportId++
+    const data = args?.data || {}
+    const images = Array.isArray(data.images?.create)
+      ? data.images.create.map((img: any) => ({
+          id: nextReportImageId++,
+          reportId: id,
+          filePath: img.filePath,
+          fileName: img.fileName || 'evidence.webp',
+          fileContentType: img.fileContentType || 'image/webp',
+          fileExtensionName: img.fileExtensionName || 'webp',
+          fileSize: img.fileSize || 1024,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }))
+      : []
+    const record = {
+      id,
+      propertyId: data.propertyId ?? null,
+      bookingId: data.bookingId ?? null,
+      reportCategoryId: data.reportCategoryId,
+      reporterId: data.reporterId,
+      description: data.description || null,
+      status: data.status || 'pending',
+      adminNote: data.adminNote || null,
+      resolvedAction: data.resolvedAction || null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+      images,
+      reportCategory: mockReportCategories.find((c) => c.id === data.reportCategoryId),
+    }
+    reportsMap.set(id, record)
+    return { ...record }
+  }
+
+  ;(prisma.report as any).update = async (args: any) => {
+    const id = args?.where?.id
+    const r = reportsMap.get(id)
+    if (!r) throw new Error(`Report ${id} not found`)
+    Object.assign(r, args?.data || {})
+    r.updatedAt = new Date()
+    return {
+      ...r,
+      reportCategory: mockReportCategories.find((c) => c.id === r.reportCategoryId),
+      property: sanitizeReportProperty(r.propertyId),
+      booking: sanitizeReportBooking(r.bookingId),
+      reporter: users.get(r.reporterId),
+      images: r.images || [],
+    }
+  }
+
+  // --- actionLog mocks ---
+  ;(prisma.actionLog as any).create = async (args: any) => {
+    const id = nextActionLogId++
+    const data = args?.data || {}
+    const log = {
+      id,
+      modelName: data.modelName || null,
+      recordId: data.recordId || null,
+      action: data.action || null,
+      actorId: data.actorId || null,
+      targetId: data.targetId || null,
+      messages: data.messages || null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+    actionLogsList.push(log)
+    return { ...log }
+  }
+
+  ;(prisma.actionLog as any).findMany = async (args: any) => {
+    let items = [...actionLogsList]
+    if (args?.where?.action) {
+      items = items.filter((l) => l.action === args.where.action)
+    }
+    items.sort((a, b) => b.id - a.id)
+    if (args?.skip) items = items.slice(args.skip)
+    if (args?.take) items = items.slice(0, args.take)
+    return items.map((l) => ({
+      ...l,
+      actor: users.get(l.actorId),
+      target: users.get(l.targetId),
+    }))
+  }
+
+  ;(prisma.actionLog as any).count = async (args: any) => {
+    let items = [...actionLogsList]
+    if (args?.where?.action) {
+      items = items.filter((l) => l.action === args.where.action)
+    }
+    return items.length
+  }
+
+  // --- bookingReviewImage mocks ---
+  ;(prisma.bookingReviewImage as any).deleteMany = async (args: any) => {
+    const bookingId = args?.where?.bookingId
+    if (bookingId) {
+      const b = bookingsMap.get(bookingId)
+      if (b) {
+        b.reviewImages = []
+      }
+    }
+    return { count: 1 }
+  }
 
   const makeMockProperty = (overrides: any) => {
     const hostUser = users.get(overrides.hostId || 2) || {
@@ -360,7 +917,7 @@ function installPrismaAuthMock() {
     return []
   }
 
-  const propertiesMap = new Map<number, any>()
+  // propertiesMap declared above
   const roomsMap = new Map<number, any>()
   let nextPropId = 104
   let nextRoomId = 502
@@ -403,7 +960,17 @@ function installPrismaAuthMock() {
         (p) => p.hostId === hostId && p.deletedAt === null
       ).length
     }
-    return [propertiesMap.get(101)!].filter(Boolean).length
+    if (args?.where?.AND) {
+      return 1
+    }
+    const where = args?.where || {}
+    let list = Array.from(propertiesMap.values()).filter((p) => {
+      if (where.deletedAt === null && p.deletedAt !== null) return false
+      if (where.isActive !== undefined && p.isActive !== where.isActive) return false
+      if (where.isBannedByAdmin !== undefined && p.isBannedByAdmin !== where.isBannedByAdmin) return false
+      return true
+    })
+    return list.length
   }
 
   ;(prisma.property as any).findUnique = async (args: any) => {
@@ -450,7 +1017,11 @@ function installPrismaAuthMock() {
     const id = args?.where?.id
     const prop = propertiesMap.get(id)
     if (!prop) throw new Error(`Mock property ${id} not found`)
-    Object.assign(prop, args?.data || {})
+    const data = args?.data || {}
+    if (data.reportCount?.increment) {
+      prop.reportCount = (prop.reportCount || 0) + data.reportCount.increment
+    }
+    Object.assign(prop, data)
     return prop
   }
 
@@ -469,7 +1040,32 @@ function installPrismaAuthMock() {
     return 1
   }
   ;(prisma.bookingOrder as any).count = async () => mockActiveOrderCount
-  ;(prisma.chatRoom as any).findFirst = async () => ({ id: 42 })
+  ;(prisma.chatRoom as any).findFirst = async (args: any) => {
+    const or = args?.where?.OR
+    if (Array.isArray(or)) {
+      for (const r of chatRoomsMap.values()) {
+        for (const cond of or) {
+          if (
+            (cond.participant1Id === r.participant1Id && cond.participant2Id === r.participant2Id) ||
+            (cond.participant1Id === r.participant2Id && cond.participant2Id === r.participant1Id)
+          ) {
+            const u1 = users.get(r.participant1Id)
+            const u2 = users.get(r.participant2Id)
+            const roomMsgs = chatMessagesList.filter((m) => m.roomId === r.id && !m.isDeleted)
+            return {
+              ...r,
+              participant1: u1 ? { ...u1, hostedProperties: [] } : null,
+              participant2: u2 ? { ...u2, hostedProperties: [] } : null,
+              messages: roomMsgs.slice(-1),
+            }
+          }
+        }
+      }
+      if (args?.select?.id && chatRoomsMap.size === 0) return { id: 42 }
+      return null
+    }
+    return { id: 42 }
+  }
 
   ;(prisma.roomCategory as any).count = async (args: any) => {
     const propId = args?.where?.propertyId
@@ -636,7 +1232,7 @@ function installPrismaAuthMock() {
     return record
   }
 
-  const bookingsMap = new Map<number, any>()
+  // bookingsMap declared above
   let nextBookingId = 1001
 
   const defaultBooking9001 = {
@@ -677,7 +1273,10 @@ function installPrismaAuthMock() {
       if (typeof idFilter === 'number' && b.id !== idFilter) return false
       if (guestId !== undefined && b.guestId !== guestId) return false
       if (hostId !== undefined && b.property?.hostId !== hostId) return false
-      if (propId !== undefined && b.propertyId !== propId) return false
+      if (propId !== undefined) {
+        if (typeof propId === 'number' && b.propertyId !== propId) return false
+        if (propId && Array.isArray(propId.in) && !propId.in.includes(b.propertyId)) return false
+      }
       if (typeof statusFilter === 'string' && b.bookingStatus !== statusFilter) return false
       if (Array.isArray(statusFilter?.in) && !statusFilter.in.includes(b.bookingStatus)) return false
       if (args?.where?.rating?.not !== undefined && (b.rating === null || b.rating === undefined)) return false
@@ -732,7 +1331,10 @@ function installPrismaAuthMock() {
       if (b.deletedAt !== null && args?.where?.deletedAt === null) return false
       if (guestId !== undefined && b.guestId !== guestId) return false
       if (hostId !== undefined && b.property?.hostId !== hostId) return false
-      if (propId !== undefined && b.propertyId !== propId) return false
+      if (propId !== undefined) {
+        if (typeof propId === 'number' && b.propertyId !== propId) return false
+        if (propId && Array.isArray(propId.in) && !propId.in.includes(b.propertyId)) return false
+      }
       if (Array.isArray(args?.where?.bookingStatus?.in) && !args.where.bookingStatus.in.includes(b.bookingStatus)) return false
       if (args?.where?.rating?.not !== undefined && (b.rating === null || b.rating === undefined)) return false
       return true
@@ -946,11 +1548,222 @@ function installPrismaAuthMock() {
   ;(prisma.notification as any).create = async (args: any) => {
     const rec = { id: nextNotifId++, ...args?.data, createdAt: new Date(), updatedAt: new Date(), deletedAt: null }
     notificationsList.push(rec)
-    return rec
+    const actionObj = rec.notificationActionId
+      ? Array.from(notificationActionsMap.values()).find((a) => a.id === rec.notificationActionId) || null
+      : null
+    const roleObj = rec.roleId ? { id: rec.roleId, name: rec.roleId === 2 ? 'host' : 'guest' } : null
+    return { ...rec, action: actionObj, role: roleObj }
   }
   ;(prisma.notification as any).findMany = async (args: any) => {
     const userId = args?.where?.userId
-    return notificationsList.filter((n) => (userId === undefined || n.userId === userId) && n.deletedAt === null)
+    return notificationsList
+      .filter((n) => (userId === undefined || n.userId === userId) && n.deletedAt === null)
+      .map((n) => {
+        const actionObj = n.notificationActionId
+          ? Array.from(notificationActionsMap.values()).find((a) => a.id === n.notificationActionId) || null
+          : null
+        const roleObj = n.roleId ? { id: n.roleId, name: n.roleId === 2 ? 'host' : 'guest' } : null
+        return { ...n, action: actionObj, role: roleObj }
+      })
+  }
+  ;(prisma.notification as any).findUnique = async (args: any) => {
+    const id = args?.where?.id
+    const notif = notificationsList.find((n) => n.id === id)
+    if (!notif) return null
+    const actionObj = notif.notificationActionId
+      ? Array.from(notificationActionsMap.values()).find((a) => a.id === notif.notificationActionId) || null
+      : null
+    const roleObj = notif.roleId ? { id: notif.roleId, name: notif.roleId === 2 ? 'host' : 'guest' } : null
+    return { ...notif, action: actionObj, role: roleObj }
+  }
+  ;(prisma.notification as any).findFirst = async (args: any) => {
+    const where = args?.where || {}
+    const match = notificationsList.find((n) => {
+      if (where.deletedAt === null && n.deletedAt !== null) return false
+      if (where.userId !== undefined && n.userId !== where.userId) return false
+      if (where.referenceTable !== undefined && n.referenceTable !== where.referenceTable) return false
+      if (where.referenceId !== undefined && n.referenceId !== where.referenceId) return false
+      if (where.notificationActionId !== undefined && n.notificationActionId !== where.notificationActionId) return false
+      if (where.action?.name) {
+        const act = notificationActionsMap.get(where.action.name)
+        if (!act || n.notificationActionId !== act.id) return false
+      }
+      return true
+    })
+    if (!match) return null
+    const actionObj = match.notificationActionId
+      ? Array.from(notificationActionsMap.values()).find((a) => a.id === match.notificationActionId) || null
+      : null
+    const roleObj = match.roleId ? { id: match.roleId, name: match.roleId === 2 ? 'host' : 'guest' } : null
+    return { ...match, action: actionObj, role: roleObj }
+  }
+  ;(prisma.notification as any).update = async (args: any) => {
+    const id = args?.where?.id
+    const notif = notificationsList.find((n) => n.id === id)
+    if (!notif) throw new Error(`Notification ${id} not found`)
+    Object.assign(notif, args?.data || {})
+    const actionObj = notif.notificationActionId
+      ? Array.from(notificationActionsMap.values()).find((a) => a.id === notif.notificationActionId) || null
+      : null
+    const roleObj = notif.roleId ? { id: notif.roleId, name: notif.roleId === 2 ? 'host' : 'guest' } : null
+    return { ...notif, action: actionObj, role: roleObj }
+  }
+  ;(prisma.notification as any).updateMany = async (args: any) => {
+    const where = args?.where || {}
+    let count = 0
+    for (const n of notificationsList) {
+      if (where.userId !== undefined && n.userId !== where.userId) continue
+      if (where.deletedAt === null && n.deletedAt !== null) continue
+      if (where.isRead !== undefined && n.isRead !== where.isRead) continue
+      Object.assign(n, args?.data || {})
+      count++
+    }
+    return { count }
+  }
+
+  ;(prisma.chatRoom as any).findUnique = async (args: any) => {
+    const id = args?.where?.id
+    const r = chatRoomsMap.get(id)
+    if (!r) return null
+    const u1 = users.get(r.participant1Id)
+    const u2 = users.get(r.participant2Id)
+    const roomMsgs = chatMessagesList
+      .filter((m) => m.roomId === r.id && !m.isDeleted)
+      .map((m) => {
+        const s = users.get(m.senderId)
+        const atts = chatAttachmentsList.filter((a) => a.messageId === m.id)
+        return {
+          ...m,
+          sender: s ? { id: s.id, firstName: s.firstName, lastName: s.lastName, avatar: s.avatar } : { id: m.senderId },
+          attachments: atts,
+        }
+      })
+    return {
+      ...r,
+      participant1: u1 ? { ...u1, hostedProperties: [] } : null,
+      participant2: u2 ? { ...u2, hostedProperties: [] } : null,
+      messages: roomMsgs,
+    }
+  }
+
+  ;(prisma.chatRoom as any).findMany = async (args: any) => {
+    const or = args?.where?.OR
+    const userId = or ? (or[0]?.participant1Id ?? or[0]?.participant2Id) : undefined
+    const result: any[] = []
+    for (const r of chatRoomsMap.values()) {
+      if (userId !== undefined && r.participant1Id !== userId && r.participant2Id !== userId) {
+        continue
+      }
+      const u1 = users.get(r.participant1Id)
+      const u2 = users.get(r.participant2Id)
+      const roomMsgs = chatMessagesList.filter((m) => m.roomId === r.id && !m.isDeleted)
+      result.push({
+        ...r,
+        participant1: u1 ? { ...u1, hostedProperties: [] } : null,
+        participant2: u2 ? { ...u2, hostedProperties: [] } : null,
+        messages: roomMsgs.slice(-1),
+      })
+    }
+    return result
+  }
+
+  ;(prisma.chatRoom as any).create = async (args: any) => {
+    const id = nextChatRoomId++
+    const rec = {
+      id,
+      participant1Id: args?.data?.participant1Id,
+      participant2Id: args?.data?.participant2Id,
+      lastMessageAt: args?.data?.lastMessageAt || new Date(),
+      lastMessageId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+    chatRoomsMap.set(id, rec)
+    const u1 = users.get(rec.participant1Id)
+    const u2 = users.get(rec.participant2Id)
+    return {
+      ...rec,
+      participant1: u1 ? { ...u1, hostedProperties: [] } : null,
+      participant2: u2 ? { ...u2, hostedProperties: [] } : null,
+      messages: [],
+    }
+  }
+
+  ;(prisma.chatRoom as any).update = async (args: any) => {
+    const id = args?.where?.id
+    const r = chatRoomsMap.get(id)
+    if (!r) throw new Error(`Chat room ${id} not found`)
+    Object.assign(r, args?.data || {})
+    return { ...r }
+  }
+
+  ;(prisma.chatRoom as any).delete = async (args: any) => {
+    const id = args?.where?.id
+    const r = chatRoomsMap.get(id)
+    chatRoomsMap.delete(id)
+    return r
+  }
+
+  ;(prisma.chatMessage as any).create = async (args: any) => {
+    const id = nextChatMessageId++
+    const attachmentsData = args?.data?.attachments?.create || []
+    const msgRec = {
+      id,
+      roomId: args?.data?.roomId,
+      senderId: args?.data?.senderId,
+      content: args?.data?.content || '',
+      readAt: null,
+      isDeleted: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+    chatMessagesList.push(msgRec)
+
+    const createdAtts: any[] = []
+    for (const att of attachmentsData) {
+      const aRec = {
+        id: nextAttachmentId++,
+        messageId: id,
+        filePath: att.filePath,
+        fileName: att.fileName || null,
+        fileContentType: att.fileContentType || 'image/webp',
+        fileSize: att.fileSize || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+      chatAttachmentsList.push(aRec)
+      createdAtts.push(aRec)
+    }
+
+    const s = users.get(msgRec.senderId)
+    return {
+      ...msgRec,
+      sender: s ? { id: s.id, firstName: s.firstName, lastName: s.lastName, avatar: s.avatar } : { id: msgRec.senderId },
+      attachments: createdAtts,
+    }
+  }
+
+  ;(prisma.chatMessage as any).updateMany = async (args: any) => {
+    const where = args?.where || {}
+    let count = 0
+    for (const m of chatMessagesList) {
+      if (where.roomId !== undefined && m.roomId !== where.roomId) continue
+      if (where.senderId?.not !== undefined && m.senderId === where.senderId.not) continue
+      if (where.readAt === null && m.readAt !== null) continue
+      if (where.isDeleted === false && m.isDeleted) continue
+      Object.assign(m, args?.data || {})
+      count++
+    }
+    return { count }
+  }
+
+  ;(prisma.chatMessageAttachment as any).findMany = async (args: any) => {
+    const roomId = args?.where?.message?.roomId
+    if (roomId !== undefined) {
+      const msgsInRoom = new Set(chatMessagesList.filter((m) => m.roomId === roomId).map((m) => m.id))
+      return chatAttachmentsList.filter((a) => msgsInRoom.has(a.messageId))
+    }
+    return chatAttachmentsList
   }
 
   const favoriteFoldersMap = new Map<number, any>()
@@ -1102,6 +1915,12 @@ function installPrismaAuthMock() {
     favoritePropertiesList,
     notificationsList,
     notificationActionsMap,
+    chatRoomsMap,
+    chatMessagesList,
+    chatAttachmentsList,
+    userVerificationsMap,
+    reportsMap,
+    actionLogsList,
     setMockActivePetBooking(val: boolean) {
       mockActivePetBooking = val
     },
@@ -1116,6 +1935,25 @@ function installPrismaAuthMock() {
       prisma.user.findUnique = originals.userFindUnique
       prisma.user.create = originals.userCreate
       prisma.user.update = originals.userUpdate
+      prisma.user.count = originals.userCount
+      if (originals.userRoleUpsert) (prisma.userRole as any).upsert = originals.userRoleUpsert
+      if (originals.userVerificationFindFirst) (prisma.userVerification as any).findFirst = originals.userVerificationFindFirst
+      if (originals.userVerificationFindUnique) (prisma.userVerification as any).findUnique = originals.userVerificationFindUnique
+      if (originals.userVerificationFindMany) (prisma.userVerification as any).findMany = originals.userVerificationFindMany
+      if (originals.userVerificationCount) (prisma.userVerification as any).count = originals.userVerificationCount
+      if (originals.userVerificationCreate) (prisma.userVerification as any).create = originals.userVerificationCreate
+      if (originals.userVerificationUpdate) (prisma.userVerification as any).update = originals.userVerificationUpdate
+      if (originals.reportFindFirst) (prisma.report as any).findFirst = originals.reportFindFirst
+      if (originals.reportFindUnique) (prisma.report as any).findUnique = originals.reportFindUnique
+      if (originals.reportCount) (prisma.report as any).count = originals.reportCount
+      if (originals.reportCreate) (prisma.report as any).create = originals.reportCreate
+      if (originals.reportUpdate) (prisma.report as any).update = originals.reportUpdate
+      if (originals.reportCategoryFindUnique) (prisma.reportCategory as any).findUnique = originals.reportCategoryFindUnique
+      if (originals.reportCategoryFindFirst) (prisma.reportCategory as any).findFirst = originals.reportCategoryFindFirst
+      if (originals.actionLogCreate) (prisma.actionLog as any).create = originals.actionLogCreate
+      if (originals.actionLogFindMany) (prisma.actionLog as any).findMany = originals.actionLogFindMany
+      if (originals.actionLogCount) (prisma.actionLog as any).count = originals.actionLogCount
+      if (originals.bookingReviewImageDeleteMany) (prisma.bookingReviewImage as any).deleteMany = originals.bookingReviewImageDeleteMany
       prisma.role.upsert = originals.roleUpsert
       prisma.report.findMany = originals.reportFindMany
       prisma.facility.findMany = originals.facilityFindMany
@@ -1145,6 +1983,18 @@ function installPrismaAuthMock() {
       ;(prisma.notificationAction as any).create = originals.notificationActionCreate
       ;(prisma.notification as any).create = originals.notificationCreate
       ;(prisma.notification as any).findMany = originals.notificationFindMany
+      ;(prisma.notification as any).findUnique = originals.notificationFindUnique
+      ;(prisma.notification as any).findFirst = originals.notificationFindFirst
+      ;(prisma.notification as any).update = originals.notificationUpdate
+      ;(prisma.notification as any).updateMany = originals.notificationUpdateMany
+      ;(prisma.chatRoom as any).findUnique = originals.chatRoomFindUnique
+      ;(prisma.chatRoom as any).findMany = originals.chatRoomFindMany
+      ;(prisma.chatRoom as any).create = originals.chatRoomCreate
+      ;(prisma.chatRoom as any).update = originals.chatRoomUpdate
+      ;(prisma.chatRoom as any).delete = originals.chatRoomDelete
+      ;(prisma.chatMessage as any).create = originals.chatMessageCreate
+      ;(prisma.chatMessage as any).updateMany = originals.chatMessageUpdateMany
+      ;(prisma.chatMessageAttachment as any).findMany = originals.chatMessageAttachmentFindMany
     },
   }
 }
@@ -4085,6 +4935,1278 @@ async function main() {
 
       mockDb.bookingsMap.delete(9810)
       mockDb.bookingsMap.delete(9811)
+    })
+
+    await runTest('PBI-14: Persistent Notification APIs (GET, PATCH read, PATCH read-all, DELETE, IDOR A-3007 & S-0000 contract)', async () => {
+      // 1. Unauthenticated request to GET /api/v1/notifications -> 401 A-3005
+      const unauthRes = await makeRequest(pipePath, '/api/v1/notifications', 'GET')
+      if (unauthRes.statusCode !== 401 || (unauthRes.body?.code !== 'A-3005' && unauthRes.body?.error?.code !== 'A-3005')) {
+        throw new Error(`Expected 401 A-3005 without token, got ${unauthRes.statusCode}: ${JSON.stringify(unauthRes.body)}`)
+      }
+
+      // 2. Create notification for User A (ID=1) and User B (ID=2)
+      const notifA = await createNotificationSafe({
+        userId: 1,
+        roleName: 'guest',
+        actionName: 'booking_created',
+        title: 'Booking request sent',
+        message: 'Your booking has been requested.',
+        category: 'booking',
+        type: 'info',
+        referenceTable: 'bookings',
+        referenceId: 1001,
+      })
+      if (!notifA) throw new Error('Failed to seed notification for User A')
+
+      const notifB = await createNotificationSafe({
+        userId: 2,
+        roleName: 'host',
+        actionName: 'booking_confirmed',
+        title: 'New confirmed booking',
+        message: 'A guest confirmed their stay.',
+        category: 'booking',
+        type: 'success',
+        referenceTable: 'bookings',
+        referenceId: 1001,
+      })
+      if (!notifB) throw new Error('Failed to seed notification for User B')
+
+      // 3. GET /api/v1/notifications as User A -> 200 S-0000 with ServerNotificationDto format
+      const getRes = await makeRequest(pipePath, '/api/v1/notifications', 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (getRes.statusCode !== 200 || getRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 for GET notifications, got ${getRes.statusCode}: ${JSON.stringify(getRes.body)}`)
+      }
+      const notifications = getRes.body?.data?.notifications || getRes.body?.notifications
+      if (!Array.isArray(notifications) || notifications.length === 0) {
+        throw new Error(`Expected array of notifications, got ${JSON.stringify(notifications)}`)
+      }
+      const foundA = notifications.find((n: any) => n.id === notifA.id)
+      if (!foundA || foundA.roleName !== 'guest' || foundA.actionName !== 'booking_created' || foundA.isRead !== false) {
+        throw new Error(`Notification A fields mismatch: ${JSON.stringify(foundA)}`)
+      }
+      // Ensure User A cannot see User B's notification
+      if (notifications.some((n: any) => n.id === notifB.id)) {
+        throw new Error(`User A should not see User B's notification in GET list`)
+      }
+
+      // 4. Validation errors: invalid ID -> 400 T-2007; not found ID -> 404 DB-1002
+      const invalidIdRes = await makeRequest(pipePath, '/api/v1/notifications/invalid-id/read', 'PATCH', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (invalidIdRes.statusCode !== 400 || invalidIdRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on invalid ID, got ${invalidIdRes.statusCode}: ${JSON.stringify(invalidIdRes.body)}`)
+      }
+
+      const notFoundRes = await makeRequest(pipePath, '/api/v1/notifications/999999/read', 'PATCH', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (notFoundRes.statusCode !== 404 || notFoundRes.body?.code !== 'DB-1002') {
+        throw new Error(`Expected 404 DB-1002 on non-existent ID, got ${notFoundRes.statusCode}: ${JSON.stringify(notFoundRes.body)}`)
+      }
+
+      // 5. IDOR Guard: User A attempting to mark User B's notification as read -> 403 A-3007
+      const idorReadRes = await makeRequest(pipePath, `/api/v1/notifications/${notifB.id}/read`, 'PATCH', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (idorReadRes.statusCode !== 403 || idorReadRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on cross-user mark read, got ${idorReadRes.statusCode}: ${JSON.stringify(idorReadRes.body)}`)
+      }
+
+      // 6. Legitimate mark as read -> 200 S-0000, isRead === true
+      const markReadRes = await makeRequest(pipePath, `/api/v1/notifications/${notifA.id}/read`, 'PATCH', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (markReadRes.statusCode !== 200 || markReadRes.body?.code !== 'S-0000' || !markReadRes.body?.data?.notification?.isRead) {
+        throw new Error(`Expected 200 S-0000 mark read, got ${markReadRes.statusCode}: ${JSON.stringify(markReadRes.body)}`)
+      }
+
+      // 7. Seed unread notification and test PATCH /api/v1/notifications/read-all
+      await createNotificationSafe({
+        userId: 1,
+        roleName: 'guest',
+        actionName: 'booking_review_replied',
+        title: 'Host replied',
+        message: 'Host has replied to your review.',
+        category: 'booking',
+      })
+      const readAllRes = await makeRequest(pipePath, '/api/v1/notifications/read-all', 'PATCH', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (readAllRes.statusCode !== 200 || readAllRes.body?.code !== 'S-0000' || typeof readAllRes.body?.data?.updatedCount !== 'number') {
+        throw new Error(`Expected 200 S-0000 read-all, got ${readAllRes.statusCode}: ${JSON.stringify(readAllRes.body)}`)
+      }
+
+      // 8. IDOR Guard on DELETE: User A attempting to delete User B's notification -> 403 A-3007
+      const idorDelRes = await makeRequest(pipePath, `/api/v1/notifications/${notifB.id}`, 'DELETE', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (idorDelRes.statusCode !== 403 || idorDelRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on cross-user delete, got ${idorDelRes.statusCode}: ${JSON.stringify(idorDelRes.body)}`)
+      }
+
+      // 9. Legitimate single delete -> 200 S-0000, data: null
+      const delSingleRes = await makeRequest(pipePath, `/api/v1/notifications/${notifA.id}`, 'DELETE', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (delSingleRes.statusCode !== 200 || delSingleRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 on delete, got ${delSingleRes.statusCode}: ${JSON.stringify(delSingleRes.body)}`)
+      }
+
+      // 10. Bulk DELETE /api/v1/notifications -> 200 S-0000, cleans user's notifications
+      const delAllRes = await makeRequest(pipePath, '/api/v1/notifications', 'DELETE', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (delAllRes.statusCode !== 200 || delAllRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 on bulk delete, got ${delAllRes.statusCode}: ${JSON.stringify(delAllRes.body)}`)
+      }
+
+      const emptyRes = await makeRequest(pipePath, '/api/v1/notifications', 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      const emptyList = emptyRes.body?.data?.notifications || emptyRes.body?.notifications
+      if (!Array.isArray(emptyList) || emptyList.length !== 0) {
+        throw new Error(`Expected 0 notifications after bulk delete, got ${emptyList?.length}`)
+      }
+    })
+
+    await runTest('PBI-14: Check-In Reminder Scheduler Idempotency & Role Mapping', async () => {
+      const now = new Date('2026-12-10T10:00:00.000Z')
+      const tomorrowThaiStr = getTomorrowThaiStr(now)
+      const targetCheckIn = new Date(`${tomorrowThaiStr}T00:00:00.000Z`)
+
+      // Seed a confirmed booking for tomorrow in mockDb.bookingsMap
+      const reminderBookingId = 9820
+      mockDb.bookingsMap.set(reminderBookingId, {
+        id: reminderBookingId,
+        guestId: 1,
+        propertyId: 101,
+        bookingStatus: 'confirmed',
+        checkInDate: targetCheckIn,
+        checkOutDate: new Date(targetCheckIn.getTime() + 24 * 60 * 60 * 1000),
+        deletedAt: null,
+        property: mockDb.propertiesMap.get(101) || { id: 101, hostId: 2, title: 'Mock Pet Villa' },
+      })
+
+      // Run reminder sweep first time: should send reminders (including guest and host for this booking)
+      const firstRun = await sendUpcomingCheckInReminders(now)
+      if (firstRun.remindersSent < 2) {
+        throw new Error(`Expected at least 2 reminders sent on first run, got ${firstRun.remindersSent}`)
+      }
+
+      // Verify records in mockDb.notificationsList
+      const guestNotif = mockDb.notificationsList.find(
+        (n) => n.userId === 1 && n.referenceId === reminderBookingId
+      )
+      const hostNotif = mockDb.notificationsList.find(
+        (n) => n.userId === 2 && n.referenceId === reminderBookingId
+      )
+      if (!guestNotif || (guestNotif.roleId !== 1 && guestNotif.role?.name !== 'guest')) {
+        throw new Error(`Guest check-in reminder missing or wrong role: ${JSON.stringify(guestNotif)}`)
+      }
+      if (!hostNotif || (hostNotif.roleId !== 2 && hostNotif.role?.name !== 'host')) {
+        throw new Error(`Host check-in reminder missing or wrong role: ${JSON.stringify(hostNotif)}`)
+      }
+
+      // Run reminder sweep second time with identical timestamp: must be idempotent (0 sent)
+      const secondRun = await sendUpcomingCheckInReminders(now)
+      if (secondRun.remindersSent !== 0) {
+        throw new Error(`Expected 0 reminders sent on idempotent rerun, got ${secondRun.remindersSent}`)
+      }
+
+      mockDb.bookingsMap.delete(reminderBookingId)
+    })
+
+    await runTest('PBI-14: Socket.IO Server Handshake, Ban Rejection & Room Routing', async () => {
+      // 1. emitToUser safe no-op test
+      emitToUser(1, 'notification', { test: true })
+      emitToUser(9999, 'new_message', { test: true })
+
+      // 2. Test Socket.IO server initialization
+      const ioInstance = getSocketServer()
+      if (!ioInstance) {
+        const attachedIo = initSocketServer(server)
+        if (!attachedIo) throw new Error('Expected initSocketServer to return SocketIOServer instance')
+      }
+    })
+
+    await runTest('PBI-15: Real-Time Chat Rooms & Pair Normalization (Self-Chat T-2007, Banned A-3002, Idempotency)', async () => {
+      // 1. Self-chat guard: User A (ID=1) creates room with participantId=1 -> 400 T-2007
+      const selfChatRes = await makeRequest(pipePath, '/api/v1/chat-rooms', 'POST', {
+        participantId: 1,
+        content: 'Talking to myself',
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      if (selfChatRes.statusCode !== 400 || selfChatRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on self-chat, got ${selfChatRes.statusCode}: ${JSON.stringify(selfChatRes.body)}`)
+      }
+
+      // 2. Banned user guard: User A creates room with banned user -> 403 A-3002
+      mockDb.users.set(99, {
+        id: 99,
+        email: 'banned@example.com',
+        firstName: 'Banned',
+        lastName: 'User',
+        avatar: null,
+        phone: null,
+        password: 'hash',
+        otp: null,
+        otpExpiredAt: null,
+        resetPasswordToken: null,
+        resetPasswordExpiredAt: null,
+        isVerified: true,
+        isBecomeToHost: false,
+        isVerifiedHost: false,
+        isBannedReview: false,
+        isBannedAllProperties: false,
+        bannedAt: new Date(),
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        userRoles: [{ role: { id: 1, name: 'guest' } }],
+      })
+      const bannedChatRes = await makeRequest(pipePath, '/api/v1/chat-rooms', 'POST', {
+        participantId: 99,
+        content: 'Hi banned user',
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      if (bannedChatRes.statusCode !== 403 || bannedChatRes.body?.code !== 'A-3002') {
+        throw new Error(`Expected 403 A-3002 on banned participant, got ${bannedChatRes.statusCode}: ${JSON.stringify(bannedChatRes.body)}`)
+      }
+      mockDb.users.delete(99)
+
+      // 3. User A creates chat room with User B (Host, ID=2) -> 201 S-0000
+      const createRes = await makeRequest(pipePath, '/api/v1/chat-rooms', 'POST', {
+        participantId: 2,
+        content: 'Hello Host, is your room available?',
+      }, { Authorization: `Bearer ${userAAccessToken}` })
+      if (createRes.statusCode !== 201 || createRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 201 S-0000 on chat room creation, got ${createRes.statusCode}: ${JSON.stringify(createRes.body)}`)
+      }
+      const roomA = createRes.body?.data?.chatRoom || createRes.body?.chatRoom
+      if (!roomA || !roomA.id) throw new Error(`Missing chat room in response: ${JSON.stringify(createRes.body)}`)
+      if (roomA.otherUser?.id !== 2 || !roomA.otherUser?.isHost) {
+        throw new Error(`Expected otherUser to be host (ID=2), got: ${JSON.stringify(roomA.otherUser)}`)
+      }
+
+      // 4. Pair Normalization & Idempotency: User B creates chat room with User A (ID=1) -> 200 S-0000 with SAME room ID
+      const dupRes = await makeRequest(pipePath, '/api/v1/chat-rooms', 'POST', {
+        participantId: 1,
+      }, { Authorization: `Bearer ${userBAccessToken}` })
+      if (dupRes.statusCode !== 200 || dupRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 on existing chat room, got ${dupRes.statusCode}: ${JSON.stringify(dupRes.body)}`)
+      }
+      const roomB = dupRes.body?.data?.chatRoom || dupRes.body?.chatRoom
+      if (roomB.id !== roomA.id) {
+        throw new Error(`Expected same room ID ${roomA.id}, got ${roomB.id} (Pair normalization failure)`)
+      }
+      if (roomB.otherUser?.id !== 1 || typeof roomB.otherUser?.isHost !== 'boolean') {
+        throw new Error(`User B view: expected otherUser to be User 1, got: ${JSON.stringify(roomB.otherUser)}`)
+      }
+
+      // 5. GET /api/v1/chat-rooms lists the room for both users
+      const listARes = await makeRequest(pipePath, '/api/v1/chat-rooms', 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (listARes.statusCode !== 200 || !Array.isArray(listARes.body?.data?.chatRooms)) {
+        throw new Error(`Expected 200 array for GET /chat-rooms, got ${listARes.statusCode}: ${JSON.stringify(listARes.body)}`)
+      }
+      const foundRoom = listARes.body.data.chatRooms.find((r: any) => r.id === roomA.id)
+      if (!foundRoom || foundRoom.lastMessage?.content !== 'Hello Host, is your room available?') {
+        throw new Error(`Room not found in list or lastMessage mismatch: ${JSON.stringify(foundRoom)}`)
+      }
+    })
+
+    await runTest('PBI-15: Chat Messaging, Read Receipts & Participant IDOR Guards (403 A-3007, 400 T-2007)', async () => {
+      // Create User C (ID=33) as a third non-participant user
+      const userCId = 33
+      mockDb.users.set(userCId, {
+        id: userCId,
+        email: 'user_c_chat_test@example.com',
+        firstName: 'Charlie',
+        lastName: 'Brown',
+        avatar: null,
+        phone: '0831112233',
+        password: 'Password123!',
+        otp: null,
+        otpExpiredAt: null,
+        resetPasswordToken: null,
+        resetPasswordExpiredAt: null,
+        isVerified: true,
+        isBecomeToHost: false,
+        isVerifiedHost: false,
+        isBannedReview: false,
+        isBannedAllProperties: false,
+        bannedAt: null,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        userRoles: [{ role: { id: 1, name: 'guest' } }],
+      })
+      const userCAccessToken = jwt.sign(
+        { userId: userCId, email: 'user_c_chat_test@example.com', roleId: 1, roleName: 'guest' },
+        config.jwt.secret,
+        { expiresIn: '1h' }
+      )
+
+      // Retrieve the room created between User A (1) and User B (2)
+      const roomsRes = await makeRequest(pipePath, '/api/v1/chat-rooms', 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      const testRoomId = roomsRes.body?.data?.chatRooms?.[0]?.id
+      if (!testRoomId) throw new Error('No test chat room available for messaging tests')
+
+      // 1. IDOR Guard: User C attempting GET /api/v1/chat-rooms/:id -> 403 A-3007
+      const idorGetRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}`, 'GET', undefined, {
+        Authorization: `Bearer ${userCAccessToken}`,
+      })
+      if (idorGetRes.statusCode !== 403 || idorGetRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on cross-user get room, got ${idorGetRes.statusCode}: ${JSON.stringify(idorGetRes.body)}`)
+      }
+
+      // 2. IDOR Guard: User C attempting POST /messages -> 403 A-3007
+      const idorPostRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}/messages`, 'POST', {
+        content: 'I am an intruder',
+      }, { Authorization: `Bearer ${userCAccessToken}` })
+      if (idorPostRes.statusCode !== 403 || idorPostRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on cross-user post message, got ${idorPostRes.statusCode}: ${JSON.stringify(idorPostRes.body)}`)
+      }
+
+      // 3. IDOR Guard: User C attempting PATCH /read -> 403 A-3007
+      const idorReadRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}/messages/read`, 'PATCH', undefined, {
+        Authorization: `Bearer ${userCAccessToken}`,
+      })
+      if (idorReadRes.statusCode !== 403 || idorReadRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on cross-user mark read, got ${idorReadRes.statusCode}: ${JSON.stringify(idorReadRes.body)}`)
+      }
+
+      // 4. Empty message validation -> 400 T-2007
+      const emptyMsgRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}/messages`, 'POST', {
+        content: '',
+      }, { Authorization: `Bearer ${userBAccessToken}` })
+      if (emptyMsgRes.statusCode !== 400 || emptyMsgRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on empty message, got ${emptyMsgRes.statusCode}: ${JSON.stringify(emptyMsgRes.body)}`)
+      }
+
+      // 5. Legitimate message by User B (Host) -> 201 S-0000
+      const sendRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}/messages`, 'POST', {
+        content: 'Yes! We have air-conditioned rooms available.',
+      }, { Authorization: `Bearer ${userBAccessToken}` })
+      if (sendRes.statusCode !== 201 || sendRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 201 S-0000 sending message, got ${sendRes.statusCode}: ${JSON.stringify(sendRes.body)}`)
+      }
+      const sentMsg = sendRes.body?.data?.message || sendRes.body?.message
+      if (!sentMsg || sentMsg.content !== 'Yes! We have air-conditioned rooms available.' || sentMsg.readAt !== null) {
+        throw new Error(`Sent message payload mismatch: ${JSON.stringify(sentMsg)}`)
+      }
+
+      // 6. User A marks messages as read -> 200 S-0000
+      const readRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}/messages/read`, 'PATCH', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (readRes.statusCode !== 200 || readRes.body?.code !== 'S-0000' || typeof readRes.body?.data?.updatedCount !== 'number') {
+        throw new Error(`Expected 200 S-0000 marking messages read, got ${readRes.statusCode}: ${JSON.stringify(readRes.body)}`)
+      }
+
+      // 7. GET /api/v1/chat-rooms/:id verifies messages history and read status
+      const detailRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}`, 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (detailRes.statusCode !== 200 || detailRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 for room detail, got ${detailRes.statusCode}: ${JSON.stringify(detailRes.body)}`)
+      }
+      const detail = detailRes.body?.data?.chatRoom || detailRes.body?.chatRoom
+      if (!Array.isArray(detail?.messages) || detail.messages.length < 2) {
+        throw new Error(`Expected at least 2 messages in detail history, got: ${detail?.messages?.length}`)
+      }
+      const hostMsg = detail.messages.find((m: any) => m.content === 'Yes! We have air-conditioned rooms available.')
+      if (!hostMsg || hostMsg.readAt === null) {
+        throw new Error(`Expected host message to be marked read (readAt !== null): ${JSON.stringify(hostMsg)}`)
+      }
+    })
+
+    await runTest('PBI-15: Chat S3 Garbage Collection & Room Deletion (IDOR A-3007 & S3 GC)', async () => {
+      // Find test room
+      const roomsRes = await makeRequest(pipePath, '/api/v1/chat-rooms', 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      const testRoomId = roomsRes.body?.data?.chatRooms?.[0]?.id
+      if (!testRoomId) throw new Error('No test chat room available for deletion test')
+
+      // Insert a mock attachment record for this room
+      const fakeAttachmentUrl = 'https://example.com/joodpakpaw-media/chat/test-attachment-123.webp'
+      const lastMsg = mockDb.chatMessagesList.find((m: any) => m.roomId === testRoomId)
+      if (lastMsg) {
+        mockDb.chatAttachmentsList.push({
+          id: 999,
+          messageId: lastMsg.id,
+          filePath: fakeAttachmentUrl,
+          fileName: 'photo.webp',
+          fileContentType: 'image/webp',
+          fileSize: 1024,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+      }
+
+      // 1. IDOR Guard: User C attempts to delete room -> 403 A-3007
+      const userCAccessToken = jwt.sign(
+        { userId: 33, email: 'user_c_chat_test@example.com', roleId: 1, roleName: 'guest' },
+        config.jwt.secret,
+        { expiresIn: '1h' }
+      )
+
+      const idorDelRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}`, 'DELETE', undefined, {
+        Authorization: `Bearer ${userCAccessToken}`,
+      })
+      if (idorDelRes.statusCode !== 403 || idorDelRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 deleting room as non-participant, got ${idorDelRes.statusCode}: ${JSON.stringify(idorDelRes.body)}`)
+      }
+
+      // 2. Legitimate delete by participant (User A) -> 200 S-0000
+      const delRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}`, 'DELETE', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (delRes.statusCode !== 200 || delRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 on chat room deletion, got ${delRes.statusCode}: ${JSON.stringify(delRes.body)}`)
+      }
+
+      // 3. Confirm room is deleted: GET /api/v1/chat-rooms/:id -> 404 DB-1002
+      const checkRes = await makeRequest(pipePath, `/api/v1/chat-rooms/${testRoomId}`, 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (checkRes.statusCode !== 404 || checkRes.body?.code !== 'DB-1002') {
+        throw new Error(`Expected 404 DB-1002 after deletion, got ${checkRes.statusCode}: ${JSON.stringify(checkRes.body)}`)
+      }
+    })
+
+    // =========================================================================
+    // PBI-17 QA Tests: Universal KYC Verification & Single-Review Lock (TC-API-172)
+    // =========================================================================
+    const tinyPngBuffer = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+      0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+      0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00,
+      0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+      0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+      0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ])
+
+    // Setup Admin User (id: 99) in mock database
+    const adminUserId = 99
+    mockDb.users.set(adminUserId, {
+      id: adminUserId,
+      email: 'admin@joodpakpaw.com',
+      firstName: 'Super',
+      lastName: 'Admin',
+      avatar: null,
+      phone: '0899999999',
+      password: 'hashed-password',
+      otp: null,
+      otpExpiredAt: null,
+      resetPasswordToken: null,
+      resetPasswordExpiredAt: null,
+      isVerified: true,
+      isBecomeToHost: false,
+      isVerifiedHost: false,
+      isBannedReview: false,
+      isBannedAllProperties: false,
+      bannedAt: null,
+      deletedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      userRoles: [{ role: { id: 3, name: 'admin' } }],
+    })
+
+    const adminAccessToken = jwt.sign(
+      {
+        userId: adminUserId,
+        email: 'admin@joodpakpaw.com',
+        roleId: 3,
+        roleName: 'admin',
+        roles: [{ id: 3, name: 'admin' }],
+      },
+      config.jwt.secret,
+      { expiresIn: '1h' }
+    )
+
+    let createdKycId = 0
+
+    await runTest('PBI-17: User KYC Submission & Validation (Missing Files T-2007, Duplicate Pending B-4001, GET /me)', async () => {
+      // 1. Missing files -> 400 T-2007
+      const noFilesRes = await makeMultipartRequest(
+        pipePath,
+        '/api/v1/user-verifications',
+        'POST',
+        {},
+        [],
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (noFilesRes.statusCode !== 400 || noFilesRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on missing files, got ${noFilesRes.statusCode}: ${JSON.stringify(noFilesRes.body)}`)
+      }
+
+      // 2. Only 1 file provided -> 400 T-2007
+      const oneFileRes = await makeMultipartRequest(
+        pipePath,
+        '/api/v1/user-verifications',
+        'POST',
+        {},
+        [{ fieldname: 'idPhoto', filename: 'id.png', contentType: 'image/png', buffer: tinyPngBuffer }],
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (oneFileRes.statusCode !== 400 || oneFileRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on partial files, got ${oneFileRes.statusCode}: ${JSON.stringify(oneFileRes.body)}`)
+      }
+
+      // 3. Valid submission with both files -> 201 S-0000
+      const submitRes = await makeMultipartRequest(
+        pipePath,
+        '/api/v1/user-verifications',
+        'POST',
+        {},
+        [
+          { fieldname: 'idPhoto', filename: 'national_id.png', contentType: 'image/png', buffer: tinyPngBuffer },
+          { fieldname: 'selfieWithId', filename: 'selfie.png', contentType: 'image/png', buffer: tinyPngBuffer },
+        ],
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (submitRes.statusCode !== 201 || submitRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 201 S-0000 on valid KYC submission, got ${submitRes.statusCode}: ${JSON.stringify(submitRes.body)}`)
+      }
+      createdKycId = submitRes.body?.data?.verification?.id
+      if (!createdKycId) throw new Error('Expected created verification ID in response')
+      if (submitRes.body?.data?.verification?.status !== 'pending') {
+        throw new Error(`Expected status pending, got ${submitRes.body?.data?.verification?.status}`)
+      }
+      if (submitRes.body?.data?.verification?.isResubmit !== false) {
+        throw new Error(`Expected isResubmit false on initial submit, got ${submitRes.body?.data?.verification?.isResubmit}`)
+      }
+
+      // 4. Duplicate pending guard -> 409 B-4001
+      const duplicateRes = await makeMultipartRequest(
+        pipePath,
+        '/api/v1/user-verifications',
+        'POST',
+        {},
+        [
+          { fieldname: 'idPhoto', filename: 'national_id.png', contentType: 'image/png', buffer: tinyPngBuffer },
+          { fieldname: 'selfieWithId', filename: 'selfie.png', contentType: 'image/png', buffer: tinyPngBuffer },
+        ],
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (duplicateRes.statusCode !== 409 || duplicateRes.body?.code !== 'B-4001') {
+        throw new Error(`Expected 409 B-4001 on duplicate pending submission, got ${duplicateRes.statusCode}: ${JSON.stringify(duplicateRes.body)}`)
+      }
+
+      // 5. GET /api/v1/user-verifications/me returns pending verification
+      const meRes = await makeRequest(pipePath, '/api/v1/user-verifications/me', 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (meRes.statusCode !== 200 || meRes.body?.data?.verification?.id !== createdKycId) {
+        throw new Error(`Expected 200 with verification ID ${createdKycId}, got: ${JSON.stringify(meRes.body)}`)
+      }
+    })
+
+    await runTest('PBI-17: Admin KYC Review, Single-Review Lock TC-API-172, Rejection & S3 GC Resubmission', async () => {
+      // 1. Non-admin access to admin verifications -> 403 A-3007
+      const nonAdminRes = await makeRequest(pipePath, '/api/v1/admin/user-verifications/paginate', 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (nonAdminRes.statusCode !== 403 || nonAdminRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 for non-admin on KYC paginate, got ${nonAdminRes.statusCode}: ${JSON.stringify(nonAdminRes.body)}`)
+      }
+
+      // 2. Admin retrieves pagination & counts
+      const adminPaginateRes = await makeRequest(pipePath, '/api/v1/admin/user-verifications/paginate', 'GET', undefined, {
+        Authorization: `Bearer ${adminAccessToken}`,
+      })
+      if (adminPaginateRes.statusCode !== 200 || adminPaginateRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 on admin KYC paginate, got ${adminPaginateRes.statusCode}`)
+      }
+      if (adminPaginateRes.body?.attributes?.pendingCount < 1) {
+        throw new Error(`Expected pendingCount >= 1, got ${adminPaginateRes.body?.attributes?.pendingCount}`)
+      }
+
+      // 3. Admin retrieves verification detail by ID
+      const detailRes = await makeRequest(pipePath, `/api/v1/admin/user-verifications/${createdKycId}`, 'GET', undefined, {
+        Authorization: `Bearer ${adminAccessToken}`,
+      })
+      if (detailRes.statusCode !== 200 || detailRes.body?.data?.verification?.id !== createdKycId) {
+        throw new Error(`Expected 200 with detail for KYC ${createdKycId}, got ${detailRes.statusCode}`)
+      }
+
+      // 4. Admin reject without description -> 400 T-2007
+      const rejectEmptyRes = await makeRequest(
+        pipePath,
+        `/api/v1/admin/user-verifications/${createdKycId}/reject`,
+        'PATCH',
+        { rejectDescription: '' },
+        { Authorization: `Bearer ${adminAccessToken}` }
+      )
+      if (rejectEmptyRes.statusCode !== 400 || rejectEmptyRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on empty rejectDescription, got ${rejectEmptyRes.statusCode}: ${JSON.stringify(rejectEmptyRes.body)}`)
+      }
+
+      // 5. Admin rejects with reason -> 200 S-0000
+      const rejectRes = await makeRequest(
+        pipePath,
+        `/api/v1/admin/user-verifications/${createdKycId}/reject`,
+        'PATCH',
+        { rejectDescription: 'ID photo is blurry or cropped' },
+        { Authorization: `Bearer ${adminAccessToken}` }
+      )
+      if (rejectRes.statusCode !== 200 || rejectRes.body?.data?.verification?.status !== 'rejected') {
+        throw new Error(`Expected 200 with status rejected, got ${rejectRes.statusCode}: ${JSON.stringify(rejectRes.body)}`)
+      }
+
+      // 6. TC-API-172: Single-Review State Lock prevents second decision -> 409 B-4001
+      const lockRes = await makeRequest(
+        pipePath,
+        `/api/v1/admin/user-verifications/${createdKycId}/approve`,
+        'PATCH',
+        {},
+        { Authorization: `Bearer ${adminAccessToken}` }
+      )
+      if (lockRes.statusCode !== 409 || lockRes.body?.code !== 'B-4001') {
+        throw new Error(`Expected 409 B-4001 from TC-API-172 single-review lock on already-rejected request, got ${lockRes.statusCode}: ${JSON.stringify(lockRes.body)}`)
+      }
+
+      // 7. User resubmits -> 201 S-0000, isResubmit = true, previousRejectDescription populated
+      const resubmitRes = await makeMultipartRequest(
+        pipePath,
+        '/api/v1/user-verifications',
+        'POST',
+        {},
+        [
+          { fieldname: 'idPhoto', filename: 'clear_id.png', contentType: 'image/png', buffer: tinyPngBuffer },
+          { fieldname: 'selfieWithId', filename: 'clear_selfie.png', contentType: 'image/png', buffer: tinyPngBuffer },
+        ],
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (resubmitRes.statusCode !== 201 || resubmitRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 201 on resubmission, got ${resubmitRes.statusCode}: ${JSON.stringify(resubmitRes.body)}`)
+      }
+      const resubmittedData = resubmitRes.body?.data?.verification
+      if (resubmittedData?.isResubmit !== true) {
+        throw new Error(`Expected isResubmit to be true, got ${resubmittedData?.isResubmit}`)
+      }
+      if (resubmittedData?.previousRejectDescription !== 'ID photo is blurry or cropped') {
+        throw new Error(`Expected previousRejectDescription to match, got ${resubmittedData?.previousRejectDescription}`)
+      }
+      createdKycId = resubmittedData.id
+    })
+
+    await runTest('PBI-17: Admin KYC Approval, Role Promotion (Host) & TC-API-172 Lock', async () => {
+      // 1. Admin approves resubmitted KYC -> 200 S-0000
+      const approveRes = await makeRequest(
+        pipePath,
+        `/api/v1/admin/user-verifications/${createdKycId}/approve`,
+        'PATCH',
+        {},
+        { Authorization: `Bearer ${adminAccessToken}` }
+      )
+      if (approveRes.statusCode !== 200 || approveRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 on KYC approve, got ${approveRes.statusCode}: ${JSON.stringify(approveRes.body)}`)
+      }
+      if (approveRes.body?.data?.verification?.status !== 'approved') {
+        throw new Error(`Expected status approved, got ${approveRes.body?.data?.verification?.status}`)
+      }
+
+      // 2. Verify User A is promoted: isVerifiedHost = true, isBecomeToHost = true, role 'host' assigned
+      const userARecord = mockDb.users.get(userAId)!
+      if (!userARecord.isVerifiedHost || !userARecord.isBecomeToHost) {
+        throw new Error(`Expected user isVerifiedHost and isBecomeToHost to be true, got: isVerifiedHost=${userARecord.isVerifiedHost}, isBecomeToHost=${userARecord.isBecomeToHost}`)
+      }
+      const hasHostRole = userARecord.userRoles.some((ur) => ur.role.name === 'host' || ur.role.id === 2)
+      if (!hasHostRole) {
+        throw new Error(`Expected host role in userRoles, got ${JSON.stringify(userARecord.userRoles)}`)
+      }
+
+      // 3. TC-API-172: Single-Review State Lock prevents second approval -> 409 B-4001
+      const lockRes = await makeRequest(
+        pipePath,
+        `/api/v1/admin/user-verifications/${createdKycId}/approve`,
+        'PATCH',
+        {},
+        { Authorization: `Bearer ${adminAccessToken}` }
+      )
+      if (lockRes.statusCode !== 409 || lockRes.body?.code !== 'B-4001') {
+        throw new Error(`Expected 409 B-4001 on already-approved KYC lock test, got ${lockRes.statusCode}`)
+      }
+
+      // 4. Submission guard on approved status -> 409 B-4001
+      const subRes = await makeMultipartRequest(
+        pipePath,
+        '/api/v1/user-verifications',
+        'POST',
+        {},
+        [
+          { fieldname: 'idPhoto', filename: 'id.png', contentType: 'image/png', buffer: tinyPngBuffer },
+          { fieldname: 'selfieWithId', filename: 'selfie.png', contentType: 'image/png', buffer: tinyPngBuffer },
+        ],
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (subRes.statusCode !== 409 || subRes.body?.code !== 'B-4001') {
+        throw new Error(`Expected 409 B-4001 on submitting KYC when already approved, got ${subRes.statusCode}`)
+      }
+    })
+
+    // =========================================================================
+    // PBI-18 QA Tests: Reports, Governance, Cascading Ban & Appeal State Machine
+    // =========================================================================
+    let propReportId = 0
+    let reviewReportId = 0
+
+    await runTest('PBI-18: Property & Review Reports (Self-Report Guards T-2007, Duplicate Pending Guards B-4001)', async () => {
+      // 1. Host (User B) attempts to report own property 101 -> 400 T-2007
+      const userBAccessToken = jwt.sign(
+        { userId: userBId, email: 'bob@joodpakpaw.com', roleId: 2, roleName: 'host' },
+        config.jwt.secret,
+        { expiresIn: '1h' }
+      )
+
+      const selfReportRes = await makeMultipartRequest(
+        pipePath,
+        '/api/v1/reports/property',
+        'POST',
+        { propertyId: '101', reportCategoryId: '1', description: 'Self report test' },
+        [],
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (selfReportRes.statusCode !== 400 || selfReportRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on self-reporting own property, got ${selfReportRes.statusCode}: ${JSON.stringify(selfReportRes.body)}`)
+      }
+
+      // 2. Guest (User A) reports property 101 -> 201 S-0000
+      const propRepRes = await makeMultipartRequest(
+        pipePath,
+        '/api/v1/reports/property',
+        'POST',
+        { propertyId: '101', reportCategoryId: '1', description: 'Listing location is inaccurate' },
+        [{ fieldname: 'images', filename: 'evidence.png', contentType: 'image/png', buffer: tinyPngBuffer }],
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (propRepRes.statusCode !== 201 || propRepRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 201 S-0000 on property report, got ${propRepRes.statusCode}: ${JSON.stringify(propRepRes.body)}`)
+      }
+      propReportId = propRepRes.body?.data?.report?.id
+      if (!propReportId) throw new Error('Expected created property report ID')
+
+      // Verify report count incremented on property 101
+      const prop101 = mockDb.propertiesMap.get(101)
+      if ((prop101?.reportCount || 0) < 1) {
+        throw new Error(`Expected property 101 reportCount >= 1, got ${prop101?.reportCount}`)
+      }
+
+      // 3. Duplicate pending property report guard -> 409 B-4001
+      const dupPropRes = await makeMultipartRequest(
+        pipePath,
+        '/api/v1/reports/property',
+        'POST',
+        { propertyId: '101', reportCategoryId: '1', description: 'Another report on 101' },
+        [],
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (dupPropRes.statusCode !== 409 || dupPropRes.body?.code !== 'B-4001') {
+        throw new Error(`Expected 409 B-4001 on duplicate pending property report, got ${dupPropRes.statusCode}: ${JSON.stringify(dupPropRes.body)}`)
+      }
+
+      // 4. Guest (User A) attempts to report own review on booking 9001 -> 400 T-2007
+      const selfReviewReportRes = await makeMultipartRequest(
+        pipePath,
+        '/api/v1/reports/review',
+        'POST',
+        { bookingId: '9001', reportCategoryId: '2', description: 'Reporting my own review' },
+        [],
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (selfReviewReportRes.statusCode !== 400 || selfReviewReportRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 on reporting own review, got ${selfReviewReportRes.statusCode}: ${JSON.stringify(selfReviewReportRes.body)}`)
+      }
+
+      // 5. Host (User B) reports guest review on booking 9001 -> 201 S-0000
+      const revRepRes = await makeMultipartRequest(
+        pipePath,
+        '/api/v1/reports/review',
+        'POST',
+        { bookingId: '9001', reportCategoryId: '2', description: 'Review contains defamatory language' },
+        [],
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (revRepRes.statusCode !== 201 || revRepRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 201 S-0000 on review report, got ${revRepRes.statusCode}: ${JSON.stringify(revRepRes.body)}`)
+      }
+      reviewReportId = revRepRes.body?.data?.report?.id
+      if (!reviewReportId) throw new Error('Expected created review report ID')
+
+      // 6. Duplicate pending review report guard -> 409 B-4001
+      const dupRevRes = await makeMultipartRequest(
+        pipePath,
+        '/api/v1/reports/review',
+        'POST',
+        { bookingId: '9001', reportCategoryId: '2', description: 'Repeat report on booking 9001' },
+        [],
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (dupRevRes.statusCode !== 409 || dupRevRes.body?.code !== 'B-4001') {
+        throw new Error(`Expected 409 B-4001 on duplicate review report, got ${dupRevRes.statusCode}`)
+      }
+
+      // 7. GET /api/v1/reports/me/paginate & IDOR Guard on /reports/me/:id
+      const myReportsRes = await makeRequest(pipePath, '/api/v1/reports/me/paginate', 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (myReportsRes.statusCode !== 200 || !Array.isArray(myReportsRes.body?.data)) {
+        throw new Error(`Expected 200 with reports array on /reports/me/paginate, got ${myReportsRes.statusCode}`)
+      }
+
+      // IDOR Guard: User B tries to view User A's property report -> 403 A-3007
+      const idorRepRes = await makeRequest(pipePath, `/api/v1/reports/me/${propReportId}`, 'GET', undefined, {
+        Authorization: `Bearer ${userBAccessToken}`,
+      })
+      if (idorRepRes.statusCode !== 403 || idorRepRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on viewing another user's report, got ${idorRepRes.statusCode}`)
+      }
+    })
+
+    await runTest('PBI-18: Admin Center (Dashboard 5 KPI Cards, Reports Pagination, Evidence Cards & TC-API-168 Lock)', async () => {
+      // 1. Non-admin access to admin dashboard -> 403 A-3007
+      const nonAdminDashRes = await makeRequest(pipePath, '/api/v1/admin/dashboard', 'GET', undefined, {
+        Authorization: `Bearer ${userAAccessToken}`,
+      })
+      if (nonAdminDashRes.statusCode !== 403 || nonAdminDashRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 for non-admin on /admin/dashboard, got ${nonAdminDashRes.statusCode}`)
+      }
+
+      // 2. Admin retrieves Dashboard with 5 KPI Cards
+      const dashRes = await makeRequest(pipePath, '/api/v1/admin/dashboard', 'GET', undefined, {
+        Authorization: `Bearer ${adminAccessToken}`,
+      })
+      if (dashRes.statusCode !== 200 || dashRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 on admin dashboard, got ${dashRes.statusCode}: ${JSON.stringify(dashRes.body)}`)
+      }
+      const kpis = dashRes.body?.data
+      for (const kpi of ['pendingReports', 'totalUsers', 'activeProperties', 'pendingVerifications', 'bannedHosts']) {
+        if (!kpis[kpi] || typeof kpis[kpi].total !== 'number' || typeof kpis[kpi].thisMonth !== 'number') {
+          throw new Error(`Expected KPI ${kpi} to have total and thisMonth numbers, got: ${JSON.stringify(kpis[kpi])}`)
+        }
+      }
+
+      // 3. Admin reports pagination with server-side filters
+      const repPagRes = await makeRequest(pipePath, '/api/v1/admin/reports/paginate?status=pending', 'GET', undefined, {
+        Authorization: `Bearer ${adminAccessToken}`,
+      })
+      if (repPagRes.statusCode !== 200 || repPagRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 on admin reports paginate, got ${repPagRes.statusCode}`)
+      }
+      if ((repPagRes.body?.attributes?.pendingCount || 0) < 2) {
+        throw new Error(`Expected pendingCount >= 2, got ${repPagRes.body?.attributes?.pendingCount}`)
+      }
+
+      // 4. Admin report detail evidence enrichment: reportedReview card
+      const revDetailRes = await makeRequest(pipePath, `/api/v1/admin/reports/${reviewReportId}`, 'GET', undefined, {
+        Authorization: `Bearer ${adminAccessToken}`,
+      })
+      if (revDetailRes.statusCode !== 200) {
+        throw new Error(`Expected 200 on report detail, got ${revDetailRes.statusCode}`)
+      }
+      const reportedReviewCard = revDetailRes.body?.data?.report?.reportedReview
+      if (!reportedReviewCard || reportedReviewCard.bookingId !== 9001 || reportedReviewCard.rating !== 5) {
+        throw new Error(`Expected reportedReview evidence card with booking 9001 rating 5, got: ${JSON.stringify(reportedReviewCard)}`)
+      }
+
+      // 5. TC-API-168: Single-Action Lock prevents duplicate action on report
+      // Dismiss review report
+      const actionRes = await makeRequest(
+        pipePath,
+        `/api/v1/admin/reports/${reviewReportId}/action`,
+        'PATCH',
+        { action: 'dismiss_report', adminNote: 'Review does not violate standards' },
+        { Authorization: `Bearer ${adminAccessToken}` }
+      )
+      if (actionRes.statusCode !== 200 || actionRes.body?.data?.report?.status !== 'dismissed') {
+        throw new Error(`Expected 200 dismissed status, got ${actionRes.statusCode}: ${JSON.stringify(actionRes.body)}`)
+      }
+
+      // Second action on the same report -> 409 B-4001
+      const lockRes = await makeRequest(
+        pipePath,
+        `/api/v1/admin/reports/${reviewReportId}/action`,
+        'PATCH',
+        { action: 'warn_user', adminNote: 'Attempting second action' },
+        { Authorization: `Bearer ${adminAccessToken}` }
+      )
+      if (lockRes.statusCode !== 409 || lockRes.body?.code !== 'B-4001') {
+        throw new Error(`Expected 409 B-4001 on TC-API-168 single-action lock test, got ${lockRes.statusCode}: ${JSON.stringify(lockRes.body)}`)
+      }
+    })
+
+    await runTest('PBI-18: TC-151 Deactivate Property, Booking Auto-Cancel & Quota Restoration', async () => {
+      // 1. Create active confirmed booking on Property 101 to verify TC-151 cancellation
+      const activeBookingId = 9888
+      mockDb.bookingsMap.set(activeBookingId, {
+        id: activeBookingId,
+        propertyId: 101,
+        guestId: userAId,
+        bookingStatus: 'confirmed',
+        checkInDate: '2026-12-05',
+        checkOutDate: '2026-12-07',
+        bookingOrders: [{ roomCategoryId: 501, roomsBooked: 1, checkInDate: '2026-12-05', checkOutDate: '2026-12-07' }],
+        deletedAt: null,
+      })
+
+      // 2. Admin executes deactivate_property on Property 101 via propReportId
+      const banRes = await makeRequest(
+        pipePath,
+        `/api/v1/admin/reports/${propReportId}/action`,
+        'PATCH',
+        { action: 'deactivate_property', adminNote: 'Suspended for safety audit' },
+        { Authorization: `Bearer ${adminAccessToken}` }
+      )
+      if (banRes.statusCode !== 200 || banRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 on deactivate_property, got ${banRes.statusCode}: ${JSON.stringify(banRes.body)}`)
+      }
+
+      // 3. TC-151 Assertions: Property 101 isBannedByAdmin = true, isActive = false
+      const prop101 = mockDb.propertiesMap.get(101)!
+      if (prop101.isBannedByAdmin !== true || prop101.isActive !== false) {
+        throw new Error(`Expected property 101 isBannedByAdmin=true and isActive=false, got: isBannedByAdmin=${prop101.isBannedByAdmin}, isActive=${prop101.isActive}`)
+      }
+
+      // 4. TC-151 Assertions: Active booking on property 101 was auto-cancelled
+      const activeBooking = mockDb.bookingsMap.get(activeBookingId)!
+      if (activeBooking.bookingStatus !== 'cancelled' || activeBooking.cancelledBy !== 'admin') {
+        throw new Error(`Expected active booking to be cancelled by admin, got status=${activeBooking.bookingStatus}, cancelledBy=${activeBooking.cancelledBy}`)
+      }
+    })
+
+    await runTest('PBI-18: Cycle-Aware Appeal Quota & Max 2/2 Limit (409 B-4001)', async () => {
+      const userBAccessToken = jwt.sign(
+        { userId: userBId, email: 'bob@joodpakpaw.com', roleId: 2, roleName: 'host' },
+        config.jwt.secret,
+        { expiresIn: '1h' }
+      )
+
+      // 1. Owner IDOR Guard: User A (guest, not owner) tries to submit unban appeal for property 101 -> 403 A-3007
+      const idorAppealRes = await makeMultipartRequest(
+        pipePath,
+        '/api/v1/reports/unban-property',
+        'POST',
+        { propertyId: '101', description: 'I want to appeal for someone else' },
+        [],
+        { Authorization: `Bearer ${userAAccessToken}` }
+      )
+      if (idorAppealRes.statusCode !== 403 || idorAppealRes.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 on appeal for non-owned property, got ${idorAppealRes.statusCode}: ${JSON.stringify(idorAppealRes.body)}`)
+      }
+
+      // 2. Host (User B, owner) submits Appeal 1 -> 201 S-0000
+      const appeal1Res = await makeMultipartRequest(
+        pipePath,
+        '/api/v1/reports/unban-property',
+        'POST',
+        { propertyId: '101', description: 'First appeal: fixed the safety issues' },
+        [],
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (appeal1Res.statusCode !== 201 || appeal1Res.body?.code !== 'S-0000') {
+        throw new Error(`Expected 201 S-0000 on appeal 1, got ${appeal1Res.statusCode}: ${JSON.stringify(appeal1Res.body)}`)
+      }
+      const appeal1Id = appeal1Res.body?.data?.report?.id
+
+      // 3. Duplicate pending guard: Host attempts another appeal while Appeal 1 is pending -> 409 B-4001
+      const dupAppealRes = await makeMultipartRequest(
+        pipePath,
+        '/api/v1/reports/unban-property',
+        'POST',
+        { propertyId: '101', description: 'Duplicate appeal attempt' },
+        [],
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (dupAppealRes.statusCode !== 409 || dupAppealRes.body?.code !== 'B-4001') {
+        throw new Error(`Expected 409 B-4001 on duplicate pending appeal, got ${dupAppealRes.statusCode}: ${JSON.stringify(dupAppealRes.body)}`)
+      }
+
+      // 4. Admin inspects appeal 1: verifies suspensionContext card (Attempt 1/2)
+      const appealDetailRes = await makeRequest(pipePath, `/api/v1/admin/reports/${appeal1Id}`, 'GET', undefined, {
+        Authorization: `Bearer ${adminAccessToken}`,
+      })
+      const suspContext = appealDetailRes.body?.data?.report?.suspensionContext
+      if (!suspContext || suspContext.appealAttempt !== 1 || suspContext.maxAppeals !== 2) {
+        throw new Error(`Expected suspensionContext with appealAttempt 1 and maxAppeals 2, got: ${JSON.stringify(suspContext)}`)
+      }
+
+      // 5. Admin dismisses Appeal 1 (Attempt 1/2 used)
+      const dismiss1Res = await makeRequest(
+        pipePath,
+        `/api/v1/admin/reports/${appeal1Id}/action`,
+        'PATCH',
+        { action: 'dismiss_report', adminNote: 'Safety report documentation incomplete' },
+        { Authorization: `Bearer ${adminAccessToken}` }
+      )
+      if (dismiss1Res.statusCode !== 200) {
+        throw new Error(`Expected 200 on dismissing appeal 1, got ${dismiss1Res.statusCode}`)
+      }
+
+      // Verify Host property unbanRequestCount is now 1
+      const hostPropRes1 = await makeRequest(pipePath, `/api/v1/hosts/properties/101`, 'GET', undefined, {
+        Authorization: `Bearer ${userBAccessToken}`,
+      })
+      if (hostPropRes1.body?.data?.property?.unbanRequestCount !== 1) {
+        throw new Error(`Expected unbanRequestCount=1 after first dismissal, got ${hostPropRes1.body?.data?.property?.unbanRequestCount}`)
+      }
+      if (hostPropRes1.body?.data?.property?.lastAppealNote !== 'Safety report documentation incomplete') {
+        throw new Error(`Expected lastAppealNote to reflect adminNote, got ${hostPropRes1.body?.data?.property?.lastAppealNote}`)
+      }
+
+      // 6. Host submits Appeal 2 -> 201 S-0000
+      const appeal2Res = await makeMultipartRequest(
+        pipePath,
+        '/api/v1/reports/unban-property',
+        'POST',
+        { propertyId: '101', description: 'Second appeal: attached professional engineer report' },
+        [],
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (appeal2Res.statusCode !== 201) {
+        throw new Error(`Expected 201 on appeal 2, got ${appeal2Res.statusCode}`)
+      }
+      const appeal2Id = appeal2Res.body?.data?.report?.id
+
+      // 7. Admin dismisses Appeal 2 (Attempt 2/2 used)
+      const dismiss2Res = await makeRequest(
+        pipePath,
+        `/api/v1/admin/reports/${appeal2Id}/action`,
+        'PATCH',
+        { action: 'dismiss_report', adminNote: 'Engineer report lacks required certification' },
+        { Authorization: `Bearer ${adminAccessToken}` }
+      )
+      if (dismiss2Res.statusCode !== 200) {
+        throw new Error(`Expected 200 on dismissing appeal 2, got ${dismiss2Res.statusCode}`)
+      }
+
+      // Verify Host property unbanRequestCount is now 2
+      const hostPropRes2 = await makeRequest(pipePath, `/api/v1/hosts/properties/101`, 'GET', undefined, {
+        Authorization: `Bearer ${userBAccessToken}`,
+      })
+      if (hostPropRes2.body?.data?.property?.unbanRequestCount !== 2) {
+        throw new Error(`Expected unbanRequestCount=2 after second dismissal, got ${hostPropRes2.body?.data?.property?.unbanRequestCount}`)
+      }
+
+      // 8. Host submits Appeal 3 -> 409 B-4001 (Maximum appeal limit 2/2 reached)
+      const appeal3Res = await makeMultipartRequest(
+        pipePath,
+        '/api/v1/reports/unban-property',
+        'POST',
+        { propertyId: '101', description: 'Third appeal attempt: should be blocked' },
+        [],
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (appeal3Res.statusCode !== 409 || appeal3Res.body?.code !== 'B-4001') {
+        throw new Error(`Expected 409 B-4001 on exceeding max 2/2 appeal quota, got ${appeal3Res.statusCode}: ${JSON.stringify(appeal3Res.body)}`)
+      }
+    })
+
+    await runTest('PBI-18: Full Cascading Ban/Appeal State Machine (TC-152 Snapshot, TC-153 & TC-154 Restore, TC-155 Single Unban)', async () => {
+      const userBAccessToken = jwt.sign(
+        { userId: userBId, email: 'bob@joodpakpaw.com', roleId: 2, roleName: 'host' },
+        config.jwt.secret,
+        { expiresIn: '1h' }
+      )
+
+      // State Setup:
+      // Host (User B) has:
+      // - Prop 101: isBannedByAdmin = true (was individually banned in TC-151)
+      // - Prop 102: isBannedByAdmin = false, isActive = true
+      const prop101 = mockDb.propertiesMap.get(101)!
+      const prop102 = mockDb.propertiesMap.get(102)!
+      prop101.isBannedByAdmin = true
+      prop101.isBannedBeforeAccountBan = false
+      prop101.isActive = false
+      prop102.isBannedByAdmin = false
+      prop102.isBannedBeforeAccountBan = false
+      prop102.isActive = true
+
+      // 1. Create a platform report against Host (User B)
+      const banHostReport = await prisma.report.create({
+        data: {
+          reporterId: userAId,
+          reportCategoryId: 1,
+          propertyId: 102,
+          description: 'Host account violations across multiple listings',
+          status: 'pending',
+        },
+      })
+
+      // 2. Admin executes deactivate_all_properties (TC-152 Snapshot)
+      const banAllRes = await makeRequest(
+        pipePath,
+        `/api/v1/admin/reports/${banHostReport.id}/action`,
+        'PATCH',
+        { action: 'deactivate_all_properties', adminNote: 'Host account suspended globally' },
+        { Authorization: `Bearer ${adminAccessToken}` }
+      )
+      if (banAllRes.statusCode !== 200 || banAllRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 on deactivate_all_properties, got ${banAllRes.statusCode}: ${JSON.stringify(banAllRes.body)}`)
+      }
+
+      // TC-152 Snapshot Assertions:
+      // - Host user: isBannedAllProperties = true
+      // - Prop 101 (previously banned): isBannedBeforeAccountBan = true, isBannedByAdmin = true, isActive = false
+      // - Prop 102 (not previously banned): isBannedBeforeAccountBan = false, isBannedByAdmin = true, isActive = false
+      const hostUser = mockDb.users.get(userBId)!
+      if (hostUser.isBannedAllProperties !== true) {
+        throw new Error(`Expected host isBannedAllProperties=true, got ${hostUser.isBannedAllProperties}`)
+      }
+      if (prop101.isBannedBeforeAccountBan !== true || prop101.isBannedByAdmin !== true) {
+        throw new Error(`Expected prop 101 snapshot isBannedBeforeAccountBan=true, got ${prop101.isBannedBeforeAccountBan}`)
+      }
+      if (prop102.isBannedBeforeAccountBan !== false || prop102.isBannedByAdmin !== true) {
+        throw new Error(`Expected prop 102 snapshot isBannedBeforeAccountBan=false, got ${prop102.isBannedBeforeAccountBan}`)
+      }
+
+      // 3. Host appeals account suspension
+      const accountAppealRes = await makeMultipartRequest(
+        pipePath,
+        '/api/v1/reports/unban-property',
+        'POST',
+        { description: 'Host account appeal: resolved all compliance items' },
+        [],
+        { Authorization: `Bearer ${userBAccessToken}` }
+      )
+      if (accountAppealRes.statusCode !== 201) {
+        throw new Error(`Expected 201 on account appeal, got ${accountAppealRes.statusCode}: ${JSON.stringify(accountAppealRes.body)}`)
+      }
+      const accountAppealId = accountAppealRes.body?.data?.report?.id
+
+      // 4. Admin executes unban_all_properties (TC-153 & TC-154 Restore)
+      const unbanAllRes = await makeRequest(
+        pipePath,
+        `/api/v1/admin/reports/${accountAppealId}/action`,
+        'PATCH',
+        { action: 'unban_all_properties', adminNote: 'Compliance verified, account restored' },
+        { Authorization: `Bearer ${adminAccessToken}` }
+      )
+      if (unbanAllRes.statusCode !== 200 || unbanAllRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 on unban_all_properties, got ${unbanAllRes.statusCode}: ${JSON.stringify(unbanAllRes.body)}`)
+      }
+
+      // TC-153 & TC-154 Restore Assertions:
+      // - Host user: isBannedAllProperties = false
+      // - Prop 102: restored to isBannedByAdmin = false (TC-153)
+      // - Prop 101: remains isBannedByAdmin = true because it was individually banned prior to account ban (TC-154!)
+      if ((hostUser as any).isBannedAllProperties !== false) {
+        throw new Error(`Expected host isBannedAllProperties=false, got ${hostUser.isBannedAllProperties}`)
+      }
+      if ((prop102 as any).isBannedByAdmin !== false) {
+        throw new Error(`Expected prop 102 isBannedByAdmin=false (TC-153), got ${prop102.isBannedByAdmin}`)
+      }
+      if ((prop101 as any).isBannedByAdmin !== true) {
+        throw new Error(`Expected prop 101 to remain isBannedByAdmin=true (TC-154), got ${prop101.isBannedByAdmin}`)
+      }
+
+      // 5. Admin executes unban_property on Prop 101 (TC-155 Single Unban)
+      const prop101UnbanReport = await prisma.report.create({
+        data: {
+          reporterId: userBId,
+          reportCategoryId: 3,
+          propertyId: 101,
+          description: 'Final individual unban request for property 101',
+          status: 'pending',
+        },
+      })
+
+      const singleUnbanRes = await makeRequest(
+        pipePath,
+        `/api/v1/admin/reports/${prop101UnbanReport.id}/action`,
+        'PATCH',
+        { action: 'unban_property', adminNote: 'Property 101 individually restored' },
+        { Authorization: `Bearer ${adminAccessToken}` }
+      )
+      if (singleUnbanRes.statusCode !== 200 || singleUnbanRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 on unban_property, got ${singleUnbanRes.statusCode}: ${JSON.stringify(singleUnbanRes.body)}`)
+      }
+
+      // TC-155 Assertions:
+      // - Prop 101: isBannedByAdmin = false, isBannedBeforeAccountBan = false
+      if (prop101.isBannedByAdmin !== false || prop101.isBannedBeforeAccountBan !== false) {
+        throw new Error(`Expected prop 101 isBannedByAdmin=false and isBannedBeforeAccountBan=false (TC-155), got: isBannedByAdmin=${prop101.isBannedByAdmin}`)
+      }
+
+      // 6. Quota Reset Verification:
+      // Prop 101 appeal quota resets to 0/2 for future suspension cycles
+      const resetCheckRes = await makeRequest(pipePath, `/api/v1/hosts/properties/101`, 'GET', undefined, {
+        Authorization: `Bearer ${userBAccessToken}`,
+      })
+      if (resetCheckRes.body?.data?.property?.unbanRequestCount !== 0) {
+        throw new Error(`Expected unbanRequestCount=0 after successful unban, got ${resetCheckRes.body?.data?.property?.unbanRequestCount}`)
+      }
+    })
+
+    await runTest('PBI-18: Review Deletion S3 GC, Rating Recalculation & Admin Action Logs', async () => {
+      // Clean up earlier reviews on property 101 so booking 9001 is the isolated review under test
+      for (const b of mockDb.bookingsMap.values()) {
+        if (b.propertyId === 101 && b.id !== 9001) {
+          b.rating = null
+          b.comment = null
+          b.reviewedAt = null
+        }
+      }
+      const b9001 = mockDb.bookingsMap.get(9001)!
+      b9001.rating = 5
+      b9001.comment = 'Spam review with prohibited links'
+      b9001.reviewedAt = new Date()
+
+      // 1. Setup a reported review on booking 9001
+      const revRep2 = await prisma.report.create({
+        data: {
+          reporterId: userBId,
+          reportCategoryId: 2,
+          bookingId: 9001,
+          propertyId: 101,
+          description: 'Spam review with prohibited links',
+          status: 'pending',
+        },
+      })
+
+      // 2. Admin executes delete_review
+      const delRevRes = await makeRequest(
+        pipePath,
+        `/api/v1/admin/reports/${revRep2.id}/action`,
+        'PATCH',
+        { action: 'delete_review', adminNote: 'Violated content policy' },
+        { Authorization: `Bearer ${adminAccessToken}` }
+      )
+      if (delRevRes.statusCode !== 200 || delRevRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 on delete_review, got ${delRevRes.statusCode}: ${JSON.stringify(delRevRes.body)}`)
+      }
+
+      // 3. Verify booking review fields were cleared
+      const booking9001 = mockDb.bookingsMap.get(9001)!
+      if (booking9001.rating !== null || booking9001.comment !== null || booking9001.reviewedAt !== null) {
+        throw new Error(`Expected booking 9001 review fields to be null, got rating=${booking9001.rating}, comment=${booking9001.comment}`)
+      }
+
+      // 4. Verify property 101 avgRating & reviewCount recalculated
+      const prop101 = mockDb.propertiesMap.get(101)!
+      if (prop101.reviewCount !== 0 || prop101.avgRating !== 0) {
+        throw new Error(`Expected property 101 reviewCount=0 and avgRating=0 after only review was deleted, got reviewCount=${prop101.reviewCount}, avgRating=${prop101.avgRating}`)
+      }
+
+      // 5. Admin retrieves action logs
+      const actionLogsRes = await makeRequest(pipePath, '/api/v1/admin/action-logs/paginate', 'GET', undefined, {
+        Authorization: `Bearer ${adminAccessToken}`,
+      })
+      if (actionLogsRes.statusCode !== 200 || !Array.isArray(actionLogsRes.body?.data)) {
+        throw new Error(`Expected 200 with action logs array, got ${actionLogsRes.statusCode}`)
+      }
+      if (actionLogsRes.body?.data?.length < 3) {
+        throw new Error(`Expected at least 3 action logs recorded, got ${actionLogsRes.body?.data?.length}`)
+      }
+      const hasDeleteReviewLog = actionLogsRes.body?.data?.some((l: any) => l.action === 'delete_review')
+      if (!hasDeleteReviewLog) {
+        throw new Error('Expected delete_review action log to be present')
+      }
     })
   } finally {
     mockDb.restore()

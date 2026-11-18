@@ -8,11 +8,20 @@ import React, {
   useCallback,
   ReactNode,
 } from 'react'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { useAuth } from './AuthContext'
 import { connectSocket, disconnectSocket } from '@/lib/socket'
 import { refreshAccessToken } from '@/lib/authenUtils'
-import { getNotifications, deleteAllNotifications, deleteNotificationById } from '@/lib/api'
+import {
+  getNotifications,
+  deleteAllNotifications,
+  deleteNotificationById,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+} from '@/lib/api'
 import { AppNotification } from '@/types'
+import { getNotificationRoute } from '@/app/notifications/_utils'
 
 // localStorage only stores which IDs have been read — notifications themselves
 // come from the API so they persist across devices.
@@ -104,7 +113,8 @@ function parseNotification(
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth()
+  const router = useRouter()
+  const { isAuthenticated, refreshAuth } = useAuth()
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [isConnected, setIsConnected] = useState<boolean | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -160,6 +170,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
     )
+    markNotificationAsRead(id).catch(console.error)
   }, [])
 
   const markAllAsRead = useCallback(() => {
@@ -169,6 +180,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       saveReadIds(readIds)
       return prev.map((n) => ({ ...n, isRead: true }))
     })
+    markAllNotificationsAsRead().catch(console.error)
   }, [])
 
   const deleteOne = useCallback(async (id: string) => {
@@ -222,7 +234,38 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
     const onNotification = (data: unknown) => {
       console.log('[Notification] Received:', data)
-      addNotification(data)
+      try {
+        const readIds = loadReadIds()
+        const notif = parseNotification(data, readIds)
+        addNotification(data)
+
+        const route = getNotificationRoute(notif)
+        toast(notif.title, {
+          description: notif.message,
+          action: route
+            ? {
+                label: 'View',
+                onClick: () => router.push(`${route}?from=toast`),
+              }
+            : undefined,
+        })
+
+        const govEvents = [
+          'kyc_approved',
+          'kyc_rejected',
+          'property_banned',
+          'property_unbanned',
+          'account_banned',
+          'account_unbanned',
+        ]
+        const rawObj = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {}
+        const eventName = String(rawObj.actionName ?? rawObj.type ?? notif.actionName ?? notif.type ?? '')
+        if (govEvents.includes(eventName)) {
+          refreshAuth().catch(console.error)
+        }
+      } catch (err) {
+        console.error('[Notification] Error handling notification event:', err)
+      }
     }
 
     socket.on('connect', onConnect)
@@ -239,7 +282,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       socket.off('disconnect', onDisconnect)
       socket.off('notification', onNotification)
     }
-  }, [isAuthenticated, reconnectKey, addNotification, fetchNotifications])
+  }, [isAuthenticated, reconnectKey, addNotification, fetchNotifications, refreshAuth, router])
 
   return (
     <NotificationContext.Provider

@@ -79,6 +79,14 @@ export default function NotificationsPage() {
 
       {/* Centered content container for tablet/desktop */}
       <div className="md:max-w-2xl lg:max-w-3xl md:mx-auto md:mt-4 md:px-4 lg:px-0">
+        {/* Desktop Header */}
+        <div className="hidden lg:flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-deep-teal">Notifications</h1>
+            <p className="text-xs text-neutral-gray mt-0.5">Stay updated on your bookings and account activity</p>
+          </div>
+          <div>{connectionMenu}</div>
+        </div>
 
         <div className="md:rounded-2xl md:border md:border-gray-100 md:shadow-sm md:overflow-hidden">
           <div className="sticky top-14 z-30 lg:top-0">

@@ -166,7 +166,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const raw = typeof data === 'string'
         ? (JSON.parse(data) as Record<string, unknown>)
         : (data as Record<string, unknown>)
-      const roomId = Number(raw?.roomId)
+      const roomId = Number(raw?.roomId ?? raw?.chatRoomId)
       const readAt = String(raw?.readAt ?? new Date().toISOString())
       if (!roomId) return
 
@@ -178,7 +178,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setRooms((prev) =>
           prev.map((r) =>
             r.id === roomId
-              ? { ...r, lastMessage: { ...r.lastMessage, readAt: r.lastMessage.readAt ?? readAt } }
+              ? { ...r, lastMessage: r.lastMessage ? { ...r.lastMessage, readAt: r.lastMessage.readAt ?? readAt } : r.lastMessage }
               : r
           )
         )
@@ -196,7 +196,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setRooms((prev) =>
         prev.map((r) =>
           r.id === roomId
-            ? { ...r, lastMessage: { ...r.lastMessage, readAt: r.lastMessage.readAt ?? readAt } }
+            ? { ...r, lastMessage: r.lastMessage ? { ...r.lastMessage, readAt: r.lastMessage.readAt ?? readAt } : r.lastMessage }
             : r
         )
       )
@@ -221,6 +221,31 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     try {
       const detail = await getChatRoomById(id)
       setRoomMessages((prev) => ({ ...prev, [id]: detail.messages }))
+      setRooms((prev) => {
+        const exists = prev.some((r) => r.id === id)
+        if (!exists) {
+          return [
+            {
+              id: detail.id,
+              lastMessageAt: detail.lastMessageAt,
+              otherUser: detail.otherUser,
+              activeBooking: detail.activeBooking,
+              contextProperty: detail.contextProperty,
+            },
+            ...prev,
+          ]
+        }
+        return prev.map((r) =>
+          r.id === id
+            ? {
+                ...r,
+                activeBooking: detail.activeBooking !== undefined ? detail.activeBooking : r.activeBooking,
+                contextProperty: detail.contextProperty !== undefined ? detail.contextProperty : r.contextProperty,
+                otherUser: detail.otherUser ?? r.otherUser,
+              }
+            : r
+        )
+      })
     } catch {
       // keep existing
     }
@@ -251,7 +276,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setRooms((prev) =>
       prev.map((r) =>
         r.id === roomId
-          ? { ...r, lastMessage: { ...r.lastMessage, readAt: new Date().toISOString() } }
+          ? {
+              ...r,
+              lastMessage: r.lastMessage
+                ? { ...r.lastMessage, readAt: new Date().toISOString() }
+                : r.lastMessage,
+            }
           : r
       )
     )

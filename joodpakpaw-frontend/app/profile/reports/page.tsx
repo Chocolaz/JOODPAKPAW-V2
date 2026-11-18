@@ -77,8 +77,16 @@ export default function MyReportsPage() {
         <>
           <div className="space-y-3">
             {data.map((report) => {
-              const status = STATUS_CONFIG[report.status]
-              const type = TYPE_CONFIG[report.type]
+              const normalizedType =
+                (report.type as string) === 'unban' ? 'unban_property' : report.type
+              const status = STATUS_CONFIG[report.status] ?? {
+                label: report.status || 'Unknown',
+                className: 'bg-gray-100 text-gray-500',
+              }
+              const type = TYPE_CONFIG[normalizedType as keyof typeof TYPE_CONFIG] ?? {
+                label: report.type || 'Report',
+                className: 'bg-gray-100 text-gray-600',
+              }
               return (
                 <button
                   key={report.id}

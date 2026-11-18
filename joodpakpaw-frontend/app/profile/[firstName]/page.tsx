@@ -283,7 +283,7 @@ export default function UserProfilePage() {
                       {saving ? (
                         <>
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          กำลังบันทึก...
+                          Saving...
                         </>
                       ) : (
                         <>

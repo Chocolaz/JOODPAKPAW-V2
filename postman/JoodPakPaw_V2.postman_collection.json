@@ -1965,6 +1965,1494 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "06 - Notifications (Sprint 3 - PBI-14)",
+      "description": "Persistent notifications CRUD with role/action metadata and IDOR guards",
+      "item": [
+        {
+          "name": "Get My Notifications",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/notifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "notifications"
+              ]
+            },
+            "description": "Retrieves up to 100 non-deleted notifications for the authenticated user."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Single data envelope & notifications array\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data.notifications).to.be.an(\"array\");",
+                  "    if (json.data.notifications.length > 0) {",
+                  "        pm.environment.set(\"sample_notification_id\", String(json.data.notifications[0].id));",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mark All Notifications As Read",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/notifications/read-all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "notifications",
+                "read-all"
+              ]
+            },
+            "description": "Marks all unread notifications for the authenticated user as read."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns updatedCount\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data.updatedCount).to.be.a(\"number\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mark Single Notification As Read",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/notifications/{{sample_notification_id}}/read",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "notifications",
+                "{{sample_notification_id}}",
+                "read"
+              ]
+            },
+            "description": "Marks a single notification as read (enforces 403 A-3007 on non-owner)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Notification isRead is true\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data.notification.isRead).to.eql(true);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Single Notification",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/notifications/{{sample_notification_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "notifications",
+                "{{sample_notification_id}}"
+              ]
+            },
+            "description": "Soft-deletes a single notification (enforces 403 A-3007 IDOR guard)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Success code S-0000\", () => pm.expect(pm.response.json().code).to.eql(\"S-0000\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete All Notifications",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/notifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "notifications"
+              ]
+            },
+            "description": "Soft-deletes all notifications belonging to the authenticated user."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Success code S-0000\", () => pm.expect(pm.response.json().code).to.eql(\"S-0000\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 - Real-Time Chat Rooms (Sprint 3 - PBI-15)",
+      "description": "1-on-1 chat rooms with pair normalization, contextual inquiry metadata, and WebP S3 GC",
+      "item": [
+        {
+          "name": "Create or Get Chat Room (with Optional Inquiry Context)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "participantId",
+                  "value": "2",
+                  "type": "text"
+                },
+                {
+                  "key": "propertyId",
+                  "value": "{{sample_property_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "content",
+                  "value": "Hello! Is there availability for my dog this weekend?",
+                  "type": "text"
+                },
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/chat-rooms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat-rooms"
+              ]
+            },
+            "description": "Creates or returns normalized 1-on-1 chat room with activeBooking, contextProperty, and optional initial message/WebP images (400 T-2007 on self-chat)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 201\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test(\"Returns chatRoom DTO & saves sample_chat_room_id\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data.chatRoom).to.be.an(\"object\");",
+                  "    pm.environment.set(\"sample_chat_room_id\", String(json.data.chatRoom.id));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "List My Chat Rooms",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/chat-rooms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat-rooms"
+              ]
+            },
+            "description": "Lists chat rooms for the authenticated user sorted by lastMessageAt desc, with otherUser and activeBooking context."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns chatRooms array\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data.chatRooms).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Chat Room Detail & Messages",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/chat-rooms/{{sample_chat_room_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat-rooms",
+                "{{sample_chat_room_id}}"
+              ]
+            },
+            "description": "Returns full room metadata, activeBooking, contextProperty, and message history (403 A-3007 if not participant)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns chatRoom detail with messages array\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data.chatRoom.messages).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Send Chat Message (Text / WebP Attachments)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "content",
+                  "value": "Here is a photo of my dog and feeding instructions.",
+                  "type": "text"
+                },
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/chat-rooms/{{sample_chat_room_id}}/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat-rooms",
+                "{{sample_chat_room_id}}",
+                "messages"
+              ]
+            },
+            "description": "Sends text and/or up to 5 WebP image attachments to the room and emits Socket.IO new_message to both participants."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Returns sent message DTO\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data.message).to.be.an(\"object\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mark Chat Room Messages As Read",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/chat-rooms/{{sample_chat_room_id}}/messages/read",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat-rooms",
+                "{{sample_chat_room_id}}",
+                "messages",
+                "read"
+              ]
+            },
+            "description": "Marks unread messages sent by the other participant as read and emits messages_read via Socket.IO."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns updatedCount\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data.updatedCount).to.be.a(\"number\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Chat Room & Purge S3 Attachments",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/chat-rooms/{{sample_chat_room_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "chat-rooms",
+                "{{sample_chat_room_id}}"
+              ]
+            },
+            "description": "Deletes the chat room, clears S3 attachment objects via deleteObjectFromS3, and notifies participants (403 A-3007 IDOR guard)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Success code S-0000\", () => pm.expect(pm.response.json().code).to.eql(\"S-0000\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "08 - Host KYC Verification (Sprint 3 - PBI-17)",
+      "description": "Universal user KYC upload, S3 resubmission cleanup, and Admin single-review concurrency lock (TC-API-172)",
+      "item": [
+        {
+          "name": "Get My Verification Status",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user-verifications/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user-verifications",
+                "me"
+              ]
+            },
+            "description": "Retrieves the latest KYC verification status for the authenticated user."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns verification envelope\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data).to.have.property(\"verification\");",
+                  "    if (json.data.verification && json.data.verification.id) {",
+                  "        pm.environment.set(\"sample_verification_id\", String(json.data.verification.id));",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit Universal Host KYC Verification",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "idPhoto",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "selfieWithId",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user-verifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user-verifications"
+              ]
+            },
+            "description": "Uploads idPhoto + selfieWithId as .webp, purges previously rejected S3 files on resubmission, and rejects pending/approved duplicates with 409 B-4001."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Saves sample_verification_id\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.environment.set(\"sample_verification_id\", String(json.data.verification.id));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin: Paginate KYC Verifications",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/user-verifications/paginate?page=1&limit=10&status=pending&orderBy=submittedAt&sort=desc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "user-verifications",
+                "paginate"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "status",
+                  "value": "pending"
+                },
+                {
+                  "key": "orderBy",
+                  "value": "submittedAt"
+                },
+                {
+                  "key": "sort",
+                  "value": "desc"
+                }
+              ]
+            },
+            "description": "Admin paginated KYC queue with status filter and server-computed counts in attributes."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns rows, pagination, and attributes\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data).to.be.an(\"array\");",
+                  "    pm.expect(json.attributes).to.have.property(\"pendingCount\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin: Get Verification Detail",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/user-verifications/{{sample_verification_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "user-verifications",
+                "{{sample_verification_id}}"
+              ]
+            },
+            "description": "Retrieves full KYC submission details and applicant info for Admin review."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns verification detail\", () => pm.expect(pm.response.json().data.verification).to.be.an(\"object\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin: Approve Verification (FOR UPDATE Lock)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/user-verifications/{{sample_verification_id}}/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "user-verifications",
+                "{{sample_verification_id}}",
+                "approve"
+              ]
+            },
+            "description": "Approves KYC inside FOR UPDATE lock (409 B-4001 if already processed - TC-API-172), promotes user to host, and sends kyc_approved notification."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Status becomes approved\", () => pm.expect(pm.response.json().data.verification.status).to.eql(\"approved\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin: Reject Verification (FOR UPDATE Lock)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/user-verifications/{{sample_verification_id}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "user-verifications",
+                "{{sample_verification_id}}",
+                "reject"
+              ]
+            },
+            "description": "Rejects KYC inside FOR UPDATE lock with mandatory rejectDescription (400 T-2007 if empty, 409 B-4001 if already processed - TC-API-172).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rejectDescription\": \"ID card text is blurry or obstructed. Please resubmit a clear photo.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Status becomes rejected\", () => pm.expect(pm.response.json().data.verification.status).to.eql(\"rejected\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "09 - Reports & Admin Governance (Sprint 3 - PBI-18)",
+      "description": "Reports, cycle-aware 2/2 suspension appeals, Admin KPI dashboard, evidence cards, action logs & cascading ban/unban state machine (TC-151..155)",
+      "item": [
+        {
+          "name": "Submit Property Report",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "propertyId",
+                  "value": "{{sample_property_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "reportCategoryId",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Listing photos do not match actual property condition.",
+                  "type": "text"
+                },
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/reports/property",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reports",
+                "property"
+              ]
+            },
+            "description": "Guest reports a property listing with self-report (400 T-2007) and duplicate pending (409 B-4001) guards."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Saves sample_report_id\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.environment.set(\"sample_report_id\", String(json.data.report.id));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit Review Report",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "bookingId",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "reportCategoryId",
+                  "value": "6",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Review contains abusive language violating guidelines.",
+                  "type": "text"
+                },
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/reports/review",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reports",
+                "review"
+              ]
+            },
+            "description": "Reports a booking review (requires rating != null; enforces self-review and duplicate pending guards)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Returns report record\", () => pm.expect(pm.response.json().code).to.eql(\"S-0000\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit Unban Appeal (Property or Account)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "propertyId",
+                  "value": "{{sample_property_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "We have updated our safety fence and uploaded verified photos.",
+                  "type": "text"
+                },
+                {
+                  "key": "images",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/reports/unban-property",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reports",
+                "unban-property"
+              ]
+            },
+            "description": "Host submits property-level (with propertyId) or account-level (omit propertyId) appeal. Enforces max 2/2 rejected appeals per suspension cycle (409 B-4001)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Saves sample_report_id\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.environment.set(\"sample_report_id\", String(json.data.report.id));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get My Reports (Paginated)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/reports/me/paginate?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reports",
+                "me",
+                "paginate"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Lists reports and appeals submitted by the authenticated user."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns reports array\", () => pm.expect(pm.response.json().data).to.be.an(\"array\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get My Report Detail",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/reports/me/{{sample_report_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "reports",
+                "me",
+                "{{sample_report_id}}"
+              ]
+            },
+            "description": "Retrieves a specific user-submitted report or appeal (403 A-3007 if not reporter)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns report detail\", () => pm.expect(pm.response.json().data.report).to.be.an(\"object\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin: Get Governance Dashboard KPIs",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "dashboard"
+              ]
+            },
+            "description": "Returns 5 KPI cards: pendingReports, totalUsers, activeProperties, pendingVerifications, bannedHosts (Admin only)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Includes bannedHosts KPI\", () => {",
+                  "    var d = pm.response.json().data;",
+                  "    pm.expect(d).to.have.property(\"pendingReports\");",
+                  "    pm.expect(d).to.have.property(\"bannedHosts\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin: Paginate Reports & Appeals (Server-Side Filter)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/reports/paginate?page=1&limit=10&status=pending&type=property&orderBy=createdAt&sort=desc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "reports",
+                "paginate"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "status",
+                  "value": "pending"
+                },
+                {
+                  "key": "type",
+                  "value": "property",
+                  "disabled": true
+                },
+                {
+                  "key": "orderBy",
+                  "value": "createdAt"
+                },
+                {
+                  "key": "sort",
+                  "value": "desc"
+                }
+              ]
+            },
+            "description": "Server-side filtered & sorted reports queue with attributes.pendingCount."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns reports and pendingCount\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data).to.be.an(\"array\");",
+                  "    pm.expect(json.attributes).to.have.property(\"pendingCount\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin: Get Report Detail (With Evidence & Suspension Context)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/reports/{{sample_report_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "reports",
+                "{{sample_report_id}}"
+              ]
+            },
+            "description": "Returns full report evidence including reportedReview (for review reports) and suspensionContext (for unban appeals)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns enriched report\", () => pm.expect(pm.response.json().data.report).to.be.an(\"object\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin: Execute Report Action (FOR UPDATE Lock & TC-151..155)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/reports/{{sample_report_id}}/action",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "reports",
+                "{{sample_report_id}}",
+                "action"
+              ]
+            },
+            "description": "Actions: dismiss_report | warn_user | deactivate_property (TC-151) | deactivate_all_properties (TC-152) | unban_all_properties (TC-153/154) | unban_property (TC-155) | delete_review. Enforces TC-API-168 FOR UPDATE single-action lock (409 B-4001).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"dismiss_report\",\n  \"adminNote\": \"Reviewed evidence; action executed according to platform guidelines.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Success code S-0000\", () => pm.expect(pm.response.json().code).to.eql(\"S-0000\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin: Paginate Audit Action Logs",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/action-logs/paginate?page=1&limit=10&action=deactivate_property",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "action-logs",
+                "paginate"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "action",
+                  "value": "deactivate_property",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Retrieves paginated immutable admin audit logs with actor, target, and optional action filter."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns action logs array\", () => pm.expect(pm.response.json().data).to.be.an(\"array\"));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }

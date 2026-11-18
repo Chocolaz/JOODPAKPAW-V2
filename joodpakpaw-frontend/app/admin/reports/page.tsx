@@ -1,12 +1,15 @@
 'use client'
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
   getAdminReports,
   getAdminReportById,
   takeReportAction,
+  createChatRoom,
 } from '@/lib/api'
+import { useAuth } from '@/app/_components/AuthContext'
 import type {
   AdminReportSummary,
   AdminReportDetail,
@@ -25,6 +28,8 @@ import {
   ChevronsUpDown,
   ChevronUp,
   ChevronDown,
+  Star,
+  MessageCircle,
 } from 'lucide-react'
 import { formatDate, formatDateRelative } from '../_utils'
 import { StatusBadge } from '../_components/StatusBadge'
@@ -95,12 +100,12 @@ const ACTION_CONFIG: Record<
   warn_user: {
     label: 'Warn User',
     description:
-      'Send a warning notification to the reporter and property owner.',
+      'Send a warning notification to the responsible user.',
     icon: AlertTriangle,
     buttonClass:
       'border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100',
     confirmClass: 'bg-amber-600 text-white hover:bg-amber-700',
-    appliesTo: ['property'],
+    appliesTo: ['property', 'review'],
   },
   deactivate_property: {
     label: 'Deactivate Property',
@@ -152,6 +157,64 @@ const ACTION_CONFIG: Record<
   },
 }
 
+const ACTION_PRESETS: Record<ReportAction, string[]> = {
+  deactivate_property: [
+    'Severe violation of safety standards',
+    'Multiple verified pet hygiene complaints',
+    'Misrepresentation of facility capabilities',
+    'Unresponsive host during pet incident',
+  ],
+  deactivate_all_properties: [
+    'Critical platform policy violation by host',
+    'Host account banned due to fraudulent activities',
+    'Severe repeated guest complaints across listings',
+  ],
+  warn_user: [
+    'First warning: please adhere to marketplace guidelines',
+    'Maintain accurate facility photos and description',
+    'Ensure timely daily updates to pet owners',
+  ],
+  delete_review: [
+    'Review contains vulgar or abusive language',
+    'Review contains irrelevant competitor advertisement',
+    'Review violates privacy policies by sharing PII',
+  ],
+  unban_property: [
+    'Host submitted verified proof of facility improvements',
+    'Corrective action plan reviewed and accepted',
+    'Suspension lifted upon successful appeal',
+  ],
+  unban_all_properties: [
+    'Account compliance verified upon comprehensive review',
+    'Host successfully fulfilled appeal requirements',
+    'Global suspension revoked',
+  ],
+  dismiss_report: [
+    'Insufficient evidence of violation',
+    'Reported content conforms to platform policies',
+    'Matter resolved between parties amicably',
+  ],
+}
+
+function normalizeReportType(
+  rawType?: string | null,
+  detail?: Partial<AdminReportDetail>
+): 'property' | 'review' | 'unban_property' {
+  const t = (rawType ?? '').toLowerCase().trim()
+  if (t === 'property' || t === 'report_property' || t === 'property_report') {
+    return 'property'
+  }
+  if (t === 'review' || t === 'report_review' || t === 'review_report') {
+    return 'review'
+  }
+  if (t === 'unban' || t === 'unban_property' || t === 'appeal') {
+    return 'unban_property'
+  }
+  if (detail?.reportedReview) return 'review'
+  if (detail?.property) return 'property'
+  return 'unban_property'
+}
+
 // ── Report Detail Panel ───────────────────────────────────────────────────────
 function ReportPanel({
   id,
@@ -162,7 +225,10 @@ function ReportPanel({
   onClose: () => void
   onUpdated: () => void
 }) {
+  const router = useRouter()
+  const { user } = useAuth()
   const [detail, setDetail] = useState<AdminReportDetail | null>(null)
+  const [contacting, setContacting] = useState(false)
   const [loading, setLoading] = useState(true)
   const [lightbox, setLightbox] = useState<{
     src: string
@@ -176,10 +242,31 @@ function ReportPanel({
   useEffect(() => {
     setLoading(true)
     getAdminReportById(id)
-      .then(setDetail)
+      .then((res) =>
+        setDetail({
+          ...res,
+          type: normalizeReportType(res.type, res),
+        })
+      )
       .catch(() => toast.error('Failed to load report.'))
       .finally(() => setLoading(false))
   }, [id])
+
+  const handleContactReporter = async () => {
+    if (!detail || contacting) return
+    setContacting(true)
+    try {
+      const room = await createChatRoom(
+        detail.reporter.id,
+        `Hi ${detail.reporter.firstName}, I'm reaching out from JoodPakPaw Admin regarding Report #${detail.id} (${detail.reportCategoryLabel}).`
+      )
+      router.push(`/chat/${room.id}?from=/admin/reports`)
+    } catch {
+      toast.error('Failed to open chat with reporter.')
+    } finally {
+      setContacting(false)
+    }
+  }
 
   const handleConfirmAction = async () => {
     if (!detail || !pendingAction) return
@@ -189,8 +276,8 @@ function ReportPanel({
       toast.success(`Action taken: ${ACTION_CONFIG[pendingAction].label}`)
       onUpdated()
       onClose()
-    } catch {
-      toast.error('Failed to take action.')
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to take action.')
     } finally {
       setActing(false)
     }
@@ -269,14 +356,32 @@ function ReportPanel({
               </p>
               <div className="flex items-center gap-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
                 <UserAvatar user={detail.reporter} size="md" />
-                <div className="min-w-0">
-                  <p className="text-[13.5px] font-semibold text-gray-900">
-                    {detail.reporter.firstName} {detail.reporter.lastName}
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-[13.5px] font-semibold text-gray-900">
+                      {detail.reporter.firstName} {detail.reporter.lastName}
+                    </p>
+                    {detail.type === 'property' && detail.isVerifiedGuest && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700">
+                        Verified Guest
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-400 truncate">
                     {detail.reporter.email} · #{detail.reporter.id}
                   </p>
                 </div>
+                {detail.reporter.id !== user?.id && (
+                  <button
+                    type="button"
+                    onClick={handleContactReporter}
+                    disabled={contacting}
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-deep-teal hover:bg-gray-100 transition cursor-pointer disabled:opacity-50"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    {contacting ? 'Opening...' : 'Message'}
+                  </button>
+                )}
               </div>
             </section>
 
@@ -345,6 +450,125 @@ function ReportPanel({
                 )}
               </dl>
             </section>
+
+            {/* Reported Review Content card (for review reports) */}
+            {detail.type === 'review' && detail.reportedReview && (
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
+                    Reported Review Content
+                  </p>
+                  <span className="text-[11px] text-gray-400 font-mono">
+                    Booking #{detail.reportedReview.bookingId}
+                  </span>
+                </div>
+                <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl p-4 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-4 h-4 ${
+                            i < (detail.reportedReview?.rating ?? 0)
+                              ? 'text-accent-orange fill-accent-orange'
+                              : 'text-gray-200 fill-gray-200'
+                          }`}
+                        />
+                      ))}
+                      <span className="text-xs font-bold text-gray-700 ml-1.5">
+                        {detail.reportedReview.rating ?? 'N/A'}/5
+                      </span>
+                    </div>
+                    {detail.reportedReview.reviewedAt && (
+                      <span className="text-xs text-gray-400">
+                        {formatDate(detail.reportedReview.reviewedAt)}
+                      </span>
+                    )}
+                  </div>
+
+                  {detail.reportedReview.comment ? (
+                    <p className="text-sm text-gray-800 leading-relaxed bg-white/80 rounded-lg p-3 border border-amber-100">
+                      {detail.reportedReview.comment}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-400 italic">No text comment provided.</p>
+                  )}
+
+                  {detail.reportedReview.images && detail.reportedReview.images.length > 0 && (
+                    <div className="flex gap-2 flex-wrap mt-1">
+                      {detail.reportedReview.images.map((imgSrc, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setLightbox({ src: imgSrc, label: `Review photo ${idx + 1}` })}
+                          className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 cursor-zoom-in"
+                        >
+                          <img src={imgSrc} alt="" className="w-full h-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {detail.reportedReview.hostReply && (
+                    <div className="bg-white/90 border border-gray-200 rounded-lg p-3 mt-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold text-deep-teal">Host Reply:</span>
+                        {detail.reportedReview.hostRepliedAt && (
+                          <span className="text-[10px] text-gray-400">
+                            {formatDate(detail.reportedReview.hostRepliedAt)}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-600 leading-relaxed italic">
+                        &ldquo;{detail.reportedReview.hostReply}&rdquo;
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* Suspension & Appeal History (for Host Appeals) */}
+            {detail.type === 'unban_property' && (
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
+                    Suspension &amp; Appeal History
+                  </p>
+                  {detail.suspensionContext && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                      Attempt {detail.suspensionContext.appealAttempt} of {detail.suspensionContext.maxAppeals || 2}
+                    </span>
+                  )}
+                </div>
+                <div className="bg-red-50/60 border border-red-200/80 rounded-xl p-4 flex flex-col gap-2.5">
+                  {(detail.suspensionContext?.priorBanReason || detail.suspensionReason) && (
+                    <div>
+                      <p className="text-xs font-semibold text-red-900">Original Suspension Reason:</p>
+                      <p className="text-xs text-red-800 leading-relaxed mt-0.5 bg-white/70 rounded-lg p-2.5 border border-red-100">
+                        {detail.suspensionContext?.priorBanReason || detail.suspensionReason}
+                      </p>
+                    </div>
+                  )}
+                  {detail.suspensionContext?.priorBannedAt && (
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>Suspended on:</span>
+                      <span className="font-medium text-gray-700">
+                        {formatDate(detail.suspensionContext.priorBannedAt)}
+                      </span>
+                    </div>
+                  )}
+                  {detail.lastAppealNote && (
+                    <div className="mt-1">
+                      <p className="text-xs font-semibold text-gray-800">Prior Appeal Decision Note:</p>
+                      <p className="text-xs text-gray-600 leading-relaxed mt-0.5 bg-white/70 rounded-lg p-2.5 border border-gray-200 italic">
+                        &ldquo;{detail.lastAppealNote}&rdquo;
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
 
             {/* Description */}
             {detail.description && (
@@ -435,10 +659,16 @@ function ReportPanel({
                     ) : (
                       <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
                         <p className="text-sm font-semibold text-gray-800 mb-1">
-                          {ACTION_CONFIG[pendingAction].label}
+                          {pendingAction === 'dismiss_report' && detail.type === 'unban_property'
+                            ? 'Reject Appeal'
+                            : pendingAction === 'warn_user' && detail.type === 'review'
+                              ? 'Warn Review Author'
+                              : ACTION_CONFIG[pendingAction].label}
                         </p>
                         <p className="text-xs text-gray-500 leading-relaxed">
-                          {ACTION_CONFIG[pendingAction].description}
+                          {pendingAction === 'dismiss_report' && detail.type === 'unban_property'
+                            ? 'Reject this unban appeal. The host will be notified and their appeal quota (1/2, 2/2) will be updated.'
+                            : ACTION_CONFIG[pendingAction].description}
                         </p>
                       </div>
                     )}
@@ -458,6 +688,20 @@ function ReportPanel({
                         rows={3}
                         className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 bg-white resize-none focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300"
                       />
+                      {pendingAction && ACTION_PRESETS[pendingAction] && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {ACTION_PRESETS[pendingAction].map((preset) => (
+                            <button
+                              key={preset}
+                              type="button"
+                              onClick={() => setAdminNote(preset)}
+                              className="text-xs px-2.5 py-1 rounded-full bg-white border border-gray-200 text-gray-700 hover:bg-gray-100 hover:border-gray-300 transition cursor-pointer text-left"
+                            >
+                              {preset}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <button
@@ -507,6 +751,12 @@ function ReportPanel({
                       .map(([action, cfg]) => {
                         const Icon = cfg.icon
                         const isDanger = action === 'deactivate_all_properties'
+                        const displayLabel =
+                          action === 'dismiss_report' && detail.type === 'unban_property'
+                            ? 'Reject Appeal'
+                            : action === 'warn_user' && detail.type === 'review'
+                              ? 'Warn Author'
+                              : cfg.label
                         return (
                           <button
                             key={action}
@@ -514,7 +764,7 @@ function ReportPanel({
                             className={`flex items-center gap-2 w-full px-4 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${isDanger ? 'bg-red-600 text-white hover:bg-red-700 border-2 border-red-800/30' : cfg.buttonClass}`}
                           >
                             <Icon className="w-4 h-4 shrink-0" />
-                            <span className="text-left">{cfg.label}</span>
+                            <span className="text-left">{displayLabel}</span>
                           </button>
                         )
                       })}
@@ -564,6 +814,7 @@ export default function AdminReportsPage() {
   const [data, setData] = useState<AdminReportSummary[]>([])
   const [totalRows, setTotalRows] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
+  const [serverPendingCount, setServerPendingCount] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
@@ -596,33 +847,18 @@ export default function AdminReportsPage() {
     try {
       const res = await getAdminReports({
         type: type === 'all' ? undefined : type,
+        status: status === 'all' ? undefined : status,
         page,
         limit: LIMIT,
+        orderBy,
+        sort,
       })
-      const filtered =
-        status === 'all'
-          ? res.data
-          : res.data.filter((r) => r.status === status)
-      const sorted = [...filtered].sort((a, b) => {
-        let aVal: string | number
-        let bVal: string | number
-        if (orderBy === 'createdAt') {
-          aVal = new Date(a.createdAt).getTime()
-          bVal = new Date(b.createdAt).getTime()
-        } else if (orderBy === 'status') {
-          aVal = a.status
-          bVal = b.status
-        } else {
-          aVal = a.id
-          bVal = b.id
-        }
-        if (aVal < bVal) return sort === 'asc' ? -1 : 1
-        if (aVal > bVal) return sort === 'asc' ? 1 : -1
-        return 0
-      })
-      setData(sorted)
+      setData(res.data)
       setTotalRows(res.totalRows)
       setTotalPages(res.totalPages)
+      if (res.attributes?.pendingCount !== undefined) {
+        setServerPendingCount(res.attributes.pendingCount)
+      }
       setLastUpdated(new Date())
     } catch {
       if (!silent) toast.error('Failed to load reports.')
@@ -645,7 +881,10 @@ export default function AdminReportsPage() {
     }
   }, [fetchData])
 
-  const pendingCount = data.filter((d) => d.status === 'pending').length
+  const pendingCount =
+    serverPendingCount !== null
+      ? serverPendingCount
+      : data.filter((d) => d.status === 'pending').length
 
   return (
     <div>

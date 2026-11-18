@@ -112,6 +112,8 @@ export interface Property {
   isBannedBeforeAccountBan?: boolean
   unbanRequestCount?: number
   hasPendingUnbanRequest?: boolean
+  suspensionReason?: string | null
+  lastAppealNote?: string | null
   isFavorite: boolean
   avgRating: number
   hostId: number
