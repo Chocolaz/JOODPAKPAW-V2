@@ -537,7 +537,7 @@ export async function createHostProperty(
       update: {},
       create: {
         name: 'host',
-        label: 'เจ้าของที่พัก (Host)',
+        label: 'Property Host',
         description: 'Property Host role',
       },
     });

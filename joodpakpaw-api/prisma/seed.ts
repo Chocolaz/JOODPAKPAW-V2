@@ -469,21 +469,21 @@ async function main() {
   console.log('➡️ Seeding Report Categories...');
   const reportCategoriesData = [
     // Property reports
-    { name: 'property_hygiene', label: 'สถานที่สกปรก ไม่ถูกสุขอนามัย', type: 'property' },
-    { name: 'property_fraud', label: 'ข้อมูลเท็จหรือหลอกลวง', type: 'property' },
-    { name: 'property_abuse', label: 'สัตว์เลี้ยงได้รับการดูแลไม่เหมาะสมหรือทารุณกรรม', type: 'property' },
-    { name: 'property_unsafe', label: 'สถานที่ไม่มีความปลอดภัยต่อสัตว์เลี้ยง', type: 'property' },
-    { name: 'property_other', label: 'อื่นๆ', type: 'property' },
+    { name: 'property_hygiene', label: 'Unclean or unhygienic property', type: 'property' },
+    { name: 'property_fraud', label: 'Misleading or fraudulent listing', type: 'property' },
+    { name: 'property_abuse', label: 'Improper pet care or animal mistreatment', type: 'property' },
+    { name: 'property_unsafe', label: 'Unsafe environment for pets', type: 'property' },
+    { name: 'property_other', label: 'Other', type: 'property' },
     // Review reports
-    { name: 'review_inappropriate', label: 'ข้อความหยาบคายหรือไม่สุภาพ', type: 'review' },
-    { name: 'review_defamation', label: 'ข้อมูลใส่ร้ายป้ายสี เป็นเท็จ', type: 'review' },
-    { name: 'review_spam', label: 'สแปมหรือโฆษณาสินค้า', type: 'review' },
-    { name: 'review_other', label: 'อื่นๆ', type: 'review' },
+    { name: 'review_inappropriate', label: 'Abusive, offensive, or inappropriate language', type: 'review' },
+    { name: 'review_defamation', label: 'False or defamatory information', type: 'review' },
+    { name: 'review_spam', label: 'Spam or promotional content', type: 'review' },
+    { name: 'review_other', label: 'Other', type: 'review' },
     // Unban appeals
-    { name: 'unban_appeal_rectified', label: 'ปรับปรุงสถานที่และแก้ไขข้อบกพร่องเรียบร้อยแล้ว', type: 'unban_property' },
-    { name: 'unban_appeal_misunderstanding', label: 'ข้อร้องเรียนเกิดจากความเข้าใจผิด พร้อมหลักฐาน', type: 'unban_property' },
-    { name: 'unban_appeal_policy_compliance', label: 'ยินดีปฏิบัติตามกฎระเบียบของแพลตฟอร์มอย่างเคร่งครัด', type: 'unban_property' },
-    { name: 'unban_appeal_other', label: 'เหตุผลอื่นๆ', type: 'unban_property' },
+    { name: 'unban_appeal_rectified', label: 'Issues have been resolved and property improved', type: 'unban_property' },
+    { name: 'unban_appeal_misunderstanding', label: 'Report was a misunderstanding (evidence attached)', type: 'unban_property' },
+    { name: 'unban_appeal_policy_compliance', label: 'Committed to strict compliance with platform policies', type: 'unban_property' },
+    { name: 'unban_appeal_other', label: 'Other reason', type: 'unban_property' },
   ];
 
   const reportCategoryMap: Record<string, any> = {};

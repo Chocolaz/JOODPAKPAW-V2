@@ -249,7 +249,7 @@ export async function signUp(
       update: {},
       create: {
         name: 'guest',
-        label: 'ผู้ใช้ทั่วไป / ผู้ฝากเลี้ยง',
+        label: 'General User / Pet Owner',
         description: 'Guest / Pet Owner role',
       },
     });
