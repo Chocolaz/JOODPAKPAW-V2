@@ -102,18 +102,18 @@ export function NotificationItem({ notification, onRead, onDelete }: Props) {
             <p className={cn(
               'leading-snug transition-all duration-300',
               'text-sm md:text-base',
-              notification.isRead ? 'font-normal text-gray-600' : 'font-semibold text-gray-900'
+              notification.isRead ? 'font-normal text-gray-700' : 'font-semibold text-gray-900'
             )}>
               {notification.title}
             </p>
             {notification.message && (
               <div className="mt-2 pl-2.5 border-l-2 border-gray-200">
-                <p className="text-xs md:text-sm text-neutral-gray/80 leading-relaxed line-clamp-2">
+                <p className="text-xs md:text-sm text-gray-600 leading-relaxed line-clamp-2">
                   {notification.message}
                 </p>
               </div>
             )}
-            <p className="text-[11px] md:text-xs text-neutral-gray/70 mt-1 md:mt-1.5">{timeAgo}</p>
+            <p className="text-[11px] md:text-xs text-gray-500 mt-1 md:mt-1.5">{timeAgo}</p>
           </div>
 
           {/* Right side */}

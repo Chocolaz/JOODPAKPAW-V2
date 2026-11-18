@@ -160,7 +160,7 @@ export function ContactHostButton({
       onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
       placeholder="Type your message..."
       rows={4}
-      className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-base outline-none focus:border-accent-orange transition-colors resize-none"
+      className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-accent-orange transition-colors resize-none"
     />
   )
 
