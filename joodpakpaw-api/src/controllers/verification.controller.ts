@@ -3,6 +3,7 @@ import { prisma } from '../database/prisma';
 import { AppError, FieldValidationError } from '../middlewares/errorHandler';
 import { uploadImageAsWebp, deleteObjectFromS3 } from '../services/storage.service';
 import { createNotificationSafe } from '../services/notification.service';
+import { evaluateKycAutoApproval } from '../services/kycPreScreen.service';
 
 /**
  * Extracts a specific uploaded file by fieldname from req.files or req.file
@@ -153,23 +154,116 @@ export async function submitVerification(
       }
     }
 
-    const verification = await prisma.userVerification.create({
-      data: {
-        userId: req.user.id,
-        status: 'pending',
-        isResubmit: Boolean(prevRejected),
-        previousRejectDescription: prevRejected?.rejectDescription ?? null,
-        idPhoto: idPhotoUrl,
-        selfieWithId: selfieUrl,
-        submittedAt: new Date(),
-      },
+    // Run risk-based automated KYC pre-screening (safe fallback to 'pending' when unconfigured/ambiguous)
+    const [hasBannedProperty, userProfile] = await Promise.all([
+      prisma.property.findFirst({
+        where: { hostId: req.user.id, isBannedByAdmin: true, deletedAt: null },
+        select: { id: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { firstName: true, lastName: true },
+      }),
+    ]);
+
+    const preScreen = await evaluateKycAutoApproval({
+      firstName: userProfile?.firstName ?? '',
+      lastName: userProfile?.lastName ?? '',
+      isBannedAllProperties: Boolean(req.user.isBannedAllProperties),
+      hasBannedProperty: Boolean(hasBannedProperty),
+      idPhotoBuffer: idPhotoFile!.buffer,
+      idPhotoMime: idPhotoFile!.mimetype || 'image/jpeg',
+      selfieBuffer: selfieFile!.buffer,
+      selfieMime: selfieFile!.mimetype || 'image/jpeg',
     });
+    console.log('[KYC PreScreen]', { userId: req.user.id, ...preScreen });
+
+    const verification = await prisma.$transaction(async (tx) => {
+      const created = await tx.userVerification.create({
+        data: {
+          userId: req.user!.id,
+          status: preScreen.autoApproved ? 'approved' : 'pending',
+          isResubmit: Boolean(prevRejected),
+          previousRejectDescription: prevRejected?.rejectDescription ?? null,
+          idPhoto: idPhotoUrl,
+          selfieWithId: selfieUrl,
+          submittedAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+
+      if (preScreen.autoApproved) {
+        const hostRoleId = await resolveHostRoleId();
+        await tx.user.update({
+          where: { id: req.user!.id },
+          data: {
+            isVerifiedHost: true,
+            isBecomeToHost: true,
+            updatedAt: new Date(),
+          },
+        });
+
+        await tx.userRole.upsert({
+          where: {
+            userId_roleId: {
+              userId: req.user!.id,
+              roleId: hostRoleId,
+            },
+          },
+          create: {
+            userId: req.user!.id,
+            roleId: hostRoleId,
+          },
+          update: {},
+        });
+
+        await tx.actionLog.create({
+          data: {
+            modelName: 'UserVerification',
+            recordId: String(created.id),
+            action: 'auto_approve_verification',
+            actorId: req.user!.id,
+            targetId: req.user!.id,
+            messages: preScreen.reason,
+          },
+        });
+      } else {
+        await tx.actionLog.create({
+          data: {
+            modelName: 'UserVerification',
+            recordId: String(created.id),
+            action: 'auto_screen_flagged',
+            actorId: req.user!.id,
+            targetId: req.user!.id,
+            messages: preScreen.reason,
+          },
+        });
+      }
+
+      return created;
+    });
+
+    if (preScreen.autoApproved) {
+      await createNotificationSafe({
+        userId: req.user.id,
+        title: 'Host Verification Approved!',
+        message: 'Your identity has been automatically verified. You can now list properties as a Host.',
+        type: 'success',
+        actionName: 'verification_approved',
+        roleName: 'user',
+        referenceId: verification.id,
+        referenceTable: 'user_verifications',
+      });
+    }
 
     res.status(201).json({
       code: 'S-0000',
-      message: 'Verification submitted successfully',
+      message: preScreen.autoApproved
+        ? 'Verification automatically approved'
+        : 'Verification submitted successfully',
       data: {
         verification,
+        autoApproved: preScreen.autoApproved,
       },
     });
   } catch (error) {
@@ -293,11 +387,28 @@ export async function getAdminVerificationById(
       throw new AppError('Verification request not found.', 404, 'DB-1002');
     }
 
+    const autoLog = await prisma.actionLog.findFirst({
+      where: {
+        modelName: 'UserVerification',
+        recordId: String(id),
+        action: { in: ['auto_screen_flagged', 'auto_approve_verification'] },
+      },
+      orderBy: { id: 'desc' },
+      select: { action: true, messages: true },
+    });
+
     res.status(200).json({
       code: 'S-0000',
       message: 'Success',
       data: {
-        verification,
+        verification: {
+          ...verification,
+          autoScreenReason:
+            autoLog?.action === 'auto_screen_flagged' ? autoLog.messages : null,
+          isAutoApproved: autoLog?.action === 'auto_approve_verification',
+          autoApprovedReason:
+            autoLog?.action === 'auto_approve_verification' ? autoLog.messages : null,
+        },
       },
     });
   } catch (error) {

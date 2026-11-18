@@ -24,6 +24,7 @@ import {
   Clock,
   ShieldCheck,
   ShieldX,
+  ImageOff,
 } from 'lucide-react'
 import { formatDate, formatDateRelative } from '../_utils'
 import { RefreshBar } from '../_components/RefreshBar'
@@ -82,9 +83,11 @@ function VerificationPanel({
     src: string
     label: string
   } | null>(null)
+  const [failedPhotos, setFailedPhotos] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     setLoading(true)
+    setFailedPhotos({})
     getAdminVerificationById(id)
       .then((res) => setDetail(res.verification))
       .catch(() => toast.error('Failed to load verification.'))
@@ -225,6 +228,39 @@ function VerificationPanel({
               </dl>
             </section>
 
+            {/* Auto-Approved by System */}
+            {detail.status === 'approved' && detail.isAutoApproved && (
+              <section>
+                <p className="text-[10px] font-semibold text-emerald-600 uppercase tracking-widest mb-3">
+                  System Auto-Approval
+                </p>
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                  <p className="text-sm font-medium text-emerald-800">
+                    Approved automatically by system
+                  </p>
+                  {detail.autoApprovedReason && (
+                    <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
+                      {detail.autoApprovedReason}
+                    </p>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* AI Pre-Screen Flag */}
+            {detail.status === 'pending' && detail.autoScreenReason && (
+              <section>
+                <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-widest mb-3">
+                  Auto-Screen Flag
+                </p>
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                  <p className="text-sm text-amber-800 leading-relaxed">
+                    {detail.autoScreenReason}
+                  </p>
+                </div>
+              </section>
+            )}
+
             {/* Previous rejection */}
             {detail.previousRejectDescription && (
               <section>
@@ -262,31 +298,49 @@ function VerificationPanel({
                 {[
                   { label: 'ID Photo', src: detail.idPhoto },
                   { label: 'Selfie with ID', src: detail.selfieWithId },
-                ].map((photo) => (
-                  <div key={photo.label} className="flex flex-col gap-1.5">
-                    <span className="text-xs font-medium text-gray-500">
-                      {photo.label}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLightbox({ src: photo.src, label: photo.label })
-                      }
-                      className="relative aspect-[4/3] rounded-xl overflow-hidden bg-gray-100 group cursor-zoom-in w-full"
-                    >
-                      <Image
-                        src={photo.src}
-                        alt={photo.label}
-                        fill
-                        className="object-cover transition-transform duration-300 group-hover:scale-105"
-                        unoptimized
-                      />
-                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <ZoomIn className="w-5 h-5 text-white" />
-                      </div>
-                    </button>
-                  </div>
-                ))}
+                ].map((photo) => {
+                  const isUnavailable = !photo.src || failedPhotos[photo.label]
+                  return (
+                    <div key={photo.label} className="flex flex-col gap-1.5">
+                      <span className="text-xs font-medium text-gray-500">
+                        {photo.label}
+                      </span>
+                      {isUnavailable ? (
+                        <div className="aspect-[4/3] rounded-xl bg-gray-50 border border-dashed border-gray-200 flex flex-col items-center justify-center gap-1.5 px-3 text-center">
+                          <ImageOff className="w-5 h-5 text-gray-300" />
+                          <span className="text-[11px] font-medium text-gray-400">
+                            Purged after resubmission
+                          </span>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setLightbox({ src: photo.src, label: photo.label })
+                          }
+                          className="relative aspect-[4/3] rounded-xl overflow-hidden bg-gray-100 group cursor-zoom-in w-full"
+                        >
+                          <Image
+                            src={photo.src}
+                            alt={photo.label}
+                            fill
+                            className="object-cover transition-transform duration-300 group-hover:scale-105"
+                            unoptimized
+                            onError={() =>
+                              setFailedPhotos((prev) => ({
+                                ...prev,
+                                [photo.label]: true,
+                              }))
+                            }
+                          />
+                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <ZoomIn className="w-5 h-5 text-white" />
+                          </div>
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </section>
 

@@ -5,10 +5,15 @@ import { ShieldCheck } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { submitVerification } from '@/lib/api'
+import type { VerificationData } from '@/types/verification'
 import { CropModal } from '@/app/_components/CropModal'
 import { ImageUploadBox } from './ImageUploadBox'
 
-export function UploadForm({ onSubmitted }: { onSubmitted: () => void }) {
+export function UploadForm({
+  onSubmitted,
+}: {
+  onSubmitted: (res: { verification: VerificationData; autoApproved?: boolean }) => void
+}) {
   const [idPhoto, setIdPhoto] = useState<File | null>(null)
   const [selfieWithId, setSelfieWithId] = useState<File | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -40,9 +45,13 @@ export function UploadForm({ onSubmitted }: { onSubmitted: () => void }) {
     if (!idPhoto || !selfieWithId) return
     setSubmitting(true)
     try {
-      await submitVerification(idPhoto, selfieWithId)
-      toast.success("Verification submitted! We'll review it shortly.")
-      onSubmitted()
+      const res = await submitVerification(idPhoto, selfieWithId)
+      if (res.autoApproved || res.verification?.status === 'approved') {
+        toast.success('Verification approved! You are now a verified host.')
+      } else {
+        toast.success("Verification submitted! We'll review it shortly.")
+      }
+      onSubmitted(res)
     } catch (err: any) {
       toast.error(err?.message || 'Failed to submit. Please try again.')
     } finally {

@@ -397,7 +397,7 @@ export const getVerificationStatus = async (): Promise<VerificationResponse> => 
 export const submitVerification = async (
   idPhoto: File,
   selfieWithId: File
-): Promise<void> => {
+): Promise<{ verification: VerificationData; autoApproved?: boolean }> => {
   const [compressedIdPhoto, compressedSelfie] = await Promise.all([
     compressImageToWebP(idPhoto),
     compressImageToWebP(selfieWithId),
@@ -405,7 +405,7 @@ export const submitVerification = async (
   const formData = new FormData()
   formData.append('idPhoto', compressedIdPhoto)
   formData.append('selfieWithId', compressedSelfie)
-  return request<void>({
+  return request<{ verification: VerificationData; autoApproved?: boolean }>({
     endpoint: 'api/v1/user-verifications',
     method: 'POST',
     body: formData,

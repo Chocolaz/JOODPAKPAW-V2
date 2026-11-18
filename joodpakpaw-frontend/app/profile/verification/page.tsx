@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ShieldCheck, ArrowLeft } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/app/_components/AuthContext'
 import { getVerificationStatus } from '@/lib/api'
 import type { VerificationData } from '@/types/verification'
 import { IntroView } from './_components/IntroView'
@@ -16,6 +17,7 @@ type Step = 'intro' | 'form'
 
 export default function VerificationPage() {
   const router = useRouter()
+  const { refreshAuth } = useAuth()
   const [verification, setVerification] = useState<VerificationData | null>(null)
   const [loading, setLoading] = useState(true)
   const [step, setStep] = useState<Step>('intro')
@@ -38,9 +40,12 @@ export default function VerificationPage() {
     if (step === 'form') {
       return (
         <UploadForm
-          onSubmitted={() =>
-            setVerification({ ...verification, status: 'pending' } as VerificationData)
-          }
+          onSubmitted={(res) => {
+            setVerification(res.verification)
+            if (res.autoApproved || res.verification?.status === 'approved') {
+              void refreshAuth()
+            }
+          }}
         />
       )
     }
