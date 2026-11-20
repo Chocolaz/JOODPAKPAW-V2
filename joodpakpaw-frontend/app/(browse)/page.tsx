@@ -6,7 +6,6 @@ import { PropertyList } from '@/app/_components/PropertyList'
 import { getProperties, getPropertiesByIds } from '@/lib/api'
 import { Property } from '@/types'
 import { useAuth } from '@/app/_components/AuthContext'
-import { useAuthModal } from '@/app/_context/AuthModalContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   SearchX,
@@ -68,17 +67,21 @@ export default function Home() {
   const [loadingMore, setLoadingMore] = useState(false)
 
   const { isAuthenticated, user } = useAuth()
-  const { openAuthModal } = useAuthModal()
   const { searchQuery, filters, buildSeeAllUrl } = useBrowseFilters()
   const { ids: recentlyViewedIds } = useRecentlyViewed()
-  const {
-    properties: recommendedProperties,
-    totalRows: recommendedTotal,
-  } = useRecommendedProperties(1, RECOMMEND_LIMIT)
   const [userLocation, setUserLocation] = useState<{
     lat: number
     lon: number
   } | null>(null)
+  const recommendedLocation = useMemo(
+    () =>
+      userLocation ? { lat: userLocation.lat, lng: userLocation.lon } : null,
+    [userLocation]
+  )
+  const {
+    properties: recommendedProperties,
+    totalRows: recommendedTotal,
+  } = useRecommendedProperties(1, RECOMMEND_LIMIT, recommendedLocation)
 
   const [filterResults, setFilterResults] = useState<Property[]>([])
   const [filterTotal, setFilterTotal] = useState(0)
@@ -479,24 +482,13 @@ export default function Home() {
                         subtitle={
                           isAuthenticated
                             ? undefined
-                            : 'Sign in to get personalized stays tailored to your pets'
+                            : 'Top-rated pet-friendly stays across Thailand'
                         }
                         icon={
                           <Sparkles
                             className="w-5 h-5 text-accent-orange"
                             strokeWidth={1.75}
                           />
-                        }
-                        headerAction={
-                          !isAuthenticated ? (
-                            <button
-                              type="button"
-                              onClick={() => openAuthModal('login')}
-                              className="ml-1 inline-flex items-center rounded-full bg-deep-teal px-3 py-1 text-xs font-medium text-white hover:bg-deep-teal/90 transition-colors cursor-pointer"
-                            >
-                              Sign in
-                            </button>
-                          ) : undefined
                         }
                         properties={recommendedProperties}
                         totalCount={recommendedTotal}

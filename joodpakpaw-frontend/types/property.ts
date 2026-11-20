@@ -103,6 +103,8 @@ export interface ScoreBreakdown {
   sCompat: number
   sQuality: number
   sPopularity: number
+  sGeo?: number | null
+  distanceKm?: number | null
 }
 
 export interface RecommendationMeta {
@@ -154,6 +156,8 @@ export interface MlStatusResponse {
   fallbackReady: boolean
   catalogSize: number
   snapshotAgeSeconds: number
+  totalUsers?: number
+  totalActiveProperties?: number
   sampleUsers?: MlSampleUser[]
   sampleProperties?: MlSampleProperty[]
 }

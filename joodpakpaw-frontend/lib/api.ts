@@ -55,6 +55,8 @@ import { FavoriteFolderDetail } from '@/types/favorite'
 import type {
   PropertiesResponse,
   RecommendationMeta,
+  MlSampleProperty,
+  MlSampleUser,
   MlStatusResponse,
   MlRefreshResponse,
   PaginationInfo,
@@ -456,9 +458,27 @@ export const getHostReviews = async (
   }
 }
 
-export const getRecommendedProperties = async (page = 1, limit = 20): Promise<PropertiesResponse> => {
+export const getRecommendedProperties = async (
+  page = 1,
+  limit = 20,
+  options?: { lat?: number | null; lng?: number | null }
+): Promise<PropertiesResponse> => {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  })
+  if (
+    typeof options?.lat === 'number' &&
+    Number.isFinite(options.lat) &&
+    typeof options?.lng === 'number' &&
+    Number.isFinite(options.lng)
+  ) {
+    params.set('lat', String(options.lat))
+    params.set('lng', String(options.lng))
+  }
+
   const res = await request<any>({
-    endpoint: `api/v1/properties/recommend?page=${page}&limit=${limit}`,
+    endpoint: `api/v1/properties/recommend?${params.toString()}`,
     method: 'GET',
     sendAuthIfAvailable: true,
     errorContext: 'Get Recommended Properties',
@@ -1925,6 +1945,8 @@ export interface AdminMlInspectParams {
   asUserId?: number
   propertyId?: number
   limit?: number
+  lat?: number | null
+  lng?: number | null
 }
 
 export interface AdminMlInspectResponse {
@@ -1937,6 +1959,11 @@ export const getAdminMlInspect = async (
   params: AdminMlInspectParams
 ): Promise<AdminMlInspectResponse> => {
   const limit = Math.min(50, Math.max(1, params.limit ?? 12))
+  const hasValidCoords =
+    typeof params.lat === 'number' &&
+    Number.isFinite(params.lat) &&
+    typeof params.lng === 'number' &&
+    Number.isFinite(params.lng)
   let endpoint: string
 
   if (params.mode === 'similar') {
@@ -1952,9 +1979,22 @@ export const getAdminMlInspect = async (
     if (params.asUserId && params.asUserId > 0) {
       query.set('asUserId', String(params.asUserId))
     }
+    if (hasValidCoords) {
+      query.set('lat', String(params.lat))
+      query.set('lng', String(params.lng))
+    }
     endpoint = `api/v1/properties/recommend?${query.toString()}`
   } else {
-    endpoint = `api/v1/properties/recommend?debug=true&asUserId=guest&limit=${limit}`
+    const query = new URLSearchParams({
+      debug: 'true',
+      asUserId: 'guest',
+      limit: String(limit),
+    })
+    if (hasValidCoords) {
+      query.set('lat', String(params.lat))
+      query.set('lng', String(params.lng))
+    }
+    endpoint = `api/v1/properties/recommend?${query.toString()}`
   }
 
   const res = await request<any>({
@@ -1978,4 +2018,47 @@ export const getAdminMlInspect = async (
     meta: res?.meta,
     pagination: res?.pagination,
   }
+}
+
+export const searchAdminMlUsers = async (
+  q: string,
+  limit = 10
+): Promise<MlSampleUser[]> => {
+  const query = new URLSearchParams({
+    q: q.trim(),
+    limit: String(Math.min(50, Math.max(1, limit))),
+  })
+  const res = await request<any>({
+    endpoint: `api/v1/admin/ml/users/search?${query.toString()}`,
+    method: 'GET',
+    requiresAuth: true,
+    errorContext: 'Search Admin ML Users',
+    cache: 'no-store',
+  })
+  if (Array.isArray(res?.data)) return res.data as MlSampleUser[]
+  if (Array.isArray(res?.data?.users)) return res.data.users as MlSampleUser[]
+  if (Array.isArray(res?.users)) return res.users as MlSampleUser[]
+  return []
+}
+
+export const searchAdminMlProperties = async (
+  q: string,
+  limit = 10
+): Promise<MlSampleProperty[]> => {
+  const query = new URLSearchParams({
+    q: q.trim(),
+    limit: String(Math.min(50, Math.max(1, limit))),
+  })
+  const res = await request<any>({
+    endpoint: `api/v1/admin/ml/properties/search?${query.toString()}`,
+    method: 'GET',
+    requiresAuth: true,
+    errorContext: 'Search Admin ML Properties',
+    cache: 'no-store',
+  })
+  if (Array.isArray(res?.data)) return res.data as MlSampleProperty[]
+  if (Array.isArray(res?.data?.properties))
+    return res.data.properties as MlSampleProperty[]
+  if (Array.isArray(res?.properties)) return res.properties as MlSampleProperty[]
+  return []
 }

@@ -7,7 +7,6 @@ import { motion } from 'framer-motion'
 import { getLowestPrice } from '@/lib/utils'
 import { PropertyList } from '@/app/_components/PropertyList'
 import { useAuth } from '@/app/_components/AuthContext'
-import { useAuthModal } from '@/app/_context/AuthModalContext'
 import { useBrowseFilters } from '@/app/_hooks/useBrowseFilters'
 import { useRecommendedProperties } from '@/app/_hooks/useRecommendedProperties'
 import { Badge } from '@/components/ui/badge'
@@ -16,7 +15,6 @@ const SKELETON_COUNT = 12
 
 export default function RecommendedPage() {
   const { isAuthenticated } = useAuth()
-  const { openAuthModal } = useAuthModal()
   const { filters, buildSeeAllUrl } = useBrowseFilters()
   const { properties, meta, isLoading } = useRecommendedProperties(1, 50)
 
@@ -41,7 +39,7 @@ export default function RecommendedPage() {
 
   const strategySubtitle = isAuthenticated
     ? 'Pet-aware hybrid matches based on your pets, preferences, and stay quality'
-    : 'Top-rated and popular pet-friendly stays · Sign in to personalize for your pets'
+    : 'Top-rated pet-friendly stays across Thailand'
 
   return (
     <div className="px-5 lg:px-12 pb-28 lg:pb-16 mt-6 lg:mt-10">
@@ -82,16 +80,6 @@ export default function RecommendedPage() {
             </p>
           </div>
         </div>
-
-        {!isAuthenticated && (
-          <button
-            type="button"
-            onClick={() => openAuthModal('login')}
-            className="inline-flex items-center rounded-full bg-deep-teal px-4 py-2 text-xs lg:text-sm font-medium text-white hover:bg-deep-teal/90 transition-colors cursor-pointer"
-          >
-            Sign in for Pet-Aware Picks
-          </button>
-        )}
       </div>
 
       {isLoading ? (
