@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { getPropertyById, getPropertyRecommendations } from '@/lib/api'
+import { useState, useEffect, useRef } from 'react'
+import { getPropertyById, trackPropertyView } from '@/lib/api'
 import { ErrorState } from '@/app/profile/_components/ErrorState'
 import { usePropertyLoader } from '@/app/_hooks/usePropertyLoader'
+import { useSimilarProperties } from '@/app/_hooks/useSimilarProperties'
 import { PropertyImageGallery } from '@/app/_components/property-detail/PropertyImageGallery'
 import { PropertyHeader } from '@/app/_components/property-detail/PropertyHeader'
 import { PropertyFacilities } from '@/app/_components/property-detail/PropertyFacilities'
@@ -21,7 +22,6 @@ import { useRecentlyViewed } from '@/app/_hooks/useRecentlyViewed'
 import { Skeleton } from '@/components/ui/skeleton'
 import { motion } from 'framer-motion'
 import { PropertyCard } from '@/app/_components/PropertyCard'
-import type { Property } from '@/types'
 
 function PropertyDetailSkeleton() {
   return (
@@ -140,27 +140,21 @@ export default function PropertyDetailPage() {
   const { user, isAuthenticated } = useAuth()
   const [reportOpen, setReportOpen] = useState(false)
   const { track } = useRecentlyViewed()
-  const [recommendations, setRecommendations] = useState<Property[]>([])
-  const [recommendationsLoading, setRecommendationsLoading] = useState(false)
+  const trackedPropertyRef = useRef<number | null>(null)
+  const { properties: recommendations } = useSimilarProperties(property?.id, 12)
 
   useEffect(() => {
     if (property?.id) track(property.id)
   }, [property?.id])
 
   useEffect(() => {
-    if (!property?.id) return
+    if (!property?.id || !isAuthenticated || !user) return
+    if (user.id === property.hostId) return
+    if (trackedPropertyRef.current === property.id) return
 
-    setRecommendationsLoading(true)
-    getPropertyRecommendations(property.id, 12)
-      .then((res) => {
-        setRecommendations(res.properties || [])
-      })
-      .catch((err) => {
-        console.error('Failed to load recommendations:', err)
-        setRecommendations([])
-      })
-      .finally(() => setRecommendationsLoading(false))
-  }, [property?.id])
+    trackedPropertyRef.current = property.id
+    trackPropertyView(property.id).catch(() => {})
+  }, [property?.id, property?.hostId, isAuthenticated, user])
 
   const handleShare = async () => {
     if (navigator.share && property) {
@@ -366,6 +360,7 @@ export default function PropertyDetailPage() {
                     key={rec.id}
                     property={rec}
                     href={`/detail/${rec.id}?propertyChain=${newChain}`}
+                    showMatchReason={true}
                   />
                 )
               })}

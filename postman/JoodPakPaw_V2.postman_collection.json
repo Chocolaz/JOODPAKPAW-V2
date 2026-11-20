@@ -3453,6 +3453,392 @@
           ]
         }
       ]
+    },
+    {
+      "name": "10 - Hybrid ML Recommendations & Admin Inspector (Sprint 4 - PBI-19..21)",
+      "description": "3-Stage Pet-Aware Hybrid ML Recommendations, Guest Cold-Start, Similar Properties, Batch Properties by IDs, Behavior View Tracking (10-min cooldown), and Admin ML Inspector & Cache Refresh.",
+      "item": [
+        {
+          "name": "Get Personalized / Guest Cold-Start Recommendations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns Single data Envelope with meta\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data).to.be.an(\"array\");",
+                  "    pm.expect(json.pagination).to.be.an(\"object\");",
+                  "    pm.expect(json.meta).to.be.an(\"object\");",
+                  "    pm.expect([\"ml_service\", \"in_process_fallback\"]).to.include(json.meta.source);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/properties/recommend?page=1&limit=8",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "properties",
+                "recommend"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "8"
+                }
+              ]
+            },
+            "description": "Returns 3-Stage Pet-Aware Hybrid ML recommendations for authenticated users, or Popular Picks Cold-Start recommendations for guests (when jwt_token is empty). Automatically falls back to In-Process engine within 1500ms if joodpakpaw-ml is unreachable."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin ML Inspector: Recommend with Debug Breakdown",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 (Admin) or 403 A-3007 (Non-Admin)\", () => {",
+                  "    pm.expect([200, 403]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test(\"Includes matchReasons, matchTier, and scoreBreakdown\", () => {",
+                  "        var json = pm.response.json();",
+                  "        pm.expect(json.code).to.eql(\"S-0000\");",
+                  "        pm.expect(json.data).to.be.an(\"array\");",
+                  "        if (json.data.length > 0) {",
+                  "            pm.expect(json.data[0]).to.have.property(\"matchReasons\");",
+                  "            pm.expect(json.data[0]).to.have.property(\"matchTier\");",
+                  "            pm.expect(json.data[0]).to.have.property(\"scoreBreakdown\");",
+                  "        }",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/properties/recommend?page=1&limit=8&debug=true&asUserId=4",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "properties",
+                "recommend"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "8"
+                },
+                {
+                  "key": "debug",
+                  "value": "true"
+                },
+                {
+                  "key": "asUserId",
+                  "value": "4"
+                }
+              ]
+            },
+            "description": "Admin-only ML Inspector mode returning sContent, sCompat, sQuality, and sPopularity scoreBreakdown for a target persona (e.g. asUserId=4). Strictly returns 403 A-3007 for guests, regular users, and hosts."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Similar Properties (Detail Page)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns similar properties with meta\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data).to.be.an(\"array\");",
+                  "    pm.expect(json.meta.strategy).to.eql(\"similar_properties\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/properties/recommend/property/{{sample_property_id}}?limit=8",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "properties",
+                "recommend",
+                "property",
+                "{{sample_property_id}}"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "8"
+                }
+              ]
+            },
+            "description": "Returns similar properties using TF-IDF cosine, pet Jaccard, geo/price proximity, and Bayesian quality with explainable matchReasons."
+          },
+          "response": []
+        },
+        {
+          "name": "Batch Get Properties by IDs (Recently Viewed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns ordered batch properties\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/properties?ids=1,2,9",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "properties"
+              ],
+              "query": [
+                {
+                  "key": "ids",
+                  "value": "1,2,9"
+                }
+              ]
+            },
+            "description": "Batch fetches up to 50 active properties by comma-separated IDs, preserving requested order and eliminating N+1 Recently Viewed requests."
+          },
+          "response": []
+        },
+        {
+          "name": "Track Property View Behavior (10-Min Cooldown)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns view tracking status\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data).to.have.property(\"propertyId\");",
+                  "    pm.expect(json.data).to.have.property(\"tracked\");",
+                  "    pm.expect(json.data).to.have.property(\"deduplicated\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user-behaviors/view-property/{{sample_property_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user-behaviors",
+                "view-property",
+                "{{sample_property_id}}"
+              ]
+            },
+            "description": "Records a property view into user_behaviors with a 10-minute deduplication cooldown, self-view skip, and 404 DB-1002 if missing."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin: Get ML Service & Fallback Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns ML status payload\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect([\"live\", \"fallback\"]).to.include(json.data.status);",
+                  "    pm.expect(json.data.fallbackReady).to.eql(true);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/ml/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "ml",
+                "status"
+              ]
+            },
+            "description": "Admin-only endpoint returning live vs fallback ML status, catalog size, snapshot age, and timeout config."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin: Refresh ML & Fallback Catalog Caches",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns refreshed cache confirmation\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data.refreshed).to.eql(true);",
+                  "    pm.expect(json.data).to.have.property(\"catalogSize\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/ml/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "ml",
+                "refresh"
+              ]
+            },
+            "description": "Admin-only endpoint that clears API recommendation caches, triggers POST /ml/v1/refresh on joodpakpaw-ml, and rebuilds the fallback catalog snapshot."
+          },
+          "response": []
+        }
+      ]
     }
   ]
 }

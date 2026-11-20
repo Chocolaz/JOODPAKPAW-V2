@@ -5,7 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { cn, getLowestPrice, getPetPolicy, assetPath, getApiImageUrl } from '@/lib/utils'
-import { Globe, GlobeLock, Heart, Star, Ban } from 'lucide-react'
+import { Globe, GlobeLock, Heart, Star, Ban, Sparkles } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FavoriteDrawer } from './FavoriteDrawer'
 import { useAuth } from '@/app/_components/AuthContext'
@@ -13,7 +13,6 @@ import {
   getFavoriteFolders,
   addFavorite,
   deleteFavoriteProperty,
-  trackPropertyView,
 } from '@/lib/api'
 import { ApiError } from '@/lib/errorHandling'
 import { toast } from 'sonner'
@@ -26,6 +25,7 @@ interface PropertyCardProps {
   showStatusIcon?: boolean
   showPetPolicyChip?: boolean
   showHeartIcon?: boolean
+  showMatchReason?: boolean
   favoriteFolderId?: number
 }
 
@@ -37,6 +37,7 @@ export function PropertyCard({
   showStatusIcon = false,
   showPetPolicyChip = false,
   showHeartIcon = false,
+  showMatchReason = false,
   favoriteFolderId,
 }: PropertyCardProps) {
   const { user } = useAuth()
@@ -61,14 +62,6 @@ export function PropertyCard({
 
   const lowestPrice = getLowestPrice(property.roomCategories)
   const petPolicy = getPetPolicy(property.pets)
-
-  const handleCardClick = () => {
-    if (user) {
-      trackPropertyView(property.id)
-        .then(() => console.log(`[trackPropertyView] property ${property.id} tracked for user ${user.id}`))
-        .catch(() => {})
-    }
-  }
 
   const handleHeartClick = async (e: React.MouseEvent) => {
     e.preventDefault()
@@ -134,7 +127,7 @@ export function PropertyCard({
       <div className="transition-colors duration-200">
         {/* Image Box */}
         <div className="w-full aspect-square relative rounded-2xl overflow-hidden bg-gray-100 border border-gray-100 group-hover:border-gray-200/80 shadow-sm transition-colors">
-          <Link href={finalHref} className="relative block w-full h-full" onClick={handleCardClick}>
+          <Link href={finalHref} className="relative block w-full h-full">
             {!isImageLoaded && (
               <Skeleton className="absolute inset-0 w-full h-full rounded-2xl bg-gray-200 animate-pulse" />
             )}
@@ -200,7 +193,7 @@ export function PropertyCard({
         </div>
 
         {/* Content */}
-        <Link href={finalHref} onClick={handleCardClick}>
+        <Link href={finalHref}>
           <div className="mt-2 px-0.5">
             <p className="text-sm md:text-base lg:text-base xl:text-lg font-medium text-deep-teal truncate">
               {property.title}
@@ -237,6 +230,16 @@ export function PropertyCard({
               <p className="font-semibold text-xs md:text-sm lg:text-sm xl:text-base text-deep-teal tabular-nums">
                 ฿{lowestPrice.toLocaleString()}
               </p>
+            )}
+
+            {showMatchReason && property.matchReasons && property.matchReasons.length > 0 && (
+              <div
+                title={property.matchReasons.join(' • ')}
+                className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full bg-deep-teal/5 border border-deep-teal/10 px-2 py-0.5 text-[11px] font-medium text-deep-teal"
+              >
+                <Sparkles className="h-3 w-3 shrink-0 text-accent-orange" />
+                <span className="truncate">{property.matchReasons[0]}</span>
+              </div>
             )}
           </div>
         </Link>

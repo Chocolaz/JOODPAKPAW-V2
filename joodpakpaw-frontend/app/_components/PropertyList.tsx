@@ -11,6 +11,7 @@ interface PropertyListProps {
   showStatusIcon?: boolean
   showPetPolicyChip?: boolean
   showHeartIcon?: boolean
+  showMatchReason?: boolean
 }
 
 export function PropertyList({
@@ -21,6 +22,7 @@ export function PropertyList({
   showStatusIcon,
   showPetPolicyChip,
   showHeartIcon,
+  showMatchReason,
 }: PropertyListProps) {
   return (
     <div className={className}>
@@ -33,6 +35,7 @@ export function PropertyList({
           showStatusIcon={showStatusIcon}
           showPetPolicyChip={showPetPolicyChip}
           showHeartIcon={showHeartIcon}
+          showMatchReason={showMatchReason}
         />
       ))}
     </div>

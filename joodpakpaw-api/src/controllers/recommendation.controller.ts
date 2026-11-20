@@ -3,6 +3,7 @@ import { prisma } from '../database/prisma';
 import { AppError } from '../middlewares/errorHandler';
 import { AuthenticatedUser } from '../middlewares/auth.middleware';
 import { formatPropertyDto, getUserFavoriteMap } from './property.controller';
+import { normalizePetName } from './lookup.controller';
 import {
   getMlServiceStatus,
   getSimilarPropertyRecommendations,
@@ -204,16 +205,20 @@ export async function getRecommendedProperties(
   try {
     const debugRequested =
       String(req.query.debug || '').trim().toLowerCase() === 'true';
+    const coldStartRequested =
+      String(req.query.coldStart || '').trim().toLowerCase() === 'true';
     const asUserIdRaw =
       req.query.asUserId !== undefined ? String(req.query.asUserId).trim() : '';
     const hasAsUserId = asUserIdRaw !== '';
 
-    if ((debugRequested || hasAsUserId) && !isAdminUser(req.user)) {
+    if ((debugRequested || hasAsUserId || coldStartRequested) && !isAdminUser(req.user)) {
       throw new AppError('Access forbidden. Insufficient permissions.', 403, 'A-3007');
     }
 
     let targetUserId: number | null = req.user?.id ?? null;
-    if (hasAsUserId) {
+    if (coldStartRequested || asUserIdRaw.toLowerCase() === 'guest') {
+      targetUserId = null;
+    } else if (hasAsUserId) {
       const parsedAsUserId = parsePositiveInt(asUserIdRaw);
       if (parsedAsUserId === null) {
         throw new AppError('Invalid asUserId parameter.', 400, 'T-2007');
@@ -353,6 +358,135 @@ export async function getSimilarProperties(
   }
 }
 
+const EPHEMERAL_EMAIL_PREFIXES = ['challenger_', 'smoke_', 'test_', 'qa_', 'audit_'];
+
+async function fetchAdminSampleUsers() {
+  const baseWhere = {
+    deletedAt: null,
+    bannedAt: null,
+    NOT: EPHEMERAL_EMAIL_PREFIXES.map((prefix) => ({
+      email: { startsWith: prefix, mode: 'insensitive' as const },
+    })),
+  };
+
+  const userSelect = {
+    id: true,
+    email: true,
+    firstName: true,
+    lastName: true,
+    userRoles: {
+      where: { role: { deletedAt: null } },
+      select: {
+        role: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    },
+    _count: {
+      select: {
+        userBehaviors: true,
+      },
+    },
+    petProfiles: {
+      where: { deletedAt: null },
+      orderBy: { id: 'asc' as const },
+      select: {
+        id: true,
+        name: true,
+        weight: true,
+        petType: {
+          select: {
+            name: true,
+          },
+        },
+        petSizeCategory: {
+          select: {
+            name: true,
+          },
+        },
+        energy: {
+          select: {
+            rating: true,
+          },
+        },
+      },
+    },
+  };
+
+  const usersWithPets = await prisma.user.findMany({
+    where: {
+      ...baseWhere,
+      petProfiles: { some: { deletedAt: null } },
+    },
+    orderBy: { id: 'asc' },
+    take: 25,
+    select: userSelect,
+  });
+
+  const remainingSlots = 25 - usersWithPets.length;
+  const usersWithoutPets =
+    remainingSlots > 0
+      ? await prisma.user.findMany({
+          where: {
+            ...baseWhere,
+            petProfiles: { none: { deletedAt: null } },
+          },
+          orderBy: { id: 'asc' },
+          take: remainingSlots,
+          select: userSelect,
+        })
+      : [];
+
+  return [...usersWithPets, ...usersWithoutPets].map((u) => ({
+    id: u.id,
+    email: u.email,
+    firstName: u.firstName || '',
+    lastName: u.lastName || '',
+    roles: u.userRoles.map((ur) => ur.role.name),
+    behaviorCount: u._count.userBehaviors,
+    pets: u.petProfiles.map((pet) => ({
+      id: pet.id,
+      name: pet.name,
+      species: normalizePetName(pet.petType.name),
+      weight: pet.weight !== null ? Number(pet.weight) : null,
+      sizeName: pet.petSizeCategory?.name ?? null,
+      energyRating: pet.energy?.rating ?? null,
+    })),
+  }));
+}
+
+async function fetchAdminSampleProperties() {
+  const properties = await prisma.property.findMany({
+    where: {
+      isActive: true,
+      deletedAt: null,
+      isBannedByAdmin: false,
+      host: {
+        deletedAt: null,
+        bannedAt: null,
+        isBannedAllProperties: false,
+      },
+    },
+    orderBy: { id: 'asc' },
+    take: 50,
+    select: {
+      id: true,
+      title: true,
+      province: true,
+      avgRating: true,
+    },
+  });
+
+  return properties.map((p) => ({
+    id: p.id,
+    title: p.title,
+    province: p.province || '',
+    avgRating: Number(p.avgRating ?? 0),
+  }));
+}
+
 /**
  * GET /api/v1/admin/ml/status
  */
@@ -366,11 +500,19 @@ export async function getAdminMlStatus(
       throw new AppError('Access forbidden. Insufficient permissions.', 403, 'A-3007');
     }
 
-    const status = await getMlServiceStatus();
+    const [status, sampleUsers, sampleProperties] = await Promise.all([
+      getMlServiceStatus(),
+      fetchAdminSampleUsers(),
+      fetchAdminSampleProperties(),
+    ]);
     res.status(200).json({
       code: 'S-0000',
       message: 'Success',
-      data: status,
+      data: {
+        ...status,
+        sampleUsers,
+        sampleProperties,
+      },
     });
   } catch (error) {
     next(error);

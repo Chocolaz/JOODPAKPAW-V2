@@ -6612,6 +6612,11 @@ async function main() {
         { path: `/api/v1/properties/recommend?asUserId=${user1Live.userId}`, expectedStatus: 403, expectedCode: 'A-3007' },
         { path: `/api/v1/properties/recommend?asUserId=${user1Live.userId}`, token: user1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
         { path: `/api/v1/properties/recommend?asUserId=${user1Live.userId}`, token: host1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/properties/recommend?asUserId=guest', expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/properties/recommend?asUserId=guest', token: user1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/properties/recommend?asUserId=guest', token: host1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/properties/recommend?coldStart=true', expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/properties/recommend?coldStart=true', token: user1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
         { path: `/api/v1/properties/recommend/property/${activeProps[0].id}?debug=true`, token: user1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
         { path: '/api/v1/admin/ml/status', expectedStatus: 401, expectedCode: 'A-3005' },
         { path: '/api/v1/admin/ml/status', token: user1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
@@ -6678,6 +6683,120 @@ async function main() {
         refreshRes.body?.data?.mlServiceRefreshed !== true
       ) {
         throw new Error(`Unexpected /admin/ml/refresh: ${refreshRes.statusCode} ${JSON.stringify(refreshRes.body)}`)
+      }
+    })
+
+    // Test 68b: PBI-21 True Guest Cold-Start via asUserId=guest / coldStart=true & Dynamic sampleUsers/sampleProperties
+    await runTest('PBI-21: Admin Guest Cold-Start (asUserId=guest & coldStart=true) and dynamic /admin/ml/status sampleUsers & sampleProperties', async () => {
+      config.mlServiceUrl = liveMlUrl
+      await invalidateAllRecommendationCaches()
+
+      // Non-admin calling asUserId=guest gets 403 A-3007
+      const nonAdminGuest = await makeRequest(
+        pipePath,
+        '/api/v1/properties/recommend?asUserId=guest&limit=4',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${user1Live.token}` }
+      )
+      if (nonAdminGuest.statusCode !== 403 || nonAdminGuest.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 for non-admin asUserId=guest, got ${nonAdminGuest.statusCode} ${JSON.stringify(nonAdminGuest.body)}`)
+      }
+
+      // Admin calling debug=true&asUserId=guest&limit=4 gets 200, strategy=cold_start & scoreBreakdown
+      const adminGuestRes = await makeRequest(
+        pipePath,
+        '/api/v1/properties/recommend?debug=true&asUserId=guest&limit=4',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${adminLive.token}` }
+      )
+      if (
+        adminGuestRes.statusCode !== 200 ||
+        adminGuestRes.body?.meta?.strategy !== 'cold_start' ||
+        !Array.isArray(adminGuestRes.body?.data) ||
+        adminGuestRes.body.data.length === 0
+      ) {
+        throw new Error(`Expected 200 cold_start for admin asUserId=guest, got ${adminGuestRes.statusCode} ${JSON.stringify(adminGuestRes.body?.meta)}`)
+      }
+      const guestBd = adminGuestRes.body.data[0].scoreBreakdown
+      if (
+        !guestBd ||
+        typeof guestBd.sContent !== 'number' ||
+        typeof guestBd.sCompat !== 'number' ||
+        typeof guestBd.sQuality !== 'number' ||
+        typeof guestBd.sPopularity !== 'number'
+      ) {
+        throw new Error(`Expected scoreBreakdown on admin asUserId=guest, got ${JSON.stringify(guestBd)}`)
+      }
+
+      // Admin calling debug=true&coldStart=true&limit=4 also runs true guest cold-start
+      const adminColdStartRes = await makeRequest(
+        pipePath,
+        '/api/v1/properties/recommend?debug=true&coldStart=true&limit=4',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${adminLive.token}` }
+      )
+      if (
+        adminColdStartRes.statusCode !== 200 ||
+        adminColdStartRes.body?.meta?.strategy !== 'cold_start' ||
+        !adminColdStartRes.body?.data?.[0]?.scoreBreakdown
+      ) {
+        throw new Error(`Expected 200 cold_start + scoreBreakdown for admin coldStart=true, got ${adminColdStartRes.statusCode} ${JSON.stringify(adminColdStartRes.body?.meta)}`)
+      }
+
+      // Admin /admin/ml/status returns dynamic sampleUsers & sampleProperties
+      const statusRes = await makeRequest(pipePath, '/api/v1/admin/ml/status', 'GET', undefined, {
+        Authorization: `Bearer ${adminLive.token}`,
+      })
+      if (statusRes.statusCode !== 200) {
+        throw new Error(`Expected 200 on /admin/ml/status, got ${statusRes.statusCode}`)
+      }
+      const sampleUsers: any[] = statusRes.body?.data?.sampleUsers
+      const sampleProperties: any[] = statusRes.body?.data?.sampleProperties
+      if (!Array.isArray(sampleUsers) || sampleUsers.length === 0) {
+        throw new Error(`Expected non-empty data.sampleUsers, got ${JSON.stringify(sampleUsers)}`)
+      }
+      if (!Array.isArray(sampleProperties) || sampleProperties.length === 0) {
+        throw new Error(`Expected non-empty data.sampleProperties, got ${JSON.stringify(sampleProperties)}`)
+      }
+
+      const usersWithPets = sampleUsers.filter((u) => Array.isArray(u.pets) && u.pets.length > 0)
+      if (usersWithPets.length === 0) {
+        throw new Error('Expected sampleUsers to include users with active petProfiles')
+      }
+
+      // Verify users with pets appear before users without pets, and no ephemeral test accounts
+      const ephemeralPrefixes = ['challenger_', 'smoke_', 'test_', 'qa_', 'audit_']
+      let seenWithoutPets = false
+      for (const u of sampleUsers) {
+        if (ephemeralPrefixes.some((p) => String(u.email || '').toLowerCase().startsWith(p))) {
+          throw new Error(`Ephemeral account leaked into sampleUsers: ${u.email}`)
+        }
+        if (typeof u.id !== 'number' || typeof u.email !== 'string' || !Array.isArray(u.roles) || typeof u.behaviorCount !== 'number') {
+          throw new Error(`Invalid sampleUser shape: ${JSON.stringify(u)}`)
+        }
+        if (u.pets.length === 0) {
+          seenWithoutPets = true
+        } else if (seenWithoutPets) {
+          throw new Error('User with active petProfiles appeared after a user without pets')
+        }
+      }
+
+      const samplePet = usersWithPets[0].pets[0]
+      if (typeof samplePet.id !== 'number' || typeof samplePet.name !== 'string' || typeof samplePet.species !== 'string' || !samplePet.species) {
+        throw new Error(`Invalid sampleUser pet shape: ${JSON.stringify(samplePet)}`)
+      }
+
+      const sampleProp = sampleProperties[0]
+      if (
+        typeof sampleProp.id !== 'number' ||
+        typeof sampleProp.title !== 'string' ||
+        typeof sampleProp.province !== 'string' ||
+        typeof sampleProp.avgRating !== 'number'
+      ) {
+        throw new Error(`Invalid sampleProperty shape: ${JSON.stringify(sampleProp)}`)
       }
     })
 
