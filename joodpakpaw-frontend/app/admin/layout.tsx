@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/app/_components/AuthContext'
 import { Spinner } from '@/components/ui/spinner'
 import Link from 'next/link'
-import { LogOut } from 'lucide-react'
+import { LogOut, Sparkles } from 'lucide-react'
 
 const NAV_ITEMS = [
   {
@@ -75,6 +75,11 @@ const NAV_ITEMS = [
         <line x1="8" y1="17" x2="16" y2="17" />
       </svg>
     ),
+  },
+  {
+    label: 'ML Inspector',
+    href: '/admin/ml-inspector',
+    icon: <Sparkles className="w-[18px] h-[18px]" strokeWidth={1.75} />,
   },
 ]
 

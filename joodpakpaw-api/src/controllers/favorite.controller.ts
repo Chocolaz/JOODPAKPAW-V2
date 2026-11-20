@@ -2,6 +2,10 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../database/prisma';
 import { AppError } from '../middlewares/errorHandler';
 import { cacheService } from '../services/cache.service';
+import {
+  invalidateUserRecommendationCache,
+  recordUserBehaviorSafe,
+} from '../services/recommendation.service';
 
 /**
  * GET /api/v1/favorite-folders/all
@@ -331,6 +335,8 @@ export async function createOrAddFavorite(
     });
 
     await cacheService.delByPrefix(`properties:favorite:${userId}`);
+    void recordUserBehaviorSafe(userId, propId, 'favorite');
+    await invalidateUserRecommendationCache(userId);
 
     res.status(201).json({
       code: 'S-0000',
@@ -445,6 +451,7 @@ export async function deleteFavoriteFolder(
     });
 
     await cacheService.delByPrefix(`properties:favorite:${userId}`);
+    await invalidateUserRecommendationCache(userId);
 
     res.status(200).json({
       code: 'S-0000',
@@ -492,6 +499,7 @@ export async function deleteFavoriteProperty(
     }
 
     await cacheService.delByPrefix(`properties:favorite:${userId}`);
+    await invalidateUserRecommendationCache(userId);
 
     res.status(200).json({
       code: 'S-0000',

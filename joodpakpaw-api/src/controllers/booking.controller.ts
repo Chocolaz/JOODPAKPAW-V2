@@ -2,8 +2,14 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../database/prisma';
 import { AppError } from '../middlewares/errorHandler';
 import { uploadImageAsWebp, deleteObjectFromS3 } from '../services/storage.service';
-import { syncPropertyRating } from './property.controller';
-import { cacheService } from '../services/cache.service';
+import {
+  invalidatePropertyCaches,
+  syncPropertyRating,
+} from './property.controller';
+import {
+  invalidateUserRecommendationCache,
+  recordUserBehaviorSafe,
+} from '../services/recommendation.service';
 import { createNotificationSafe } from '../services/notification.service';
 import {
   REVIEWABLE_STATUSES,
@@ -781,6 +787,9 @@ export async function createBooking(
       console.warn('Failed to sync property booking count:', syncErr);
     }
 
+    void recordUserBehaviorSafe(userId, property.id, 'book');
+    await invalidateUserRecommendationCache(userId);
+
     await createNotificationSafe({
       userId: property.hostId,
       roleName: 'host',
@@ -1037,6 +1046,8 @@ export async function confirmBookingPayment(
       console.warn('Failed to sync property booking count:', syncErr);
     }
 
+    await invalidateUserRecommendationCache(booking.guestId);
+
     if (prop?.hostId) {
       await createNotificationSafe({
         userId: prop.hostId,
@@ -1182,6 +1193,8 @@ export async function cancelBooking(
     } catch (syncErr) {
       console.warn('Failed to sync property booking count:', syncErr);
     }
+
+    await invalidateUserRecommendationCache(booking.guestId);
 
     const counterpartyId =
       cancelledBy === 'guest' ? booking.property.hostId : booking.guestId;
@@ -2055,7 +2068,7 @@ export async function submitBookingReview(
     );
 
     await syncPropertyRating(booking.propertyId);
-    await cacheService.delByPrefix('properties:');
+    await invalidatePropertyCaches();
 
     const hostId = booking.property?.hostId;
     if (hostId) {
@@ -2208,7 +2221,7 @@ export async function replyToBookingReview(
       { maxWait: 10000, timeout: 30000 }
     );
 
-    await cacheService.delByPrefix('properties:');
+    await invalidatePropertyCaches();
 
     await createNotificationSafe({
       userId: booking.guestId,

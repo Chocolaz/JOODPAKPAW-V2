@@ -19,6 +19,11 @@ healthRouter.get('/health', async (_req: Request, res: Response) => {
       redis: redisHealth,
       storage: 'ready',
     },
+    ml: {
+      url: config.mlServiceUrl,
+      timeoutMs: config.mlTimeoutMs,
+      fallbackReady: true,
+    },
   };
 
   res.status(200).json(healthPayload);

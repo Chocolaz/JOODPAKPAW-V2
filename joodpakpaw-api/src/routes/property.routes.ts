@@ -7,6 +7,10 @@ import {
   searchPropertyRoomCategories,
   getFeaturedSections,
 } from '../controllers/property.controller';
+import {
+  getRecommendedProperties,
+  getSimilarProperties,
+} from '../controllers/recommendation.controller';
 import { optionalAuthenticateToken } from '../middlewares/auth.middleware';
 
 export const propertyRouter = Router();
@@ -19,6 +23,14 @@ propertyRouter.get(
   '/featured-sections',
   optionalAuthenticateToken,
   getFeaturedSections
+);
+
+// Hybrid ML Recommendations (MUST precede /:propertyId)
+propertyRouter.get('/recommend', optionalAuthenticateToken, getRecommendedProperties);
+propertyRouter.get(
+  '/recommend/property/:propertyId',
+  optionalAuthenticateToken,
+  getSimilarProperties
 );
 
 // Specific host sub-routes MUST precede /:propertyId

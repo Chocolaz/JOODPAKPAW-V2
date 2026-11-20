@@ -3,15 +3,15 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { PageHeader } from '@/app/_components/PageHeader'
 import { PropertyList } from '@/app/_components/PropertyList'
-import { getProperties, getRecommendedProperties, getPropertyById } from '@/lib/api'
+import { getProperties, getPropertiesByIds } from '@/lib/api'
 import { Property } from '@/types'
 import { useAuth } from '@/app/_components/AuthContext'
+import { useAuthModal } from '@/app/_context/AuthModalContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   SearchX,
   Compass,
   Star,
-  Heart,
   Loader2,
   Tag,
   MapPin,
@@ -19,10 +19,12 @@ import {
   Cat,
   Clock,
   TrendingUp,
+  Sparkles,
 } from 'lucide-react'
 import { useBrowseFilters } from '@/app/_hooks/useBrowseFilters'
 import { useRecentlyViewed } from '@/app/_hooks/useRecentlyViewed'
 import { useFeaturedSections } from '@/app/_hooks/useFeaturedSections'
+import { useRecommendedProperties } from '@/app/_hooks/useRecommendedProperties'
 import { BrowseSection } from './_components/BrowseSection'
 
 function haversineDistance(
@@ -65,14 +67,14 @@ export default function Home() {
   const [pagedTotalRows, setPagedTotalRows] = useState<number | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
 
-  const [recommendedProperties, setRecommendedProperties] = useState<
-    Property[]
-  >([])
-  const [recommendedTotal, setRecommendedTotal] = useState(0)
-
   const { isAuthenticated, user } = useAuth()
+  const { openAuthModal } = useAuthModal()
   const { searchQuery, filters, buildSeeAllUrl } = useBrowseFilters()
   const { ids: recentlyViewedIds } = useRecentlyViewed()
+  const {
+    properties: recommendedProperties,
+    totalRows: recommendedTotal,
+  } = useRecommendedProperties(1, RECOMMEND_LIMIT)
   const [userLocation, setUserLocation] = useState<{
     lat: number
     lon: number
@@ -203,23 +205,6 @@ export default function Home() {
     filters.maxPrice,
   ])
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setRecommendedProperties([])
-      setRecommendedTotal(0)
-      return
-    }
-    getRecommendedProperties(1, RECOMMEND_LIMIT)
-      .then((res) => {
-        setRecommendedProperties(res.data)
-        setRecommendedTotal(res.totalRows)
-      })
-      .catch(() => {
-        setRecommendedProperties([])
-        setRecommendedTotal(0)
-      })
-  }, [isAuthenticated])
-
   // Exclude the current user's own properties
   const visibleProperties = useMemo(() => {
     if (!user) return properties
@@ -273,9 +258,11 @@ export default function Home() {
       return
     }
 
+    let cancelled = false
+
     const fetchRecentlyViewed = async () => {
-      // Create a pool of all currently loaded properties to avoid redundant API calls
-      const allLoaded = [
+      const allLoadedMap = new Map<number, Property>()
+      for (const prop of [
         ...visibleProperties,
         ...sectionData.topRated,
         ...sectionData.bestValue,
@@ -283,31 +270,40 @@ export default function Home() {
         ...sectionData.trending,
         ...sectionData.dogFriendly,
         ...sectionData.catFriendly,
-      ]
+        ...recommendedProperties,
+      ]) {
+        allLoadedMap.set(prop.id, prop)
+      }
+
+      const missingIds = recentlyViewedIds.filter((id) => !allLoadedMap.has(id))
+
+      if (missingIds.length === 0) {
+        const resolved = recentlyViewedIds
+          .map((id) => allLoadedMap.get(id))
+          .filter((p): p is Property => p != null)
+        if (!cancelled) setRecentlyViewedFullProperties(resolved)
+        return
+      }
 
       try {
-        const promises = recentlyViewedIds.map(async (id) => {
-          const existing = allLoaded.find((p) => p.id === id)
-          if (existing) return existing
-
-          try {
-            const res = await getPropertyById(String(id))
-            return res.property
-          } catch (err) {
-            console.error(`Failed to fetch recently viewed property ${id}:`, err)
-            return null
-          }
-        })
-
-        const results = await Promise.all(promises)
-        setRecentlyViewedFullProperties(results.filter((p): p is Property => p != null))
+        const fetched = await getPropertiesByIds(missingIds)
+        for (const prop of fetched) {
+          allLoadedMap.set(prop.id, prop)
+        }
+        const resolved = recentlyViewedIds
+          .map((id) => allLoadedMap.get(id))
+          .filter((p): p is Property => p != null)
+        if (!cancelled) setRecentlyViewedFullProperties(resolved)
       } catch (err) {
         console.error('Error fetching recently viewed properties:', err)
       }
     }
 
     fetchRecentlyViewed()
-  }, [recentlyViewedIds, visibleProperties, sectionData])
+    return () => {
+      cancelled = true
+    }
+  }, [recentlyViewedIds, visibleProperties, sectionData, recommendedProperties])
 
   return (
     <div>
@@ -472,17 +468,41 @@ export default function Home() {
                       />
                     )}
 
-                    {/* Recommended slot — authenticated only */}
-                    {isAuthenticated && recommendedProperties.length > 0 && (
+                    {/* Recommended slot — personalized when authenticated, cold-start picks for guests */}
+                    {recommendedProperties.length > 0 && (
                       <BrowseSection
-                        title="Recommended for You"
+                        title={
+                          isAuthenticated
+                            ? 'Recommended for You'
+                            : 'Popular Picks to Get Started'
+                        }
+                        subtitle={
+                          isAuthenticated
+                            ? undefined
+                            : 'Sign in to get personalized stays tailored to your pets'
+                        }
                         icon={
-                          <Heart className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />
+                          <Sparkles
+                            className="w-5 h-5 text-accent-orange"
+                            strokeWidth={1.75}
+                          />
+                        }
+                        headerAction={
+                          !isAuthenticated ? (
+                            <button
+                              type="button"
+                              onClick={() => openAuthModal('login')}
+                              className="ml-1 inline-flex items-center rounded-full bg-deep-teal px-3 py-1 text-xs font-medium text-white hover:bg-deep-teal/90 transition-colors cursor-pointer"
+                            >
+                              Sign in
+                            </button>
+                          ) : undefined
                         }
                         properties={recommendedProperties}
                         totalCount={recommendedTotal}
-                        showHeartIcon={true}
+                        showHeartIcon={isAuthenticated}
                         showPetPolicyChip={true}
+                        showMatchReason={true}
                         seeAllHref={buildSeeAllUrl('/recommended')}
                       />
                     )}

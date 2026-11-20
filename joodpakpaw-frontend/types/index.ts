@@ -7,6 +7,14 @@ export type {
   RoomCategoryCalendarItem,
   RoomCategoryCalendarsResponse,
   PropertiesResponse,
+  MatchTier,
+  ScoreBreakdown,
+  RecommendationMeta,
+  MlSampleUserPet,
+  MlSampleUser,
+  MlSampleProperty,
+  MlStatusResponse,
+  MlRefreshResponse,
 } from './property'
 export * from './authen'
 export * from './pet'

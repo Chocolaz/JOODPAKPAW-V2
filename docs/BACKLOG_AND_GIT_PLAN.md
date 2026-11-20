@@ -12,9 +12,9 @@
 
 ---
 
-## Phase 0 / Sprint 0: Foundation, Monorepo Infra & Database
+## Phase 0 / Sprint 0: Foundation, Monorepo Infra & Database (COMPLETED)
 - **Branch:** `feat/phase-0-db-infra`
-- **Merge Commit:** `chore(sprint-0): merge phase 0 database and infrastructure into develop`
+- **Merge Commit:** `af57081` — `chore(sprint-0): merge phase 0 database and infrastructure into develop`
 
 | สถานะ | รหัส PBI | รายละเอียดงาน (PBI Scope) | Agent ผู้สร้าง | ข้อความ Git Commit (`git commit -m "..."`) |
 | :---: | :--- | :--- | :--- | :--- |
@@ -24,9 +24,9 @@
 
 ---
 
-## Phase 1 / Sprint 1: Auth, User, Property/Room CRUD & Cloud Storage (Enterprise V2 Standardized)
+## Phase 1 / Sprint 1: Auth, User, Property/Room CRUD & Cloud Storage (COMPLETED)
 - **Branch:** `feat/phase-1-auth-property` & `feat/phase-1-enterprise-refactor`
-- **Merge Commit:** `merge: feat/phase-1-enterprise-refactor into develop`
+- **Merge Commit:** `1def09a` / `7e11811` — `merge: feat/phase-1-enterprise-refactor into develop`
 
 | สถานะ | รหัส PBI | รายละเอียดงาน (PBI Scope & Enterprise Rules) | Agent ผู้สร้าง | ข้อความ Git Commit (`git commit -m "..."`) |
 | :---: | :--- | :--- | :--- | :--- |
@@ -38,40 +38,40 @@
 
 ---
 
-## Phase 2 / Sprint 2: Booking Engine, Host Calendar UI, Pets, Favorites & Reviews
+## Phase 2 / Sprint 2: Booking Engine, Host Calendar UI, Pets, Favorites & Reviews (COMPLETED)
 - **Branch:** `feat/phase-2-booking-calendar`
-- **Merge Commit:** `chore(sprint-2): merge phase 2 booking engine, host calendar UI, pets, favorites, and reviews into develop`
+- **Merge Commit:** `c44cd68` — `feat(sprint-2): merge booking engine, calendar UI, pets, and reviews into develop`
 
 | สถานะ | รหัส PBI | รายละเอียดงาน (PBI Scope & Proactive Enterprise Business Rules) | Agent ผู้สร้าง | ข้อความ Git Commit (`git commit -m "..."`) |
 | :---: | :--- | :--- | :--- | :--- |
-| `[ ]` | **`PBI-09`** | **Pet Profile CRUD API & Frontend Unwrap:** พัฒนา `/api/v1/profiles/pet-profiles/*` (`GET /all`, `GET /:id`, `POST`, `PUT /:id`, `DELETE /:id`) ภายใต้ Single `data` Envelope + `camelCase` (`petSizeCategoryId`), S3 WebP + Garbage Collection เมื่อลบรูปสัตว์เลี้ยง, ป้องกัน IDOR (`A-3007`), และบล็อกการลบสัตว์เลี้ยงที่ติดใบจอง (`B-4001`) พร้อมอัปเดต `lib/api.ts` | `backend-core-engineer` + `frontend-upgrader` | `feat(pets): [PBI-09] implement pet profile CRUD APIs with S3 GC and active-booking guard` |
-| `[ ]` | **`PBI-10`** | **Row-Locked Multi-Room Booking Engine & Marketplace Guards:** พัฒนา `POST /api/v1/bookings`, `GET /bookings/paginate`, `GET /bookings/:id` ด้วย `SELECT ... FOR UPDATE` บน `room_category_calendars`, บล็อก Host จองที่พักตัวเอง (`B-4002`), ตรวจวันเช็คอิน/เอาต์ (`B-4003`), ตรวจสิทธิ์เจ้าของสัตว์เลี้ยง + ชนิด/ขนาดน้ำหนักสัตว์ + ความจุห้อง + กันสัตว์เลี้ยงจองซ้ำช่วงเวลาเดียวกัน (`B-4004`) และบันทึก `pet_snapshot` | `backend-core-engineer` + `frontend-upgrader` | `feat(booking): [PBI-10] implement row-locked multi-room booking engine with pet and self-booking guards` |
-| `[ ]` | **`PBI-11`** | **Booking Payment, Cancel, Checkout & Host Booking Management:** พัฒนา `PATCH /bookings/:id/confirm-payment` (อัปโหลดสลิป `.webp` + เช็ก `paymentDeadline`), `PATCH /bookings/:id/cancel` (คืนโควตา `booked_rooms` อัตโนมัติ), `PATCH /hosts/bookings/:id/success` (เฉพาะ Host เจ้าของที่พักเมื่อถึงวันเข้าพัก) และ `/hosts/bookings/*` พร้อมปรับ `lib/api.ts` | `backend-core-engineer` + `frontend-upgrader` | `feat(booking-flow): [PBI-11] implement payment slip verification, cancellation quota restore, and host booking APIs` |
-| `[ ]` | **`PBI-12`** | **Host Room Availability & Dynamic Pricing Calendar (API + UI):** สร้าง `GET` & `PATCH /api/v1/hosts/properties/:propertyId/room-categories/:roomId/calendars` (พร้อม Guard ห้ามบล็อกห้องเกินจำนวนห้องว่างที่ยังไม่ถูกจอง `unavailableRooms <= totalRooms - bookedRooms`) คู่กับ **UI จัดการปฏิทินห้องพักและปรับราคารายวันของ Host** ใน `joodpakpaw-frontend` | `backend-core-engineer` + `frontend-upgrader` | `feat(calendar): [PBI-12] implement host room availability and daily pricing calendar API and UI` |
-| `[ ]` | **`PBI-13`** | **Favorite Folders (`FF-4101`) & Verified-Stay Review System:** พัฒนา `/api/v1/favorite-folders/*`, `/favorite-properties/:id` (พร้อมรหัส `FF-4101`) และ `POST /api/v1/bookings/:bookingId/review` (อนุญาตเฉพาะผู้เข้าพักจริงที่สถานะใบจอง `completed` เท่านั้น, จำกัด 1 รีวิวต่อ 1 ใบจอง, อัปโหลดรูป `.webp` และคำนวณ `property.avgRating` ใหม่แบบ Atomic) | `backend-core-engineer` + `frontend-upgrader` | `feat(favorites-reviews): [PBI-13] implement favorite folders with FF-4101 and verified-stay review system` |
+| `[x]` | **`PBI-09`** | **Pet Profile CRUD API & Frontend Unwrap:** พัฒนา `/api/v1/profiles/pet-profiles/*` (`GET /all`, `GET /:id`, `POST`, `PUT /:id`, `DELETE /:id`) ภายใต้ Single `data` Envelope + `camelCase` (`petSizeCategoryId`), S3 WebP + Garbage Collection เมื่อลบรูปสัตว์เลี้ยง, ป้องกัน IDOR (`A-3007`), และบล็อกการลบสัตว์เลี้ยงที่ติดใบจอง (`B-4001`) พร้อมอัปเดต `lib/api.ts` และ 6-step Add-Pet Wizard | `backend-core-engineer` + `frontend-upgrader` | `feat(pbi-09): implement pet profiles CRUD with S3 WebP and active booking guard` |
+| `[x]` | **`PBI-10`** | **Row-Locked Multi-Room Booking Engine & Marketplace Guards:** พัฒนา `POST /api/v1/bookings`, `GET /bookings/paginate`, `GET /bookings/:id` ด้วย `SELECT ... FOR UPDATE` บน `room_category_calendars`, บล็อก Host จองที่พักตัวเอง (`B-4002`), ตรวจวันเช็คอิน/เอาต์ (`B-4003`), ตรวจสิทธิ์เจ้าของสัตว์เลี้ยง + ชนิด/ขนาดน้ำหนักสัตว์ + ความจุห้อง + กันสัตว์เลี้ยงจองซ้ำช่วงเวลาเดียวกัน (`B-4004`) และบันทึก `pet_snapshot` | `backend-core-engineer` + `frontend-upgrader` | `feat(pbi-10): implement row-locked multi-room booking engine and date availability search` |
+| `[x]` | **`PBI-11`** | **Booking Payment, Cancel, Checkout & Host Booking Management:** พัฒนา `PATCH /bookings/:id/confirm-payment` (อัปโหลดสลิป `.webp` + เช็ก `paymentDeadline`), `PATCH /bookings/:id/cancel` (คืนโควตา `booked_rooms` อัตโนมัติ), `PATCH /hosts/bookings/:id/success` (เฉพาะ Host เจ้าของที่พักเมื่อถึงวันเข้าพัก) และ `/hosts/bookings/*` พร้อมปรับ `lib/api.ts` และ Lifecycle Scheduler | `backend-core-engineer` + `frontend-upgrader` | `feat(pbi-11): implement payment slip 24h window guard, atomic quota restore, and host checkout` |
+| `[x]` | **`PBI-12`** | **Host Room Availability & Dynamic Pricing Calendar (API + UI):** สร้าง `GET` & `PATCH /api/v1/hosts/properties/:propertyId/room-categories/:roomId/calendars` (พร้อม Guard ห้ามบล็อกห้องเกินจำนวนห้องว่างที่ยังไม่ถูกจอง `unavailableRooms <= totalRooms - bookedRooms`) คู่กับ **UI จัดการปฏิทินห้องพักและปรับราคารายวันของ Host** ใน `joodpakpaw-frontend` | `backend-core-engineer` + `frontend-upgrader` | `feat(pbi-12): implement host room availability and dynamic pricing calendar API and UI drawer` |
+| `[x]` | **`PBI-13`** | **Favorite Folders (`FF-4101`) & Verified-Stay Review System:** พัฒนา `/api/v1/favorite-folders/*`, `/favorite-properties/:id` (พร้อมรหัส `FF-4101`) และ `POST /api/v1/bookings/:bookingId/review` (อนุญาตเฉพาะผู้เข้าพักจริงที่สถานะใบจอง `successful`/`completed` ภายใน 14 วัน, จำกัด 1 รีวิวต่อ 1 ใบจอง, อัปโหลดรูป `.webp`, คำนวณ `property.avgRating` ใหม่แบบ Atomic และรองรับ `review-reply` ของ Host) | `backend-core-engineer` + `frontend-upgrader` | `feat(pbi-13): implement favorites wishlist folders and verified-stay single reviews with rating sync` |
 
 ---
 
-## Phase 3 / Sprint 3: Real-Time Socket.IO, Chat, KYC & Admin Backoffice
+## Phase 3 / Sprint 3: Real-Time Socket.IO, Chat, KYC & Admin Backoffice (COMPLETED)
 - **Branch:** `feat/phase-3-realtime-admin`
-- **Merge Commit:** `chore(sprint-3): merge phase 3 real-time socket, chat, KYC, and admin system into develop`
+- **Status:** Integrated into `develop` (`60ad1ba`..`8906ecb`, Postman synced at `b28d601`)
 
 | สถานะ | รหัส PBI | รายละเอียดงาน (PBI Scope & Proactive Enterprise Business Rules) | Agent ผู้สร้าง | ข้อความ Git Commit (`git commit -m "..."`) |
 | :---: | :--- | :--- | :--- | :--- |
-| `[ ]` | **`PBI-14`** | **Socket.IO v4 Server, Persistent Notifications & Reminder Scheduler:** พัฒนา Socket.IO Server (`/api/socket.io`), REST API `/api/v1/notifications/*` (รวม `PATCH /:id/read` และ `PATCH /read-all` תחת Single `data` Envelope) และระบบส่งอีเมล/แจ้งเตือนก่อนเช็คอิน (รองรับทั้ง Redis และ In-Memory `node-cron` Fallback) | `backend-core-engineer` | `feat(notifications): [PBI-14] implement Socket.IO server, persistent notification APIs, and check-in reminder scheduler` |
-| `[ ]` | **`PBI-15`** | **Real-Time Chat Rooms & Messaging API:** พัฒนา `/api/v1/chat-rooms/*` พร้อมป้องกันการสร้างห้องแชทกับตัวเอง, Deduplicate ห้องแชท 1-ต่อ-1 ที่มีอยู่แล้ว, ตรวจสิทธิ์เฉพาะคู่สนทนา (`403 A-3007`), อัปโหลดรูปแชท `.webp` + S3 GC และยิงอีเวนต์ `new_message`, `messages_read`, `new_chat_room` | `backend-core-engineer` | `feat(chat): [PBI-15] implement real-time chat rooms and messaging APIs with participant guards` |
-| `[ ]` | **`PBI-16`** | **Frontend Real-Time WebSocket & Notification Sync Upgrade:** อัปเกรด `joodpakpaw-frontend/lib/socket.ts` ให้ใช้ Env Config + โหมด WebSocket แท้, เชื่อม `NotificationContext.tsx` ซิงค์สถานะ `is_read` ลงฐานข้อมูลจริง และปรับ `lib/api.ts` หมวด Chat/Notification ให้รับ Single `data` Envelope | `frontend-upgrader` | `feat(fe-realtime): [PBI-16] upgrade socket client to WebSocket transport and sync notification read state` |
-| `[ ]` | **`PBI-17`** | **Host KYC Verification Workflow & Single-Review Guard:** พัฒนา `/api/v1/user-verifications/*` (บล็อกการส่งซ้ำถ้าสถานะ `pending`/`approved`, อัปโหลดบัตร/เซลฟี่เป็น `.webp` + S3 GC) และ `/api/v1/admin/user-verifications/*` (อนุมัติแล้วอัปเกรด `isVerifiedHost = true` + Role `host` + แจ้งเตือนทันที พร้อมล็อกไม่ให้ Admin กดซ้ำตาม `TC-API-172`) | `backend-core-engineer` + `frontend-upgrader` | `feat(kyc): [PBI-17] implement host KYC verification workflow with single-review state lock` |
-| `[ ]` | **`PBI-18`** | **Report System, Cascading Admin Ban/Appeal State Machine & Action Logs:** พัฒนา `/api/v1/reports/*` (ป้องกันการรายงานซ้ำ, จำกัดสิทธิ์ยื่นอุทธรณ์เฉพาะเจ้าของที่พักที่ถูกแบน) และ `/api/v1/admin/*` (Dashboard, จัดการรายงานแบบ Single-Action Lock `TC-API-168`, แบนที่พักเดี่ยว vs แบนทั้งบัญชีพร้อมคืนค่า `isBannedBeforeAccountBan` เมื่อปลดแบนตาม `TC-151..155`, และ Action Logs) | `backend-core-engineer` + `frontend-upgrader` | `feat(admin): [PBI-18] implement report system, cascading ban/appeal state machine, and admin dashboard` |
+| `[x]` | **`PBI-14`** | **Socket.IO v4 Server, Persistent Notifications & Reminder Scheduler:** พัฒนา Socket.IO Server (`/api/socket.io`), REST API `/api/v1/notifications/*` (รวม `PATCH /:id/read` และ `PATCH /read-all` ภายใต้ Single `data` Envelope) และระบบส่งอีเมล/แจ้งเตือนก่อนเช็คอิน (รองรับทั้ง Redis และ In-Memory Fallback) | `backend-core-engineer` | `feat(notifications): [PBI-14] implement Socket.IO server, persistent notification APIs, and check-in reminder scheduler` |
+| `[x]` | **`PBI-15`** | **Real-Time Chat Rooms & Messaging API:** พัฒนา `/api/v1/chat-rooms/*` พร้อมป้องกันการสร้างห้องแชทกับตัวเอง, Deduplicate ห้องแชท 1-ต่อ-1 ที่มีอยู่แล้ว, ตรวจสิทธิ์เฉพาะคู่สนทนา (`403 A-3007`), อัปโหลดรูปแชท `.webp` + S3 GC และยิงอีเวนต์ `new_message`, `messages_read`, `new_chat_room` | `backend-core-engineer` | `feat(chat): [PBI-15] implement real-time chat rooms and messaging APIs with contextual inquiry metadata` |
+| `[x]` | **`PBI-16`** | **Frontend Real-Time WebSocket & Notification Sync Upgrade:** อัปเกรด `joodpakpaw-frontend/lib/socket.ts` ให้ใช้ Env Config + โหมด WebSocket แท้, เชื่อม `NotificationContext.tsx` ซิงค์สถานะ `is_read` ลงฐานข้อมูลจริง และปรับ `lib/api.ts` หมวด Chat/Notification ให้รับ Single `data` Envelope | `frontend-upgrader` | `feat(fe-realtime): [PBI-16] upgrade socket transport, actionable notifications, and Airbnb contextual chat UX` |
+| `[x]` | **`PBI-17`** | **Host KYC Verification Workflow & Single-Review Guard:** พัฒนา `/api/v1/user-verifications/*` (บล็อกการส่งซ้ำถ้าสถานะ `pending`/`approved`, อัปโหลดบัตร/เซลฟี่เป็น `.webp` + S3 GC) และ `/api/v1/admin/user-verifications/*` (อนุมัติแล้วอัปเกรด `isVerifiedHost = true` + Role `host` + แจ้งเตือนทันที พร้อมล็อกไม่ให้ Admin กดซ้ำตาม `TC-API-172`) | `backend-core-engineer` + `frontend-upgrader` | `feat(kyc): [PBI-17] implement host KYC verification workflow with universal access and single-review lock` |
+| `[x]` | **`PBI-18`** | **Report System, Cascading Admin Ban/Appeal State Machine & Action Logs:** พัฒนา `/api/v1/reports/*` (ป้องกันการรายงานซ้ำ, จำกัดสิทธิ์ยื่นอุทธรณ์เฉพาะเจ้าของที่พักที่ถูกแบน) และ `/api/v1/admin/*` (Dashboard, จัดการรายงานแบบ Single-Action Lock `TC-API-168`, แบนที่พักเดี่ยว vs แบนทั้งบัญชีพร้อมคืนค่า `isBannedBeforeAccountBan` เมื่อปลดแบนตาม `TC-151..155`, และ Action Logs) | `backend-core-engineer` + `frontend-upgrader` | `feat(admin): [PBI-18] implement report system, cascading ban/appeal state machine, and Airbnb-grade admin center` |
 
 ---
 
-## Phase 4 / Sprint 4: Hybrid ML Service (`joodpakpaw-ml`) & Production Polish
+## Phase 4 / Sprint 4: Hybrid ML Service (`joodpakpaw-ml`) & Production Polish (COMPLETED)
 - **Branch:** `feat/phase-4-ml-hybrid`
 - **Merge Commit:** `chore(sprint-4): merge phase 4 hybrid ML service and frontend optimization into develop`
 
 | สถานะ | รหัส PBI | รายละเอียดงาน (PBI Scope & Proactive Enterprise Business Rules) | Agent ผู้สร้าง | ข้อความ Git Commit (`git commit -m "..."`) |
 | :---: | :--- | :--- | :--- | :--- |
-| `[ ]` | **`PBI-19`** | **`joodpakpaw-ml` 3-Stage Pet-Aware Hybrid Recommendation Service:** พัฒนา Python FastAPI พอร์ต `5000` (Stage 1: กรองที่พักที่ปลอดภัยและรับชนิด/ขนาดสัตว์เลี้ยงของผู้ใช้ + ตัดที่พักของตัวเอง/ที่พักถูกแบนออก, Stage 2: จับคู่ระดับพลังงาน 1–5 กับสิ่งอำนวยความสะดวก, Stage 3: Behavioral Time-Decay + Bayesian Weighted Rating) พร้อม Explainable `match_reasons` และ Dockerfile สำหรับ Free Cloud | `ml-recommendation-engineer` | `feat(ml): [PBI-19] implement joodpakpaw-ml FastAPI 3-stage pet-aware hybrid recommendation service` |
-| `[ ]` | **`PBI-20`** | **Backend ML Integration & 1.5s Cold-Start Fallback:** พัฒนา `POST /api/v1/user-behaviors/view-property/:id`, `GET /api/v1/properties/recommend` และ `/recommend/property/:id` (Single `data` Envelope) พร้อมระบบ **In-Process Pet-Aware + Bayesian Fallback ภายใน 1.5 วินาที** เมื่อ `joodpakpaw-ml` กำลังตื่นจากโหมดสลีป | `backend-core-engineer` | `feat(api-ml): [PBI-20] integrate recommendation endpoints with 1.5s cold-start fallback` |
-| `[ ]` | **`PBI-21`** | **Frontend Home Feed Optimization & Free Cloud Deployment Guide:** ปรับปรุง `joodpakpaw-frontend/app/(browse)/page.tsx` ลดการยิง API ซ้ำซ้อนด้วย Caching/Deduplication, ทดสอบ E2E ครบทุก Sprint และสร้างคู่มือการ Deploy บนบริการฟรี (`docs/FREE_CLOUD_DEPLOY_GUIDE.md`) | `frontend-upgrader` | `feat(fe-perf): [PBI-21] optimize home feed requests and add free-tier cloud deployment guide` |
+| `[x]` | **`PBI-19`** | **`joodpakpaw-ml` 3-Stage Pet-Aware Hybrid Recommendation Service:** พัฒนา Python FastAPI พอร์ต `5000` (Stage 1: Tiered Strict-First `all_pets` / `partial_pets` + ตัดที่พักของตัวเอง/ที่พักถูกแบนออก, Stage 2: Energy-Facility Compatibility + TF-IDF Cosine Similarity, Stage 3: Reconciled Behavioral Time-Decay + IMDB Bayesian Rating) พร้อม Explainable `match_reasons`, `score_breakdown`, 60s Snapshot Cache, และ Dockerfile สำหรับ Free Cloud (`b5cdcee`) | `ml-recommendation-engineer` | `feat(ml): [PBI-19] implement joodpakpaw-ml FastAPI 3-stage pet-aware hybrid recommendation service` |
+| `[x]` | **`PBI-20`** | **Backend ML Integration & 1.5s Cold-Start Fallback:** พัฒนา `POST /api/v1/user-behaviors/view-property/:id` (10-min cooldown + self-view skip), `GET /api/v1/properties/recommend`, `/recommend/property/:id`, Batch `GET /api/v1/properties?ids=...`, และ `/api/v1/admin/ml/{status,refresh}` (Admin RBAC `403 A-3007`) พร้อม **In-Process Pet-Aware + Bayesian Fallback ภายใน 1.5 วินาที** (`0910358`) | `backend-core-engineer` | `feat(api-ml): [PBI-20] integrate recommendation endpoints with 1.5s cold-start fallback` |
+| `[x]` | **`PBI-21`** | **Frontend Explainable AI UI, SWR Caching, Admin ML Inspector & Free Cloud Deployment Guide:** อัปเกรด UI แสดง Match Reason Pill + Guest Cold-Start Picks + SWR Hooks + Batch `Recently Viewed` + `/admin/ml-inspector` + `docker-compose.yml` + `docs/FREE_CLOUD_DEPLOY_GUIDE.md` + Postman Sprint 4 Folder | `frontend-upgrader` + `db-infra-architect` | `feat(fe-perf): [PBI-21] optimize home feed requests and add free-tier cloud deployment guide` |

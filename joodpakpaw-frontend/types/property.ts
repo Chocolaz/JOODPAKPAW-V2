@@ -96,6 +96,75 @@ export interface PropertyHost {
   isVerifiedHost?: boolean
 }
 
+export type MatchTier = 'all_pets' | 'partial_pets' | 'cold_start' | 'similar'
+
+export interface ScoreBreakdown {
+  sContent: number
+  sCompat: number
+  sQuality: number
+  sPopularity: number
+}
+
+export interface RecommendationMeta {
+  source: 'ml_service' | 'in_process_fallback'
+  strategy: string
+  snapshotAgeSeconds?: number
+  latencyMs?: number
+  totalCandidates?: number
+}
+
+export interface MlSampleUserPet {
+  id: number
+  name: string
+  species: string
+  weight: number | null
+  sizeName: string | null
+  energyRating: number | null
+}
+
+export interface MlSampleUser {
+  id: number
+  email: string
+  firstName: string
+  lastName: string
+  roles: string[]
+  behaviorCount: number
+  pets: MlSampleUserPet[]
+}
+
+export interface MlSampleProperty {
+  id: number
+  title: string
+  province: string
+  avgRating: number
+}
+
+export interface MlStatusResponse {
+  mlServiceUrl: string
+  timeoutMs: number
+  mlServiceReachable: boolean
+  status: 'live' | 'fallback'
+  mlHealth: {
+    status: string
+    service: string
+    catalogSize: number
+    snapshotAgeSeconds: number
+    dbConnected: boolean
+  } | null
+  fallbackReady: boolean
+  catalogSize: number
+  snapshotAgeSeconds: number
+  sampleUsers?: MlSampleUser[]
+  sampleProperties?: MlSampleProperty[]
+}
+
+export interface MlRefreshResponse {
+  refreshed: boolean
+  mlServiceRefreshed: boolean
+  catalogSize: number
+  snapshotAgeSeconds: number
+}
+
 export interface Property {
   id: number
   title: string
@@ -132,6 +201,10 @@ export interface Property {
   pets?: Pet[]
   host?: PropertyHost
   chatRoomId?: number | null
+  matchReasons?: string[]
+  recommendationScore?: number
+  matchTier?: MatchTier
+  scoreBreakdown?: ScoreBreakdown
 }
 
 export interface PaginationInfo {
@@ -148,6 +221,7 @@ export interface PropertiesResponse {
   totalPages: number
   data: Property[]
   pagination?: PaginationInfo
+  meta?: RecommendationMeta
   limit: number
   page: number
   orderBy?: string
@@ -161,6 +235,7 @@ export interface HostPropertiesResponse {
     properties: Property[]
   } | Property[]
   properties: Property[]
+  meta?: RecommendationMeta
 }
 
 export interface RoomCategoriesResponse {
