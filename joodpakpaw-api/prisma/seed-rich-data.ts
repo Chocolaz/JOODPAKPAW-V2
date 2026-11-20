@@ -17,6 +17,32 @@ async function main() {
   const propTypes = await prisma.propertyType.findMany();
   const propTypeByName = Object.fromEntries(propTypes.map((t) => [t.name, t.id]));
 
+  // Ensure 'Swimming Pool' facility exists under 'Play & Exercise' category
+  let playExerciseCategory = await prisma.facilityCategory.findFirst({
+    where: { name: 'Play & Exercise' },
+  });
+  if (!playExerciseCategory) {
+    playExerciseCategory = await prisma.facilityCategory.create({
+      data: { name: 'Play & Exercise' },
+    });
+  }
+  const existingSwimmingPool = await prisma.facility.findFirst({
+    where: { name: 'Swimming Pool' },
+  });
+  if (!existingSwimmingPool) {
+    await prisma.facility.create({
+      data: {
+        name: 'Swimming Pool',
+        categoryId: playExerciseCategory.id,
+      },
+    });
+  } else if (existingSwimmingPool.categoryId !== playExerciseCategory.id) {
+    await prisma.facility.update({
+      where: { id: existingSwimmingPool.id },
+      data: { categoryId: playExerciseCategory.id },
+    });
+  }
+
   const facilities = await prisma.facility.findMany();
   const facByName = Object.fromEntries(facilities.map((f) => [f.name, f.id]));
 
@@ -238,8 +264,8 @@ async function main() {
       lat: 13.7796,
       lng: 100.5446,
       hostId: host4.id,
-      typeName: 'Home Boarding',
-      facilities: ['Air Conditioning', 'Separated Pet Zones', 'Daily Updates'],
+      typeName: 'Pet Homestay',
+      facilities: ['Air Conditioning', 'Separated Zones', 'Daily Updates'],
       images: [
         'https://images.unsplash.com/photo-1513360371669-4adf3dd7dff8?auto=format&fit=crop&w=900&q=80',
         'https://images.unsplash.com/photo-1533738363-b7f5aef12965?auto=format&fit=crop&w=900&q=80',
@@ -282,8 +308,8 @@ async function main() {
       lat: 13.7568,
       lng: 100.5699,
       hostId: host3.id,
-      typeName: 'Vet Care & Boarding',
-      facilities: ['Nearby Vet Clinic', 'CCTV 24h', 'Air Conditioning', 'Separated Pet Zones', 'Daily Updates'],
+      typeName: 'Pet Hotel',
+      facilities: ['Nearby Vet', 'CCTV 24h', 'Air Conditioning', 'Separated Zones', 'Daily Updates'],
       images: [
         'https://images.unsplash.com/photo-1628009368231-7bb7cfcb0def?auto=format&fit=crop&w=900&q=80',
         'https://images.unsplash.com/photo-1576201836106-db1758fd1c97?auto=format&fit=crop&w=900&q=80',
@@ -304,8 +330,8 @@ async function main() {
       lat: 18.7971,
       lng: 98.9675,
       hostId: host4.id,
-      typeName: 'Home Boarding',
-      facilities: ['Air Conditioning', 'Separated Pet Zones', 'Daily Updates'],
+      typeName: 'Pet Homestay',
+      facilities: ['Air Conditioning', 'Separated Zones', 'Daily Updates'],
       images: [
         'https://images.unsplash.com/photo-1452570053594-1b985d6ea890?auto=format&fit=crop&w=900&q=80',
         'https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?auto=format&fit=crop&w=900&q=80',
@@ -391,7 +417,7 @@ async function main() {
       lat: 12.5684,
       lng: 99.9577,
       hostId: host4.id,
-      typeName: 'Home Boarding',
+      typeName: 'Pet Homestay',
       facilities: ['Outdoor Play Area', 'Air Conditioning', 'Daily Updates'],
       images: [
         'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?auto=format&fit=crop&w=900&q=80',
@@ -412,8 +438,8 @@ async function main() {
       lat: 13.9041,
       lng: 100.5284,
       hostId: host4.id,
-      typeName: 'Home Boarding',
-      facilities: ['Air Conditioning', 'Separated Pet Zones'],
+      typeName: 'Pet Homestay',
+      facilities: ['Air Conditioning', 'Separated Zones'],
       images: [
         'https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?auto=format&fit=crop&w=900&q=80',
         'https://images.unsplash.com/photo-1573865526739-10659fec78a5?auto=format&fit=crop&w=900&q=80',
@@ -427,6 +453,11 @@ async function main() {
   const createdProps: Array<{ id: number; title: string; minRoomId: number; minPrice: number }> = [];
 
   for (const spec of propertySpecs) {
+    const resolvedPropertyTypeId = propTypeByName[spec.typeName] ?? null;
+    if (!resolvedPropertyTypeId) {
+      console.warn(`⚠️ [seed-rich-data] Unresolved propertyType "${spec.typeName}" for "${spec.title}"`);
+    }
+
     let prop = await prisma.property.findFirst({ where: { title: spec.title } });
     if (!prop) {
       prop = await prisma.property.create({
@@ -444,9 +475,14 @@ async function main() {
           isActive: true,
           isBannedByAdmin: false,
           hostId: spec.hostId,
-          propertyTypeId: propTypeByName[spec.typeName] ?? null,
+          propertyTypeId: resolvedPropertyTypeId,
           publishedAt: new Date(),
         },
+      });
+    } else if (prop.propertyTypeId === null && resolvedPropertyTypeId !== null) {
+      prop = await prisma.property.update({
+        where: { id: prop.id },
+        data: { propertyTypeId: resolvedPropertyTypeId },
       });
     }
 
@@ -474,6 +510,8 @@ async function main() {
           update: {},
           create: { propertyId: prop.id, facilityId: fId },
         });
+      } else {
+        console.warn(`⚠️ [seed-rich-data] Unresolved facility "${fName}" for "${spec.title}"`);
       }
     }
 

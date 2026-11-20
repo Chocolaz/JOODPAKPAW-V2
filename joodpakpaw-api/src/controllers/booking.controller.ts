@@ -585,16 +585,11 @@ export async function createBooking(
 
       for (const pet of userPets) {
         const isEligibleForAnyRoom = roomCategories.some((rc) => {
-          const speciesMatch = rc.pets.some((p) => {
-            if (p.petId === pet.petTypeId || p.pet.name.toLowerCase() === pet.petType.name.toLowerCase()) {
-              return true;
-            }
-            const exoticIds = [3, 4, 5, 6, 7];
-            if (exoticIds.includes(pet.petTypeId) && exoticIds.includes(p.petId)) {
-              return true;
-            }
-            return false;
-          });
+          const speciesMatch = rc.pets.some(
+            (p) =>
+              p.petId === pet.petTypeId ||
+              p.pet.name.toLowerCase() === pet.petType.name.toLowerCase()
+          );
           const sizeMatch = !rc.petSizeCategoryId || !pet.petSizeCategoryId || pet.petSizeCategoryId <= rc.petSizeCategoryId;
           return speciesMatch && sizeMatch;
         });

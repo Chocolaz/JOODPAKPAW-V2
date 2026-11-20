@@ -137,10 +137,20 @@ JWT_REFRESH_SECRET=<64_CHAR_DIFFERENT_RANDOM_SECRET>
 JWT_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
 FRONTEND_URL=https://your-app.vercel.app
+# Optional comma-separated extra trusted browser origins (strictly enforced when NODE_ENV=production)
+CORS_ORIGINS=https://your-app.vercel.app,https://your-custom-domain.com
+# Optional Free-Tier Transactional Email via Resend (3,000 free emails/month) for OTP & Password Reset
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxx
+EMAIL_FROM="JoodPakPaw <no-reply@joodpakpaw.com>"
 ML_SERVICE_URL=https://your-ml-service.hf.space
 ML_TIMEOUT_MS=1500
 ML_INTERNAL_SECRET=<SHARED_RANDOM_SECRET>
 ```
+
+### Production Security & Email Delivery Notes
+- **Fail-Fast JWT Guard:** When `NODE_ENV=production`, `joodpakpaw-api` refuses to boot if `JWT_SECRET` or `JWT_REFRESH_SECRET` are missing or still set to the `_dev` defaults.
+- **Strict Production CORS & `trust proxy`:** `app.set('trust proxy', 1)` ensures rate-limiting uses the true client IP behind Render/Koyeb/Nginx proxies, and unlisted origins receive no `Access-Control-Allow-Origin` header in `production` (configure additional domains via `CORS_ORIGINS`).
+- **Transactional Email (`RESEND_API_KEY` & `EMAIL_FROM`):** When `RESEND_API_KEY` is configured, OTP verification and password-reset emails are sent via the Resend REST API with zero extra npm dependencies. In `production`, OTP codes and password-reset tokens are never returned in HTTP responses.
 
 ### Health Check & 1.5s Cold-Start Fallback Behavior
 - Configure your cloud provider health check path to **`/health`** (returns `200 OK` with `services.database`, `services.redis`, `services.storage`, and `ml: { url, timeoutMs, fallbackReady: true }`).

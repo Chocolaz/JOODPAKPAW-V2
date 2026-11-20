@@ -16,7 +16,12 @@ import { cacheService } from '../services/cache.service'
 import { invalidateAllRecommendationCaches } from '../services/recommendation.service'
 import { AppError } from '../middlewares/errorHandler'
 import jwt from 'jsonwebtoken'
-import { config } from '../config/env'
+import {
+  config,
+  assertProductionSecrets,
+  DEFAULT_JWT_SECRET,
+  DEFAULT_JWT_REFRESH_SECRET,
+} from '../config/env'
 
 interface TestResult {
   name: string
@@ -45,7 +50,7 @@ function makeRequest(
   method = 'GET',
   body?: unknown,
   headers: Record<string, string> = {}
-): Promise<{ statusCode: number; body: any }> {
+): Promise<{ statusCode: number; body: any; headers: http.IncomingHttpHeaders }> {
   return new Promise((resolve, reject) => {
     const payload = body !== undefined ? JSON.stringify(body) : undefined
     const reqHeaders: Record<string, string> = { ...headers }
@@ -69,7 +74,7 @@ function makeRequest(
           try {
             parsed = JSON.parse(data)
           } catch {}
-          resolve({ statusCode: res.statusCode || 0, body: parsed })
+          resolve({ statusCode: res.statusCode || 0, body: parsed, headers: res.headers })
         })
       }
     )
@@ -7218,6 +7223,162 @@ async function main() {
         if (res.statusCode !== c.expectedStatus || res.body?.code !== c.expectedCode) {
           throw new Error(`RBAC failed on ${c.path}: expected ${c.expectedStatus} ${c.expectedCode}, got ${res.statusCode} ${JSON.stringify(res.body)}`)
         }
+      }
+    })
+
+    // Test 77: Enterprise Hardening P0 — Production forgot-password hides reset token/payload + fail-fast JWT secret guard
+    await runTest('P0 Security: forgot-password hides resetPasswordToken & payload in production and assertProductionSecrets enforces strong JWT secrets', async () => {
+      // 1. Verify fail-fast production secret guard
+      let threwDefaultSecret = false
+      try {
+        assertProductionSecrets({
+          env: 'production',
+          jwt: { secret: DEFAULT_JWT_SECRET, refreshSecret: 'strong_refresh_secret_prod_2026' },
+        })
+      } catch {
+        threwDefaultSecret = true
+      }
+      if (!threwDefaultSecret) {
+        throw new Error('Expected assertProductionSecrets to throw for default JWT_SECRET in production')
+      }
+
+      let threwDefaultRefresh = false
+      try {
+        assertProductionSecrets({
+          env: 'production',
+          jwt: { secret: 'strong_access_secret_prod_2026', refreshSecret: DEFAULT_JWT_REFRESH_SECRET },
+        })
+      } catch {
+        threwDefaultRefresh = true
+      }
+      if (!threwDefaultRefresh) {
+        throw new Error('Expected assertProductionSecrets to throw for default JWT_REFRESH_SECRET in production')
+      }
+
+      // Should NOT throw with strong secrets in production or defaults in test/dev
+      assertProductionSecrets({
+        env: 'production',
+        jwt: { secret: 'strong_access_secret_prod_2026', refreshSecret: 'strong_refresh_secret_prod_2026' },
+      })
+      assertProductionSecrets({
+        env: 'development',
+        jwt: { secret: DEFAULT_JWT_SECRET, refreshSecret: DEFAULT_JWT_REFRESH_SECRET },
+      })
+
+      // 2. Verify forgot-password hides resetPasswordToken & payload when NODE_ENV=production
+      const prevNodeEnv = process.env.NODE_ENV
+      try {
+        process.env.NODE_ENV = 'production'
+        const prodForgotRes = await makeRequest(pipePath, '/api/v1/auth/forgot-password', 'POST', {
+          email: 'user1@joodpakpaw.com',
+        })
+        if (prodForgotRes.statusCode !== 200 || prodForgotRes.body?.code !== 'S-0000') {
+          throw new Error(`Expected 200 S-0000 on production forgot-password, got ${prodForgotRes.statusCode} ${JSON.stringify(prodForgotRes.body)}`)
+        }
+        if (
+          prodForgotRes.body?.data?.resetPasswordToken !== undefined ||
+          prodForgotRes.body?.data?.payload !== undefined
+        ) {
+          throw new Error(`Security leak: resetPasswordToken/payload exposed in production response: ${JSON.stringify(prodForgotRes.body)}`)
+        }
+      } finally {
+        process.env.NODE_ENV = prevNodeEnv || 'test'
+        await prisma.user.updateMany({
+          where: { email: 'user1@joodpakpaw.com' },
+          data: { resetPasswordToken: null, resetPasswordExpiredAt: null },
+        })
+      }
+    })
+
+    // Test 78: Enterprise Hardening P0 — Strict CORS in production mode
+    await runTest('P0 Security: Strict CORS in production omits Access-Control-Allow-Origin for untrusted origins while allowing frontendUrl', async () => {
+      const prevNodeEnv = process.env.NODE_ENV
+      try {
+        process.env.NODE_ENV = 'production'
+
+        const evilRes = await makeRequest(pipePath, '/health', 'GET', undefined, {
+          Origin: 'https://evil.example.com',
+        })
+        if (evilRes.statusCode !== 200) {
+          throw new Error(`Expected 200 on /health, got ${evilRes.statusCode}`)
+        }
+        if (evilRes.headers['access-control-allow-origin'] !== undefined) {
+          throw new Error(
+            `CORS leak: expected no Access-Control-Allow-Origin for untrusted origin in production, got ${evilRes.headers['access-control-allow-origin']}`
+          )
+        }
+
+        const allowedRes = await makeRequest(pipePath, '/health', 'GET', undefined, {
+          Origin: config.frontendUrl,
+        })
+        if (allowedRes.statusCode !== 200) {
+          throw new Error(`Expected 200 on /health for frontendUrl, got ${allowedRes.statusCode}`)
+        }
+        if (allowedRes.headers['access-control-allow-origin'] !== config.frontendUrl) {
+          throw new Error(
+            `Expected Access-Control-Allow-Origin=${config.frontendUrl}, got ${allowedRes.headers['access-control-allow-origin']}`
+          )
+        }
+      } finally {
+        process.env.NODE_ENV = prevNodeEnv || 'test'
+      }
+    })
+
+    // Test 79: Enterprise Hardening P1 — Exact exotic pet safety parity in booking engine
+    await runTest('P1 Safety Parity: Booking rejects Bird (Kiwi) into Rabbit/Hamster-only room with 400 B-4004', async () => {
+      const user3Live = await signInLive('user3@joodpakpaw.com')
+      const kiwiPet = await prisma.petProfile.findFirst({
+        where: { guestId: user3Live.userId, name: 'Kiwi', deletedAt: null },
+        include: { petType: true },
+      })
+      if (!kiwiPet) {
+        throw new Error('Seeded Bird pet Kiwi for user3@joodpakpaw.com not found in live DB')
+      }
+
+      const ariProp = await prisma.property.findFirst({
+        where: { title: 'Ari Cozy Cat & Bunny Home', deletedAt: null },
+        include: {
+          roomCategories: {
+            where: { deletedAt: null },
+            include: { pets: { include: { pet: true } } },
+          },
+        },
+      })
+      const bunnyRoom = ariProp?.roomCategories.find(
+        (rc) =>
+          rc.name === 'Bunny & Small Pet Garden Room' ||
+          (rc.pets.some((p) => p.pet.name.toLowerCase().includes('rabbit')) &&
+            !rc.pets.some((p) => p.pet.name.toLowerCase().includes('bird')))
+      )
+      if (!bunnyRoom) {
+        throw new Error('Seeded Rabbit/Hamster-only room at Ari Cozy Cat & Bunny Home not found in live DB')
+      }
+
+      const checkIn = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10)
+      const checkOut = new Date(Date.now() + 11 * 86400000).toISOString().slice(0, 10)
+
+      const bookingRes = await makeRequest(
+        pipePath,
+        '/api/v1/bookings',
+        'POST',
+        {
+          bookingOrders: [
+            {
+              roomCategoryId: bunnyRoom.id,
+              checkInDate: checkIn,
+              checkOutDate: checkOut,
+              roomsBooked: 1,
+            },
+          ],
+          petProfileIds: [kiwiPet.id],
+        },
+        { Authorization: `Bearer ${user3Live.token}` }
+      )
+
+      if (bookingRes.statusCode !== 400 || bookingRes.body?.code !== 'B-4004') {
+        throw new Error(
+          `Expected 400 B-4004 when booking Bird (Kiwi) into Rabbit-only room, got ${bookingRes.statusCode} ${JSON.stringify(bookingRes.body)}`
+        )
       }
     })
   } finally {
