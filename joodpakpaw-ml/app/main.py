@@ -75,9 +75,17 @@ def create_app(
         user_id: int,
         limit: int = Query(default=10, ge=1, le=50),
         debug: bool = Query(default=False),
+        lat: Optional[float] = Query(default=None, ge=-90.0, le=90.0),
+        lng: Optional[float] = Query(default=None, ge=-180.0, le=180.0),
     ) -> RecommendationResponse:
         rec: HybridRecommender = request.app.state.recommender
-        result = rec.recommend_for_user(user_id=user_id, limit=limit, debug=debug)
+        result = rec.recommend_for_user(
+            user_id=user_id,
+            limit=limit,
+            debug=debug,
+            user_lat=lat,
+            user_lng=lng,
+        )
         return RecommendationResponse(
             strategy=result.strategy,
             snapshot_age_seconds=result.snapshot_age_seconds,
@@ -94,9 +102,16 @@ def create_app(
         request: Request,
         limit: int = Query(default=10, ge=1, le=50),
         debug: bool = Query(default=False),
+        lat: Optional[float] = Query(default=None, ge=-90.0, le=90.0),
+        lng: Optional[float] = Query(default=None, ge=-180.0, le=180.0),
     ) -> RecommendationResponse:
         rec: HybridRecommender = request.app.state.recommender
-        result = rec.recommend_cold_start(limit=limit, debug=debug)
+        result = rec.recommend_cold_start(
+            limit=limit,
+            debug=debug,
+            user_lat=lat,
+            user_lng=lng,
+        )
         return RecommendationResponse(
             strategy=result.strategy,
             snapshot_age_seconds=result.snapshot_age_seconds,

@@ -10,6 +10,8 @@ class ScoreBreakdown(BaseModel):
     s_compat: float
     s_quality: float
     s_popularity: float
+    s_geo: Optional[float] = None
+    distance_km: Optional[float] = None
 
 
 class RecommendationItem(BaseModel):

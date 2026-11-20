@@ -12,7 +12,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from app.database import CatalogDataSource
-from app.models import PropertyData, UserContextData, UserPetData
+from app.models import PropertyData, RoomCategoryData, UserContextData, UserPetData
 from app.schemas import RecommendationItem, ScoreBreakdown
 
 ACTION_WEIGHTS: dict[str, float] = {
@@ -77,20 +77,99 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2.0 * r * math.asin(min(1.0, math.sqrt(a)))
 
 
-def pet_matches_property(pet: UserPetData, prop: PropertyData) -> bool:
-    """Stage 1 safety rule: at least one active room category accepts pet species + weight/size."""
-    for rc in prop.room_categories:
-        if pet.pet_type_id not in rc.pet_type_ids:
-            continue
-        if rc.pet_size_category_id is None:
-            return True
-        if pet.weight is not None and rc.min_weight is not None and rc.max_weight is not None:
-            if rc.min_weight <= pet.weight <= rc.max_weight:
-                return True
-        elif pet.weight is None and pet.pet_size_category_id is not None:
-            if pet.pet_size_category_id == rc.pet_size_category_id:
-                return True
+def _has_valid_property_coords(prop: PropertyData) -> bool:
+    return (
+        prop.latitude is not None
+        and prop.longitude is not None
+        and math.isfinite(prop.latitude)
+        and math.isfinite(prop.longitude)
+        and prop.latitude != 0.0
+        and prop.longitude != 0.0
+        and -90.0 <= prop.latitude <= 90.0
+        and -180.0 <= prop.longitude <= 180.0
+    )
+
+
+def _compute_geo_signal(
+    prop: PropertyData,
+    user_lat: float | None,
+    user_lng: float | None,
+) -> tuple[float | None, float | None]:
+    """Return (s_geo, distance_km) when both user coordinates and property coordinates are valid."""
+    if user_lat is None or user_lng is None or not _has_valid_property_coords(prop):
+        return None, None
+    assert prop.latitude is not None and prop.longitude is not None
+    distance_km = _haversine_km(user_lat, user_lng, prop.latitude, prop.longitude)
+    s_geo = math.exp(-distance_km / 50.0)
+    return s_geo, distance_km
+
+
+def _format_near_you_reason(distance_km: float) -> str:
+    if distance_km < 1.0:
+        return "Near you (<1 km)"
+    return f"Near you ({distance_km:.1f} km)"
+
+
+def pet_matches_room(pet: UserPetData, rc: RoomCategoryData) -> bool:
+    """Stage 1 safety rule (aligned with Booking Engine <= max-size parity)."""
+    if pet.pet_type_id not in rc.pet_type_ids:
+        return False
+    if rc.pet_size_category_id is None:
+        return True
+    if pet.weight is not None and rc.max_weight is not None:
+        return pet.weight <= rc.max_weight
+    if pet.pet_size_category_id is not None:
+        if pet.size_code is not None and rc.size_code is not None:
+            return pet.size_code <= rc.size_code
+        return pet.pet_size_category_id <= rc.pet_size_category_id
     return False
+
+
+def pet_matches_property(pet: UserPetData, prop: PropertyData) -> bool:
+    """Stage 1 safety rule: at least one active room category accepts pet species + up-to-max size."""
+    return any(pet_matches_room(pet, rc) for rc in prop.room_categories)
+
+
+def compute_room_size_fit(pet: UserPetData, rc: RoomCategoryData) -> float:
+    """Size-fit micro-bonus in (0, 1] favoring exact-band or unrestricted rooms over oversized rooms."""
+    if rc.pet_size_category_id is None:
+        return 1.0
+    if (
+        pet.weight is not None
+        and rc.min_weight is not None
+        and rc.max_weight is not None
+        and rc.min_weight <= pet.weight <= rc.max_weight
+    ):
+        return 1.0
+    if pet.pet_size_category_id is not None and pet.pet_size_category_id == rc.pet_size_category_id:
+        return 1.0
+    if pet.size_code is not None and rc.size_code is not None:
+        if rc.size_code == pet.size_code:
+            return 1.0
+        if rc.size_code - pet.size_code == 1:
+            return 0.75
+    if pet.weight is not None and rc.max_weight is not None and rc.max_weight <= pet.weight * 4.0:
+        return 0.75
+    if (
+        pet.size_code is None
+        and rc.size_code is None
+        and pet.pet_size_category_id is not None
+        and rc.pet_size_category_id is not None
+        and rc.pet_size_category_id - pet.pet_size_category_id == 1
+    ):
+        return 0.75
+    return 0.55
+
+
+def compute_pet_size_fit(pet: UserPetData, prop: PropertyData) -> float:
+    """Best size-fit score across all compatible rooms on a property for a matched pet."""
+    best = 0.0
+    for rc in prop.room_categories:
+        if pet_matches_room(pet, rc):
+            fit = compute_room_size_fit(pet, rc)
+            if fit > best:
+                best = fit
+    return best
 
 
 def _energy_bucket(rating: int) -> str:
@@ -385,8 +464,14 @@ class HybridRecommender:
         s_popularity: float,
         interacted_provinces: set[str],
         interacted_types: set[str],
+        s_geo: float | None = None,
+        distance_km: float | None = None,
     ) -> list[str]:
         candidates: list[tuple[float, str]] = []
+
+        # 0. Location proximity (high-priority when <= 35 km)
+        if distance_km is not None and distance_km <= 35.0:
+            candidates.append((0.35 + 0.15 * (s_geo or 0.0), _format_near_you_reason(distance_km)))
 
         # 1. Pet safety & species/breed fit
         if total_pets > 0:
@@ -462,8 +547,12 @@ class HybridRecommender:
         prop: PropertyData,
         s_quality: float,
         s_popularity: float,
+        s_geo: float | None = None,
+        distance_km: float | None = None,
     ) -> list[str]:
         candidates: list[tuple[float, str]] = []
+        if distance_km is not None and distance_km <= 35.0:
+            candidates.append((0.70 + 0.15 * (s_geo or 0.0), _format_near_you_reason(distance_km)))
         if prop.review_count > 0 and prop.avg_rating >= 4.0:
             review_word = "review" if prop.review_count == 1 else "reviews"
             candidates.append(
@@ -505,24 +594,37 @@ class HybridRecommender:
         content_scores: np.ndarray | None = None,
         interacted_provinces: set[str] | None = None,
         interacted_types: set[str] | None = None,
+        user_lat: float | None = None,
+        user_lng: float | None = None,
     ) -> list[RecommendationItem]:
-        scored_pool: list[tuple[PropertyData, float, float, float, float]] = []
+        scored_pool: list[
+            tuple[PropertyData, float, float, float, float, float | None, float | None]
+        ] = []
         for prop in candidates:
             s_q = snapshot.quality_scores[prop.id]
             s_p = snapshot.popularity_scores[prop.id]
+            s_geo, distance_km = _compute_geo_signal(prop, user_lat, user_lng)
             s_c = 0.0
             if content_scores is not None:
                 idx = snapshot.prop_idx_by_id[prop.id]
                 s_c = float(content_scores[idx])
                 base_score = 0.40 * s_c + 0.40 * s_q + 0.20 * s_p
+                final_score = (
+                    0.88 * base_score + 0.12 * s_geo if s_geo is not None else base_score
+                )
             else:
                 base_score = 0.65 * s_q + 0.35 * s_p
-            scored_pool.append((prop, round(base_score, 4), s_c, s_q, s_p))
+                final_score = (
+                    0.85 * base_score + 0.15 * s_geo if s_geo is not None else base_score
+                )
+            scored_pool.append((prop, round(final_score, 4), s_c, s_q, s_p, s_geo, distance_km))
 
         # Greedy selection with light province diversity tie-breaking on equal scores
         remaining = list(scored_pool)
         province_counts: dict[str, int] = {}
-        selected: list[tuple[PropertyData, float, float, float, float]] = []
+        selected: list[
+            tuple[PropertyData, float, float, float, float, float | None, float | None]
+        ] = []
 
         while remaining and len(selected) < limit:
             remaining.sort(
@@ -538,7 +640,7 @@ class HybridRecommender:
                 province_counts[chosen[0].province] = province_counts.get(chosen[0].province, 0) + 1
 
         items: list[RecommendationItem] = []
-        for prop, score, s_c, s_q, s_p in selected:
+        for prop, score, s_c, s_q, s_p, s_geo, distance_km in selected:
             if content_scores is not None and s_c >= 0.12:
                 reasons = self._build_personalized_reasons(
                     prop=prop,
@@ -552,9 +654,13 @@ class HybridRecommender:
                     s_popularity=s_p,
                     interacted_provinces=interacted_provinces or set(),
                     interacted_types=interacted_types or set(),
+                    s_geo=s_geo,
+                    distance_km=distance_km,
                 )
             else:
-                reasons = self._build_cold_start_reasons(prop, s_q, s_p)
+                reasons = self._build_cold_start_reasons(
+                    prop, s_q, s_p, s_geo=s_geo, distance_km=distance_km
+                )
 
             items.append(
                 RecommendationItem(
@@ -568,6 +674,8 @@ class HybridRecommender:
                             s_compat=0.0,
                             s_quality=round(s_q, 4),
                             s_popularity=round(s_p, 4),
+                            s_geo=round(s_geo, 4) if s_geo is not None else None,
+                            distance_km=round(distance_km, 1) if distance_km is not None else None,
                         )
                         if debug
                         else None
@@ -581,6 +689,8 @@ class HybridRecommender:
         limit: int = 10,
         debug: bool = False,
         exclude_host_id: int | None = None,
+        user_lat: float | None = None,
+        user_lng: float | None = None,
     ) -> RecommendationResult:
         snapshot = self.get_snapshot()
         age = round(max(0.0, time.monotonic() - snapshot.built_at), 2)
@@ -594,6 +704,8 @@ class HybridRecommender:
             candidates=candidates,
             limit=limit,
             debug=debug,
+            user_lat=user_lat,
+            user_lng=user_lng,
         )
         return RecommendationResult(
             strategy="cold_start",
@@ -608,6 +720,8 @@ class HybridRecommender:
         limit: int = 10,
         debug: bool = False,
         user_context: UserContextData | None = None,
+        user_lat: float | None = None,
+        user_lng: float | None = None,
     ) -> RecommendationResult:
         snapshot = self.get_snapshot()
         age = round(max(0.0, time.monotonic() - snapshot.built_at), 2)
@@ -634,6 +748,8 @@ class HybridRecommender:
                 content_scores=content_scores if has_usable_behavior else None,
                 interacted_provinces=interacted_provinces,
                 interacted_types=interacted_types,
+                user_lat=user_lat,
+                user_lng=user_lng,
             )
             return RecommendationResult(
                 strategy="hybrid_behavior_v2" if has_usable_behavior else "cold_start",
@@ -655,25 +771,34 @@ class HybridRecommender:
 
             energy_scores: list[float] = []
             energy_labels: list[tuple[float, str, str]] = []
+            size_fit_scores: list[float] = []
             for pet in matched_pets:
                 ef_score, labels = compute_pet_energy_facility_score(pet, prop)
                 energy_scores.append(ef_score)
                 energy_labels.extend(labels)
+                size_fit_scores.append(compute_pet_size_fit(pet, prop))
 
-            s_energy_facility = sum(energy_scores) / matched_count
-            s_compat = 0.65 * s_energy_facility + 0.35 * (matched_count / total_pets)
+            avg_energy_score = sum(energy_scores) / matched_count
+            coverage = matched_count / total_pets
+            avg_size_fit = sum(size_fit_scores) / matched_count
+            s_compat = 0.55 * avg_energy_score + 0.30 * coverage + 0.15 * avg_size_fit
 
             idx = snapshot.prop_idx_by_id[prop.id]
             s_content = float(content_scores[idx])
             s_quality = snapshot.quality_scores[prop.id]
             s_popularity = snapshot.popularity_scores[prop.id]
 
-            final_score = (
+            base_hybrid_score = (
                 0.40 * s_content
                 + 0.30 * s_compat
                 + 0.20 * s_quality
                 + 0.10 * s_popularity
             )
+            s_geo, distance_km = _compute_geo_signal(prop, user_lat, user_lng)
+            if s_geo is not None:
+                final_score = 0.88 * base_hybrid_score + 0.12 * s_geo
+            else:
+                final_score = base_hybrid_score
             rounded_score = round(final_score, 4)
 
             reasons = self._build_personalized_reasons(
@@ -688,6 +813,8 @@ class HybridRecommender:
                 s_popularity=s_popularity,
                 interacted_provinces=interacted_provinces,
                 interacted_types=interacted_types,
+                s_geo=s_geo,
+                distance_km=distance_km,
             )
 
             item = RecommendationItem(
@@ -701,6 +828,8 @@ class HybridRecommender:
                         s_compat=round(s_compat, 4),
                         s_quality=round(s_quality, 4),
                         s_popularity=round(s_popularity, 4),
+                        s_geo=round(s_geo, 4) if s_geo is not None else None,
+                        distance_km=round(distance_km, 1) if distance_km is not None else None,
                     )
                     if debug
                     else None

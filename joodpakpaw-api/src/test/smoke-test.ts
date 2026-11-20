@@ -6317,7 +6317,7 @@ async function main() {
       })
       if (probe.ok) {
         const body: any = await probe.json()
-        mlLiveReady = body?.status === 'ok'
+        mlLiveReady = body?.status === 'ok' && body?.db_connected === true
       }
     } catch {
       mlLiveReady = false
@@ -6949,6 +6949,275 @@ async function main() {
       const missingId = await makeRequest(pipePath, '/api/v1/properties/recommend/property/9999999')
       if (missingId.statusCode !== 404 || missingId.body?.code !== 'DB-1002') {
         throw new Error(`Expected 404 DB-1002, got ${missingId.statusCode} ${JSON.stringify(missingId.body)}`)
+      }
+    })
+
+    // Test 74: PF-1 Up-to-Max-Size (<=) parity for Choco (3.5kg Small Dog) & strict upper-bound for Milo (28.5kg Large Dog)
+    await runTest('PF-1: Small dog (user2 Choco 3.5kg) gets >= 5 dog properties & Large dog (user1 Milo 28.5kg) never matches Small-only rooms', async () => {
+      const dogPetRecord = await prisma.pet.findFirst({
+        where: { name: { contains: 'Dog', mode: 'insensitive' }, deletedAt: null },
+      })
+      if (!dogPetRecord) {
+        throw new Error('Seeded Dog pet type not found in DB')
+      }
+
+      const allCatalogProps = await prisma.property.findMany({
+        where: {
+          isActive: true,
+          isBannedByAdmin: false,
+          deletedAt: null,
+          host: { deletedAt: null, bannedAt: null, isBannedAllProperties: false },
+        },
+        include: {
+          roomCategories: {
+            where: { deletedAt: null },
+            include: {
+              petSizeCategory: true,
+              pets: true,
+            },
+          },
+        },
+      })
+      const propDetailsById = new Map(allCatalogProps.map((p) => [p.id, p]))
+
+      const modes: Array<{ label: string; url: string; expectedSource: string }> = [
+        { label: 'live_ml', url: liveMlUrl, expectedSource: 'ml_service' },
+        { label: 'in_process_fallback', url: 'http://127.0.0.1:59998', expectedSource: 'in_process_fallback' },
+      ]
+
+      for (const mode of modes) {
+        config.mlServiceUrl = mode.url
+        config.mlTimeoutMs = originalMlTimeoutMs
+        await invalidateAllRecommendationCaches()
+
+        const chocoRes = await makeRequest(pipePath, '/api/v1/properties/recommend?limit=20', 'GET', undefined, {
+          Authorization: `Bearer ${user2Live.token}`,
+        })
+        if (chocoRes.statusCode !== 200 || chocoRes.body?.meta?.source !== mode.expectedSource) {
+          throw new Error(`[${mode.label}] Expected 200 ${mode.expectedSource} for user2, got ${chocoRes.statusCode} ${JSON.stringify(chocoRes.body?.meta)}`)
+        }
+        const chocoItems: any[] = chocoRes.body?.data || []
+        if (chocoItems.length < 5) {
+          throw new Error(`[${mode.label}] Expected >= 5 dog-friendly properties for user2 (Choco 3.5kg), got ${chocoItems.length}`)
+        }
+        for (const item of chocoItems) {
+          const detail = propDetailsById.get(item.id)
+          const hasDogRoom = detail?.roomCategories.some((rc) =>
+            rc.pets.some((rp) => rp.petId === dogPetRecord.id)
+          )
+          if (!hasDogRoom) {
+            throw new Error(`[${mode.label}] Property ${item.id} returned for Choco does not have a Dog room`)
+          }
+        }
+
+        // Verify Milo (28.5kg Large Dog, owned by user1 alongside Luna Small Cat) never gets matched to a property
+        // whose Dog rooms are strictly Small/Medium (max < 28.5) as all_pets
+        const miloRes = await makeRequest(pipePath, '/api/v1/properties/recommend?limit=20', 'GET', undefined, {
+          Authorization: `Bearer ${user1Live.token}`,
+        })
+        if (miloRes.statusCode !== 200 || miloRes.body?.meta?.source !== mode.expectedSource) {
+          throw new Error(`[${mode.label}] Expected 200 ${mode.expectedSource} for user1, got ${miloRes.statusCode}`)
+        }
+        for (const item of miloRes.body?.data || []) {
+          if (item.matchTier === 'all_pets') {
+            const detail = propDetailsById.get(item.id)
+            const supportsLargeDog = detail?.roomCategories.some(
+              (rc) =>
+                rc.pets.some((rp) => rp.petId === dogPetRecord.id) &&
+                (rc.petSizeCategory === null || rc.petSizeCategory.max >= 28.5)
+            )
+            if (!supportsLargeDog) {
+              throw new Error(`[${mode.label}] Large dog Milo (28.5kg) matched Small/Medium-only dog room on property ${item.id} as all_pets`)
+            }
+          }
+        }
+      }
+    })
+
+    // Test 75: PF-3 Optional Location-Aware Soft Geo-Boost (?lat=&lng=)
+    await runTest('PF-3: ?lat=13.7563&lng=100.5018 applies Soft Geo-Boost (Near you reason & distanceKm) without dropping distant provinces', async () => {
+      const modes: Array<{ label: string; url: string; expectedSource: string }> = [
+        { label: 'live_ml', url: liveMlUrl, expectedSource: 'ml_service' },
+        { label: 'in_process_fallback', url: 'http://127.0.0.1:59998', expectedSource: 'in_process_fallback' },
+      ]
+
+      for (const mode of modes) {
+        config.mlServiceUrl = mode.url
+        config.mlTimeoutMs = originalMlTimeoutMs
+        await invalidateAllRecommendationCaches()
+
+        // Cold-start with Bangkok coordinates + admin debug
+        const coldGeoRes = await makeRequest(
+          pipePath,
+          '/api/v1/properties/recommend?debug=true&asUserId=guest&limit=50&lat=13.7563&lng=100.5018',
+          'GET',
+          undefined,
+          { Authorization: `Bearer ${adminLive.token}` }
+        )
+        if (coldGeoRes.statusCode !== 200 || coldGeoRes.body?.meta?.source !== mode.expectedSource) {
+          throw new Error(`[${mode.label}] Cold-start geo failed: ${coldGeoRes.statusCode} ${JSON.stringify(coldGeoRes.body?.meta)}`)
+        }
+        const coldItems: any[] = coldGeoRes.body?.data || []
+        const nearbyCold = coldItems.filter(
+          (item) =>
+            typeof item.scoreBreakdown?.distanceKm === 'number' &&
+            item.scoreBreakdown.distanceKm <= 35 &&
+            typeof item.scoreBreakdown?.sGeo === 'number' &&
+            Array.isArray(item.matchReasons) &&
+            item.matchReasons.length <= 3 &&
+            item.matchReasons.some((r: string) => r.startsWith('Near you ('))
+        )
+        if (nearbyCold.length === 0) {
+          throw new Error(`[${mode.label}] Expected at least 1 nearby Bangkok/Nonthaburi property with 'Near you (... km)' & distanceKm`)
+        }
+        const distantCold = coldItems.filter(
+          (item) =>
+            typeof item.scoreBreakdown?.distanceKm === 'number' &&
+            item.scoreBreakdown.distanceKm > 100
+        )
+        if (distantCold.length === 0) {
+          throw new Error(`[${mode.label}] Soft Geo-Boost dropped distant provinces (Chiang Mai/Phuket) completely`)
+        }
+
+        // Personalized user2 with Bangkok coordinates + admin debug
+        const persGeoRes = await makeRequest(
+          pipePath,
+          `/api/v1/properties/recommend?debug=true&asUserId=${user2Live.userId}&limit=50&lat=13.7563&lng=100.5018`,
+          'GET',
+          undefined,
+          { Authorization: `Bearer ${adminLive.token}` }
+        )
+        if (persGeoRes.statusCode !== 200 || persGeoRes.body?.meta?.source !== mode.expectedSource) {
+          throw new Error(`[${mode.label}] Personalized geo failed: ${persGeoRes.statusCode}`)
+        }
+        const persItems: any[] = persGeoRes.body?.data || []
+        const nearbyPers = persItems.filter(
+          (item) =>
+            typeof item.scoreBreakdown?.distanceKm === 'number' &&
+            item.scoreBreakdown.distanceKm <= 35 &&
+            typeof item.scoreBreakdown?.sGeo === 'number' &&
+            Array.isArray(item.matchReasons) &&
+            item.matchReasons.length <= 3 &&
+            item.matchReasons.some((r: string) => r.startsWith('Near you ('))
+        )
+        if (nearbyPers.length === 0) {
+          throw new Error(`[${mode.label}] Expected nearby personalized recommendation with 'Near you (... km)' & distanceKm`)
+        }
+      }
+
+      // Public guest call with valid lat/lng succeeds without scoreBreakdown; invalid/partial lat is ignored gracefully
+      const publicGeoRes = await makeRequest(pipePath, '/api/v1/properties/recommend?limit=10&lat=13.7563&lng=100.5018')
+      if (publicGeoRes.statusCode !== 200 || publicGeoRes.body?.data?.[0]?.scoreBreakdown !== undefined) {
+        throw new Error(`Public geo recommend failed or leaked scoreBreakdown: ${publicGeoRes.statusCode}`)
+      }
+      const partialLatRes = await makeRequest(pipePath, '/api/v1/properties/recommend?limit=4&lat=13.7563')
+      if (partialLatRes.statusCode !== 200 || !Array.isArray(partialLatRes.body?.data)) {
+        throw new Error(`Partial lat param should be ignored gracefully, got ${partialLatRes.statusCode}`)
+      }
+    })
+
+    // Test 76: PF-4 Scalable Admin ML Inspector APIs (featured caps, counts, & server-side search + RBAC)
+    await runTest('PF-4: Admin ML status caps samples (<=6 users, <=12 props) with totals & /users/search + /properties/search work with Admin RBAC', async () => {
+      config.mlServiceUrl = liveMlUrl
+      config.mlTimeoutMs = originalMlTimeoutMs
+      await invalidateAllRecommendationCaches()
+      await makeRequest(pipePath, '/api/v1/admin/ml/refresh', 'POST', undefined, {
+        Authorization: `Bearer ${adminLive.token}`,
+      })
+
+      const statusRes = await makeRequest(pipePath, '/api/v1/admin/ml/status', 'GET', undefined, {
+        Authorization: `Bearer ${adminLive.token}`,
+      })
+      if (statusRes.statusCode !== 200) {
+        throw new Error(`Expected 200 on /admin/ml/status, got ${statusRes.statusCode}`)
+      }
+      const statusData = statusRes.body?.data
+      if (
+        !Array.isArray(statusData?.sampleUsers) ||
+        statusData.sampleUsers.length === 0 ||
+        statusData.sampleUsers.length > 6
+      ) {
+        throw new Error(`Expected 1..6 featured sampleUsers, got ${statusData?.sampleUsers?.length}`)
+      }
+      if (
+        !Array.isArray(statusData?.sampleProperties) ||
+        statusData.sampleProperties.length === 0 ||
+        statusData.sampleProperties.length > 12
+      ) {
+        throw new Error(`Expected 1..12 featured sampleProperties, got ${statusData?.sampleProperties?.length}`)
+      }
+      if (
+        typeof statusData?.totalUsers !== 'number' ||
+        statusData.totalUsers < statusData.sampleUsers.length ||
+        typeof statusData?.totalActiveProperties !== 'number' ||
+        statusData.totalActiveProperties < statusData.sampleProperties.length
+      ) {
+        throw new Error(`Invalid totalUsers/totalActiveProperties in /admin/ml/status: ${JSON.stringify(statusData)}`)
+      }
+
+      // Admin search users (?q=user3 & ?q=user2 & exact numeric ID)
+      const userSearch3 = await makeRequest(pipePath, '/api/v1/admin/ml/users/search?q=user3&limit=10', 'GET', undefined, {
+        Authorization: `Bearer ${adminLive.token}`,
+      })
+      if (userSearch3.statusCode !== 200 || userSearch3.body?.code !== 'S-0000' || !Array.isArray(userSearch3.body?.data)) {
+        throw new Error(`Expected 200 array for /admin/ml/users/search?q=user3, got ${userSearch3.statusCode} ${JSON.stringify(userSearch3.body)}`)
+      }
+
+      const userSearch2 = await makeRequest(pipePath, '/api/v1/admin/ml/users/search?q=user2&limit=50', 'GET', undefined, {
+        Authorization: `Bearer ${adminLive.token}`,
+      })
+      if (
+        userSearch2.statusCode !== 200 ||
+        !Array.isArray(userSearch2.body?.data) ||
+        userSearch2.body.data.length === 0 ||
+        userSearch2.body.data.length > 20 ||
+        !userSearch2.body.data.some((u: any) => u.email === 'user2@joodpakpaw.com')
+      ) {
+        throw new Error(`Expected user2@joodpakpaw.com from /admin/ml/users/search?q=user2, got ${JSON.stringify(userSearch2.body)}`)
+      }
+
+      const userSearchById = await makeRequest(pipePath, `/api/v1/admin/ml/users/search?q=${user2Live.userId}`, 'GET', undefined, {
+        Authorization: `Bearer ${adminLive.token}`,
+      })
+      if (userSearchById.statusCode !== 200 || userSearchById.body?.data?.[0]?.id !== user2Live.userId) {
+        throw new Error(`Expected exact numeric ID match ${user2Live.userId}, got ${JSON.stringify(userSearchById.body?.data)}`)
+      }
+
+      // Admin search properties (?q=Chiang & exact numeric ID)
+      const propSearchChiang = await makeRequest(pipePath, '/api/v1/admin/ml/properties/search?q=Chiang&limit=10', 'GET', undefined, {
+        Authorization: `Bearer ${adminLive.token}`,
+      })
+      if (
+        propSearchChiang.statusCode !== 200 ||
+        propSearchChiang.body?.code !== 'S-0000' ||
+        !Array.isArray(propSearchChiang.body?.data) ||
+        propSearchChiang.body.data.length === 0
+      ) {
+        throw new Error(`Expected matching properties for /admin/ml/properties/search?q=Chiang, got ${propSearchChiang.statusCode} ${JSON.stringify(propSearchChiang.body)}`)
+      }
+
+      const propSearchById = await makeRequest(pipePath, `/api/v1/admin/ml/properties/search?q=${activeProps[0].id}`, 'GET', undefined, {
+        Authorization: `Bearer ${adminLive.token}`,
+      })
+      if (propSearchById.statusCode !== 200 || propSearchById.body?.data?.[0]?.id !== activeProps[0].id) {
+        throw new Error(`Expected exact numeric property ID match ${activeProps[0].id}, got ${JSON.stringify(propSearchById.body?.data)}`)
+      }
+
+      // Strict RBAC rejection on new search endpoints
+      const rbacChecks = [
+        { path: '/api/v1/admin/ml/users/search?q=user3', expectedStatus: 401, expectedCode: 'A-3005' },
+        { path: '/api/v1/admin/ml/users/search?q=user3', token: user1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/admin/ml/users/search?q=user3', token: host1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/admin/ml/properties/search?q=Chiang', expectedStatus: 401, expectedCode: 'A-3005' },
+        { path: '/api/v1/admin/ml/properties/search?q=Chiang', token: user1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/admin/ml/properties/search?q=Chiang', token: host1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+      ]
+      for (const c of rbacChecks) {
+        const headers: Record<string, string> = c.token ? { Authorization: `Bearer ${c.token}` } : {}
+        const res = await makeRequest(pipePath, c.path, 'GET', undefined, headers)
+        if (res.statusCode !== c.expectedStatus || res.body?.code !== c.expectedCode) {
+          throw new Error(`RBAC failed on ${c.path}: expected ${c.expectedStatus} ${c.expectedCode}, got ${res.statusCode} ${JSON.stringify(res.body)}`)
+        }
       }
     })
   } finally {

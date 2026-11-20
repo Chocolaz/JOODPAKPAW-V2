@@ -12,6 +12,7 @@ from app.engine.hybrid import (
     CatalogSnapshot,
     HybridRecommender,
     compute_pet_energy_facility_score,
+    compute_pet_size_fit,
     pet_matches_property,
 )
 from app.main import create_app
@@ -307,20 +308,20 @@ def test_stage1_safety_and_tier_a_vs_tier_b_backfill() -> None:
     res = engine.recommend_for_user(user_id=4, limit=5, debug=True)
     rec_ids = [r.property_id for r in res.recommendations]
 
-    # Self-owned p5, inactive p6, banned p7, deleted p8, and 0-match p4/p3 must NOT appear
+    # Self-owned p5, inactive p6, banned p7, deleted p8, and 0-match p4 must NOT appear
     assert 5 not in rec_ids
     assert 6 not in rec_ids
     assert 7 not in rec_ids
     assert 8 not in rec_ids
     assert 4 not in rec_ids
-    assert 3 not in rec_ids  # p3 only accepts Giant dogs (30-100kg), neither 28.5kg nor Cat
 
-    # Tier A (p1) must come BEFORE Tier B (p2)
-    assert rec_ids == [1, 2]
+    # Tier A (p1: fits both Milo & Luna) must come BEFORE Tier B (p2: Luna only, p3: Milo <= 100kg only)
+    assert rec_ids[0] == 1
+    assert set(rec_ids[1:]) == {2, 3}
     assert res.recommendations[0].match_tier == "all_pets"
-    assert res.recommendations[1].match_tier == "partial_pets"
+    assert all(r.match_tier == "partial_pets" for r in res.recommendations[1:])
     assert "Fits all your pets" in res.recommendations[0].match_reasons
-    assert "1/2" in res.recommendations[1].match_reasons[0]
+    assert all("1/2" in r.match_reasons[0] for r in res.recommendations[1:])
 
     # When limit=1, only Tier A is returned (no Tier B backfill needed)
     res_lim1 = engine.recommend_for_user(user_id=4, limit=1)
@@ -701,3 +702,262 @@ def test_database_reconciliation_sql_contains_live_checks() -> None:
     assert "deleted_at IS NULL" in src
     assert "booking_status <> 'cancelled'" in src
     assert "reference_record ~" in src
+    assert "psc.code" in src
+
+    cat_src = inspect.getsource(DatabaseClient.fetch_catalog_properties)
+    assert "psc.code" in cat_src
+
+
+def test_pf1_pet_size_up_to_max_and_size_fit_micro_bonus() -> None:
+    def _dog_prop(
+        pid: int,
+        title: str,
+        size_id: int | None,
+        size_code: int | None,
+        size_name: str | None,
+        min_w: float | None,
+        max_w: float | None,
+    ) -> PropertyData:
+        return PropertyData(
+            id=pid,
+            host_id=100 + pid,
+            title=title,
+            description="Cozy dog boarding stay with care",
+            property_type="Pet Hotel",
+            province="Bangkok",
+            district="Watthana",
+            min_price=800.0,
+            avg_rating=4.6,
+            review_count=6,
+            booking_count=5,
+            favorite_count=3,
+            view_count_30d=15,
+            facilities=["Air Conditioning", "CCTV 24h", "Daily Updates"],
+            room_categories=[
+                RoomCategoryData(
+                    id=pid * 10,
+                    pet_size_category_id=size_id,
+                    size_code=size_code,
+                    size_name=size_name,
+                    min_weight=min_w,
+                    max_weight=max_w,
+                    room_area_sqm=5.0,
+                    pet_type_ids=frozenset({1}),
+                )
+            ],
+            allowed_pet_type_ids={1},
+            allowed_pet_type_names=["สุนัข (Dog)"],
+            pet_size_names=[size_name] if size_name else [],
+            max_room_area_sqm=5.0,
+        )
+
+    p_small = _dog_prop(1, "Dog Stay Alpha", 1, 1, "Small (0-5 kg)", 0.0, 5.0)
+    p_medium = _dog_prop(2, "Dog Stay Alpha", 2, 2, "Medium (5-15 kg)", 5.0, 15.0)
+    p_large = _dog_prop(3, "Dog Stay Alpha", 3, 3, "Large (15-30 kg)", 15.0, 30.0)
+    p_giant = _dog_prop(4, "Dog Stay Alpha", 4, 4, "Giant (30-100 kg)", 30.0, 100.0)
+    p_any = _dog_prop(5, "Dog Stay Alpha", None, None, None, None, None)
+
+    small_pom = UserPetData(
+        id=1,
+        name="Mochi",
+        pet_type_id=1,
+        pet_type_name="สุนัข (Dog)",
+        breed_name="Pomeranian",
+        weight=3.5,
+        pet_size_category_id=1,
+        size_code=1,
+        size_name="Small (0-5 kg)",
+        energy_rating=3,
+    )
+    large_golden = UserPetData(
+        id=2,
+        name="Milo",
+        pet_type_id=1,
+        pet_type_name="สุนัข (Dog)",
+        breed_name="Golden Retriever",
+        weight=28.5,
+        pet_size_category_id=3,
+        size_code=3,
+        size_name="Large (15-30 kg)",
+        energy_rating=3,
+    )
+
+    # Small dog (3.5 kg) matches Small, Medium, Large, Giant, and Unrestricted (<= max_weight)
+    assert pet_matches_property(small_pom, p_small) is True
+    assert pet_matches_property(small_pom, p_medium) is True
+    assert pet_matches_property(small_pom, p_large) is True
+    assert pet_matches_property(small_pom, p_giant) is True
+    assert pet_matches_property(small_pom, p_any) is True
+
+    # Large dog (28.5 kg) is STRICTLY excluded from Small (<=5) and Medium (<=15), but fits Large/Giant/Any
+    assert pet_matches_property(large_golden, p_small) is False
+    assert pet_matches_property(large_golden, p_medium) is False
+    assert pet_matches_property(large_golden, p_large) is True
+    assert pet_matches_property(large_golden, p_giant) is True
+    assert pet_matches_property(large_golden, p_any) is True
+
+    # Weight-null fallback respects size_code <= rc.size_code
+    small_no_weight = UserPetData(
+        id=3,
+        name="Tiny",
+        pet_type_id=1,
+        pet_type_name="Dog",
+        weight=None,
+        pet_size_category_id=1,
+        size_code=1,
+    )
+    large_no_weight = UserPetData(
+        id=4,
+        name="Rex",
+        pet_type_id=1,
+        pet_type_name="Dog",
+        weight=None,
+        pet_size_category_id=3,
+        size_code=3,
+    )
+    assert pet_matches_property(small_no_weight, p_medium) is True
+    assert pet_matches_property(large_no_weight, p_medium) is False
+    assert pet_matches_property(large_no_weight, p_giant) is True
+
+    # Size-fit micro-bonus values
+    assert compute_pet_size_fit(small_pom, p_small) == pytest.approx(1.0)
+    assert compute_pet_size_fit(small_pom, p_any) == pytest.approx(1.0)
+    assert compute_pet_size_fit(small_pom, p_medium) == pytest.approx(0.75)
+    assert compute_pet_size_fit(small_pom, p_large) == pytest.approx(0.55)
+    assert compute_pet_size_fit(small_pom, p_giant) == pytest.approx(0.55)
+
+    # Exact-fit Small room outranks oversized Giant room for 3.5 kg Small dog
+    user_small = UserContextData(user_id=77, pets=[small_pom])
+    engine = HybridRecommender(data_source=FakeDataSource([p_giant, p_small], {77: user_small}))
+    res = engine.recommend_for_user(user_id=77, limit=5, debug=True)
+    rec_ids = [r.property_id for r in res.recommendations]
+    assert rec_ids == [1, 4]
+    assert res.recommendations[0].score > res.recommendations[1].score
+    assert res.recommendations[0].score_breakdown is not None
+    assert res.recommendations[1].score_breakdown is not None
+    assert res.recommendations[0].score_breakdown.s_compat > res.recommendations[1].score_breakdown.s_compat
+
+
+def test_pf3_location_aware_soft_geo_boost_unit_and_api() -> None:
+    catalog = _make_sample_catalog()
+    # Add an ultra-nearby (<1 km) Bangkok property to verify "<1 km" formatting too
+    p_ultra_near = PropertyData(
+        id=9,
+        host_id=19,
+        title="Bangkok Central Paw Lounge",
+        description="Quiet suites right in central Bangkok with air conditioning and CCTV",
+        property_type="Pet Condo",
+        province="Bangkok",
+        district="Phra Nakhon",
+        latitude=13.7580,
+        longitude=100.5030,
+        min_price=850.0,
+        avg_rating=4.6,
+        review_count=6,
+        booking_count=8,
+        favorite_count=4,
+        view_count_30d=20,
+        facilities=["Separated Zones", "Air Conditioning", "CCTV 24h", "Daily Updates"],
+        room_categories=[
+            RoomCategoryData(
+                id=901,
+                pet_size_category_id=1,
+                size_code=1,
+                size_name="Small (0-5 kg)",
+                min_weight=0.0,
+                max_weight=5.0,
+                room_area_sqm=4.0,
+                pet_type_ids=frozenset({1, 2}),
+            )
+        ],
+        allowed_pet_type_ids={1, 2},
+        allowed_pet_type_names=["สุนัข (Dog)", "แมว (Cat)"],
+        pet_size_names=["Small (0-5 kg)"],
+        max_room_area_sqm=4.0,
+    )
+    full_catalog = catalog + [p_ultra_near]
+
+    bkk_user = UserContextData(
+        user_id=88,
+        pets=[
+            UserPetData(
+                id=1,
+                name="Puff",
+                pet_type_id=1,
+                pet_type_name="สุนัข (Dog)",
+                breed_name="Pomeranian",
+                weight=3.5,
+                pet_size_category_id=1,
+                size_code=1,
+                size_name="Small (0-5 kg)",
+                energy_rating=2,
+            )
+        ],
+    )
+    ds = FakeDataSource(full_catalog, {88: bkk_user}, db_ok=True)
+    engine = HybridRecommender(data_source=ds)
+
+    # 1. Cold-Start WITHOUT location: Chiang Mai p1 outranks Bangkok p2 (higher rating & engagement)
+    cs_no_loc = engine.recommend_cold_start(limit=6, debug=True)
+    cs_no_loc_ids = [r.property_id for r in cs_no_loc.recommendations]
+    assert cs_no_loc_ids.index(1) < cs_no_loc_ids.index(2)
+    assert cs_no_loc.recommendations[0].score_breakdown is not None
+    assert cs_no_loc.recommendations[0].score_breakdown.s_geo is None
+    assert cs_no_loc.recommendations[0].score_breakdown.distance_km is None
+
+    # 2. Cold-Start WITH Bangkok location (13.7563, 100.5018): Bangkok properties outrank Chiang Mai p1,
+    #    and Chiang Mai p1 is NEVER hard-excluded!
+    cs_bkk = engine.recommend_cold_start(
+        limit=6, debug=True, user_lat=13.7563, user_lng=100.5018
+    )
+    cs_bkk_ids = [r.property_id for r in cs_bkk.recommendations]
+    assert 1 in cs_bkk_ids  # Distant Chiang Mai stay is NEVER hard-excluded
+    assert cs_bkk_ids.index(2) < cs_bkk_ids.index(1)  # Bangkok p2 boosted above Chiang Mai p1
+    by_id_cs = {r.property_id: r for r in cs_bkk.recommendations}
+    assert any(reason.startswith("Near you (") and reason.endswith(" km)") for reason in by_id_cs[2].match_reasons)
+    assert "Near you (<1 km)" in by_id_cs[9].match_reasons
+    assert not any(reason.startswith("Near you") for reason in by_id_cs[1].match_reasons)
+    assert by_id_cs[2].score_breakdown is not None
+    assert by_id_cs[2].score_breakdown.distance_km is not None
+    assert by_id_cs[2].score_breakdown.distance_km < 15.0
+    assert by_id_cs[2].score_breakdown.s_geo is not None
+    assert by_id_cs[2].score_breakdown.s_geo > 0.7
+
+    # 3. Personalized WITH Bangkok location via FastAPI TestClient
+    settings = Settings(
+        port=5000,
+        database_url="",
+        snapshot_ttl_seconds=60,
+        time_decay_lambda=0.05,
+        ml_internal_secret="",
+    )
+    app = create_app(settings=settings, data_source=ds)
+    client = TestClient(app)
+
+    r_user_geo = client.get(
+        "/ml/v1/recommend/user/88?limit=6&debug=true&lat=13.7563&lng=100.5018"
+    )
+    assert r_user_geo.status_code == 200
+    u_recs = r_user_geo.json()["recommendations"]
+    u_ids = [r["property_id"] for r in u_recs]
+    assert 1 in u_ids  # Distant Chiang Mai still included
+    assert u_ids.index(2) < u_ids.index(1)  # Bangkok p2 boosted above Chiang Mai p1
+    u_by_id = {r["property_id"]: r for r in u_recs}
+    assert any(reason.startswith("Near you (") for reason in u_by_id[2]["match_reasons"])
+    assert "Near you (<1 km)" in u_by_id[9]["match_reasons"]
+    assert len(u_by_id[2]["match_reasons"]) <= 3
+    assert u_by_id[2]["score_breakdown"]["distance_km"] is not None
+    assert u_by_id[2]["score_breakdown"]["s_geo"] is not None
+
+    # Cold-start endpoint with lat/lng
+    r_cs_geo = client.get(
+        "/ml/v1/recommend/cold-start?limit=6&debug=true&lat=13.7563&lng=100.5018"
+    )
+    assert r_cs_geo.status_code == 200
+    cs_api_ids = [r["property_id"] for r in r_cs_geo.json()["recommendations"]]
+    assert 1 in cs_api_ids
+    assert cs_api_ids.index(2) < cs_api_ids.index(1)
+
+    # Validation check: out-of-range lat rejected with 422
+    r_bad_lat = client.get("/ml/v1/recommend/cold-start?lat=95.0&lng=100.5")
+    assert r_bad_lat.status_code == 422

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 class RoomCategoryData:
     id: int
     pet_size_category_id: int | None = None
+    size_code: int | None = None
     size_name: str | None = None
     min_weight: float | None = None
     max_weight: float | None = None
@@ -53,6 +54,7 @@ class UserPetData:
     breed_name: str | None = None
     weight: float | None = None
     pet_size_category_id: int | None = None
+    size_code: int | None = None
     size_name: str | None = None
     energy_rating: int = 3
 

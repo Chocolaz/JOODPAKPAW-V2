@@ -151,6 +151,7 @@ class DatabaseClient:
                       rc.property_id,
                       rc.id AS room_category_id,
                       rc.pet_size_category_id,
+                      psc.code::int AS size_code,
                       psc.name AS size_name,
                       psc.min::float AS min_weight,
                       psc.max::float AS max_weight,
@@ -188,6 +189,7 @@ class DatabaseClient:
                       rc.property_id,
                       rc.id,
                       rc.pet_size_category_id,
+                      psc.code,
                       psc.name,
                       psc.min,
                       psc.max,
@@ -203,17 +205,19 @@ class DatabaseClient:
                     prop = props_by_id.get(prop_id)
                     if prop is None:
                         continue
-                    pet_ids = frozenset(int(x) for x in (row[7] or []))
-                    pet_names = [str(x) for x in (row[8] or []) if x]
-                    size_name = str(row[3]) if row[3] else None
-                    area = float(row[6] or 0.0)
+                    pet_ids = frozenset(int(x) for x in (row[8] or []))
+                    pet_names = [str(x) for x in (row[9] or []) if x]
+                    size_code = int(row[3]) if row[3] is not None else None
+                    size_name = str(row[4]) if row[4] else None
+                    area = float(row[7] or 0.0)
 
                     rc = RoomCategoryData(
                         id=int(row[1]),
                         pet_size_category_id=int(row[2]) if row[2] is not None else None,
+                        size_code=size_code,
                         size_name=size_name,
-                        min_weight=float(row[4]) if row[4] is not None else None,
-                        max_weight=float(row[5]) if row[5] is not None else None,
+                        min_weight=float(row[5]) if row[5] is not None else None,
+                        max_weight=float(row[6]) if row[6] is not None else None,
                         room_area_sqm=area,
                         pet_type_ids=pet_ids,
                     )
@@ -306,6 +310,7 @@ class DatabaseClient:
                       pb.breed AS breed_name,
                       pp.weight::float AS weight,
                       pp.pet_size_category_id,
+                      psc.code::int AS size_code,
                       psc.name AS size_name,
                       COALESCE(ppe.rating, 3)::int AS energy_rating
                     FROM pet_profiles pp
@@ -335,8 +340,9 @@ class DatabaseClient:
                         breed_name=str(row[4]) if row[4] else None,
                         weight=float(row[5]) if row[5] is not None else None,
                         pet_size_category_id=int(row[6]) if row[6] is not None else None,
-                        size_name=str(row[7]) if row[7] else None,
-                        energy_rating=int(row[8]) if row[8] is not None else 3,
+                        size_code=int(row[7]) if row[7] is not None else None,
+                        size_name=str(row[8]) if row[8] else None,
+                        energy_rating=int(row[9]) if row[9] is not None else 3,
                     )
                     for row in cur.fetchall()
                 ]

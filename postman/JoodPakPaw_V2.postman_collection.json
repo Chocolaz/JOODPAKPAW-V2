@@ -3511,10 +3511,22 @@
                 {
                   "key": "limit",
                   "value": "8"
+                },
+                {
+                  "key": "lat",
+                  "value": "13.7563",
+                  "description": "Optional latitude (-90..90) for Location-Aware Soft Geo-Boost (PF-3)",
+                  "disabled": true
+                },
+                {
+                  "key": "lng",
+                  "value": "100.5018",
+                  "description": "Optional longitude (-180..180) for Location-Aware Soft Geo-Boost (PF-3)",
+                  "disabled": true
                 }
               ]
             },
-            "description": "Returns 3-Stage Pet-Aware Hybrid ML recommendations for authenticated users, or Popular Picks Cold-Start recommendations for guests (when jwt_token is empty). Automatically falls back to In-Process engine within 1500ms if joodpakpaw-ml is unreachable."
+            "description": "Returns 3-Stage Pet-Aware Hybrid ML recommendations (up-to-max-size <= eligibility + size-fit micro-bonus) for authenticated users, or Popular Picks Cold-Start recommendations for guests (when jwt_token is empty). Supports optional ?lat=&lng= for Location-Aware Soft Geo-Boost (PF-3). Automatically falls back to In-Process engine within 1500ms if joodpakpaw-ml is unreachable."
           },
           "response": []
         },
@@ -3585,10 +3597,22 @@
                 {
                   "key": "asUserId",
                   "value": "4"
+                },
+                {
+                  "key": "lat",
+                  "value": "13.7563",
+                  "description": "Optional latitude (-90..90) to inspect sGeo & distanceKm in scoreBreakdown (PF-3)",
+                  "disabled": true
+                },
+                {
+                  "key": "lng",
+                  "value": "100.5018",
+                  "description": "Optional longitude (-180..180) to inspect sGeo & distanceKm in scoreBreakdown (PF-3)",
+                  "disabled": true
                 }
               ]
             },
-            "description": "Admin-only ML Inspector mode returning sContent, sCompat, sQuality, and sPopularity scoreBreakdown for a target persona (e.g. asUserId=4). Strictly returns 403 A-3007 for guests, regular users, and hosts."
+            "description": "Admin-only ML Inspector mode returning sContent, sCompat, sQuality, sPopularity (and optional sGeo, distanceKm when lat/lng are provided) scoreBreakdown for a target persona (e.g. asUserId=4 or asUserId=guest). Strictly returns 403 A-3007 for guests, regular users, and hosts."
           },
           "response": []
         },
@@ -3785,7 +3809,129 @@
                 "status"
               ]
             },
-            "description": "Admin-only endpoint returning live vs fallback ML status, catalog size, snapshot age, and timeout config."
+            "description": "Admin-only endpoint returning live vs fallback ML status, catalog size, snapshot age, timeout config, 6 featured sampleUsers, top 12 sampleProperties, totalUsers, and totalActiveProperties (cached 15s)."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin: Search ML Inspector Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns MlSampleUser[] in Single data Envelope\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/ml/users/search?q=user3&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "ml",
+                "users",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "user3",
+                  "description": "Search by exact numeric user ID or case-insensitive substring on email, firstName, lastName"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Max results (capped at 20)"
+                }
+              ]
+            },
+            "description": "Admin-only server-side search endpoint (100k+ users ready) returning matching active non-banned non-ephemeral MlSampleUser[] for the ML Inspector."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin: Search ML Inspector Properties",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Returns MlSampleProperty[] in Single data Envelope\", () => {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data).to.be.an(\"array\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/ml/properties/search?q=Chiang&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "ml",
+                "properties",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "Chiang",
+                  "description": "Search by exact numeric property ID or case-insensitive substring on title, province, district"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Max results (capped at 20)"
+                }
+              ]
+            },
+            "description": "Admin-only server-side search endpoint returning matching active non-banned MlSampleProperty[] (with active non-banned hosts) for the ML Inspector."
           },
           "response": []
         },

@@ -4,11 +4,18 @@ import { cacheService } from './cache.service';
 
 export type MatchTier = 'all_pets' | 'partial_pets' | 'cold_start' | 'similar';
 
+export interface UserLocation {
+  lat: number;
+  lng: number;
+}
+
 export interface ScoreBreakdown {
   sContent: number;
   sCompat: number;
   sQuality: number;
   sPopularity: number;
+  sGeo?: number | null;
+  distanceKm?: number | null;
 }
 
 export interface RecommendationItem {
@@ -62,6 +69,8 @@ interface MlApiScoreBreakdown {
   s_compat: number;
   s_quality: number;
   s_popularity: number;
+  s_geo?: number | null;
+  distance_km?: number | null;
 }
 
 interface MlApiRecommendationItem {
@@ -88,6 +97,7 @@ interface MlApiRefreshResponse {
 interface SnapshotRoomCategory {
   id: number;
   petSizeCategoryId: number | null;
+  sizeCode: number | null;
   sizeName: string | null;
   minWeight: number | null;
   maxWeight: number | null;
@@ -141,6 +151,7 @@ interface UserPetData {
   breedName: string | null;
   weight: number | null;
   petSizeCategoryId: number | null;
+  sizeCode: number | null;
   sizeName: string | null;
   energyRating: number;
 }
@@ -308,21 +319,82 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
   return 2 * r * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
-function petMatchesProperty(pet: UserPetData, prop: SnapshotProperty): boolean {
-  for (const rc of prop.roomCategories) {
-    if (!rc.petTypeIds.has(pet.petTypeId)) continue;
-    if (rc.petSizeCategoryId === null) return true;
-    if (pet.weight !== null && rc.minWeight !== null && rc.maxWeight !== null) {
-      if (rc.minWeight <= pet.weight && pet.weight <= rc.maxWeight) {
-        return true;
-      }
-    } else if (pet.weight === null && pet.petSizeCategoryId !== null) {
-      if (pet.petSizeCategoryId === rc.petSizeCategoryId) {
-        return true;
-      }
-    }
+function computePropertyGeo(
+  prop: SnapshotProperty,
+  userLocation: UserLocation | null
+): { distanceKm: number | null; sGeo: number | null } {
+  if (!userLocation) return { distanceKm: null, sGeo: null };
+  if (
+    prop.latitude === null ||
+    prop.longitude === null ||
+    !Number.isFinite(prop.latitude) ||
+    !Number.isFinite(prop.longitude) ||
+    (prop.latitude === 0 && prop.longitude === 0)
+  ) {
+    return { distanceKm: null, sGeo: null };
+  }
+  const distanceKm = haversineKm(
+    userLocation.lat,
+    userLocation.lng,
+    prop.latitude,
+    prop.longitude
+  );
+  const sGeo = Math.exp(-distanceKm / 50.0);
+  return { distanceKm, sGeo };
+}
+
+function formatNearYouReason(distanceKm: number): string {
+  return distanceKm < 1
+    ? 'Near you (<1 km)'
+    : `Near you (${distanceKm.toFixed(1)} km)`;
+}
+
+function petMatchesRoom(pet: UserPetData, rc: SnapshotRoomCategory): boolean {
+  if (!rc.petTypeIds.has(pet.petTypeId)) return false;
+  if (rc.petSizeCategoryId === null) return true;
+  if (pet.weight !== null && rc.maxWeight !== null) {
+    return pet.weight <= rc.maxWeight;
+  }
+  if (pet.petSizeCategoryId !== null) {
+    return pet.sizeCode !== null && rc.sizeCode !== null
+      ? pet.sizeCode <= rc.sizeCode
+      : pet.petSizeCategoryId <= rc.petSizeCategoryId;
   }
   return false;
+}
+
+function petMatchesProperty(pet: UserPetData, prop: SnapshotProperty): boolean {
+  for (const rc of prop.roomCategories) {
+    if (petMatchesRoom(pet, rc)) return true;
+  }
+  return false;
+}
+
+function computePetSizeFitScore(pet: UserPetData, prop: SnapshotProperty): number {
+  let bestFit = 0.55;
+  for (const rc of prop.roomCategories) {
+    if (!petMatchesRoom(pet, rc)) continue;
+    const isExactFit =
+      rc.petSizeCategoryId === null ||
+      (pet.petSizeCategoryId !== null && rc.petSizeCategoryId === pet.petSizeCategoryId) ||
+      (pet.weight !== null &&
+        rc.minWeight !== null &&
+        rc.maxWeight !== null &&
+        rc.minWeight <= pet.weight &&
+        pet.weight <= rc.maxWeight);
+    if (isExactFit) return 1.0;
+
+    const isNextTier =
+      (pet.sizeCode !== null && rc.sizeCode !== null && rc.sizeCode - pet.sizeCode === 1) ||
+      (pet.weight !== null &&
+        pet.weight > 0 &&
+        rc.maxWeight !== null &&
+        rc.maxWeight <= pet.weight * 4);
+    if (isNextTier && bestFit < 0.75) {
+      bestFit = 0.75;
+    }
+  }
+  return bestFit;
 }
 
 type EnergyBucket = 'high' | 'medium' | 'low';
@@ -409,6 +481,7 @@ interface RawCatalogRoomPet {
 interface RawCatalogRoomCategory {
   id: number;
   petSizeCategoryId: number | null;
+  sizeCode: number | null;
   sizeName: string | null;
   minWeight: number | null;
   maxWeight: number | null;
@@ -450,6 +523,7 @@ interface RawUserPetJson {
   breedName: string | null;
   weight: number | null;
   petSizeCategoryId: number | null;
+  sizeCode: number | null;
   sizeName: string | null;
   energyRating: number;
 }
@@ -480,6 +554,7 @@ async function buildCatalogSnapshot(): Promise<CatalogSnapshot> {
         rc.id AS room_category_id,
         rc.property_id,
         psc.id AS pet_size_category_id,
+        psc.code::int AS size_code,
         psc.name AS size_name,
         psc.min::float8 AS min_weight,
         psc.max::float8 AS max_weight,
@@ -515,6 +590,7 @@ async function buildCatalogSnapshot(): Promise<CatalogSnapshot> {
         rc.id,
         rc.property_id,
         psc.id,
+        psc.code,
         psc.name,
         psc.min,
         psc.max,
@@ -528,6 +604,7 @@ async function buildCatalogSnapshot(): Promise<CatalogSnapshot> {
           JSON_BUILD_OBJECT(
             'id', room_category_id,
             'petSizeCategoryId', pet_size_category_id,
+            'sizeCode', size_code,
             'sizeName', size_name,
             'minWeight', min_weight,
             'maxWeight', max_weight,
@@ -639,6 +716,7 @@ async function buildCatalogSnapshot(): Promise<CatalogSnapshot> {
       return {
         id: Number(rc.id),
         petSizeCategoryId: sizeId,
+        sizeCode: rc.sizeCode != null ? Number(rc.sizeCode) : null,
         sizeName,
         minWeight: rc.minWeight != null ? Number(rc.minWeight) : null,
         maxWeight: rc.maxWeight != null ? Number(rc.maxWeight) : null,
@@ -783,6 +861,7 @@ async function fetchUserContext(userId: number): Promise<UserContextData> {
             pb.breed AS "breedName",
             pp.weight::float8 AS weight,
             psc.id::int AS "petSizeCategoryId",
+            psc.code::int AS "sizeCode",
             psc.name AS "sizeName",
             COALESCE(ppe.rating, 3)::int AS "energyRating"
           FROM pet_profiles pp
@@ -860,6 +939,7 @@ async function fetchUserContext(userId: number): Promise<UserContextData> {
     breedName: pp.breedName ? String(pp.breedName) : null,
     weight: pp.weight != null ? Number(pp.weight) : null,
     petSizeCategoryId: pp.petSizeCategoryId != null ? Number(pp.petSizeCategoryId) : null,
+    sizeCode: pp.sizeCode != null ? Number(pp.sizeCode) : null,
     sizeName: pp.sizeName ? String(pp.sizeName) : null,
     energyRating: pp.energyRating != null ? Number(pp.energyRating) : 3,
   }));
@@ -970,6 +1050,8 @@ function buildPersonalizedReasons(params: {
   sPopularity: number;
   interactedProvinces: Set<string>;
   interactedTypes: Set<string>;
+  distanceKm?: number | null;
+  sGeo?: number | null;
 }): string[] {
   const {
     prop,
@@ -983,6 +1065,8 @@ function buildPersonalizedReasons(params: {
     sPopularity,
     interactedProvinces,
     interactedTypes,
+    distanceKm,
+    sGeo,
   } = params;
 
   const candidates: Array<[number, string]> = [];
@@ -1012,6 +1096,10 @@ function buildPersonalizedReasons(params: {
         : `Fits ${matchedPets.length}/${totalPets} of your pets`;
     }
     candidates.push([0.3 * sCompat + 0.2, petReason]);
+  }
+
+  if (distanceKm !== undefined && distanceKm !== null && distanceKm <= 35) {
+    candidates.push([0.12 * (sGeo ?? 0) + 0.22, formatNearYouReason(distanceKm)]);
   }
 
   if (energyMatchedLabels.length > 0 && matchedPets.length > 0) {
@@ -1069,9 +1157,14 @@ function buildPersonalizedReasons(params: {
 function buildColdStartReasons(
   prop: SnapshotProperty,
   sQuality: number,
-  sPopularity: number
+  sPopularity: number,
+  distanceKm?: number | null,
+  sGeo?: number | null
 ): string[] {
   const candidates: Array<[number, string]> = [];
+  if (distanceKm !== undefined && distanceKm !== null && distanceKm <= 35) {
+    candidates.push([0.15 * (sGeo ?? 0) + 0.25, formatNearYouReason(distanceKm)]);
+  }
   if (prop.reviewCount > 0 && prop.avgRating >= 4.0) {
     const reviewWord = prop.reviewCount === 1 ? 'review' : 'reviews';
     candidates.push([
@@ -1120,6 +1213,7 @@ function coldStartRank(params: {
   contentScores?: number[];
   interactedProvinces?: Set<string>;
   interactedTypes?: Set<string>;
+  userLocation?: UserLocation | null;
 }): RecommendationItem[] {
   const {
     snapshot,
@@ -1129,6 +1223,7 @@ function coldStartRank(params: {
     contentScores,
     interactedProvinces,
     interactedTypes,
+    userLocation = null,
   } = params;
 
   type ScoredEntry = {
@@ -1137,6 +1232,8 @@ function coldStartRank(params: {
     sContent: number;
     sQuality: number;
     sPopularity: number;
+    sGeo: number | null;
+    distanceKm: number | null;
   };
 
   const remaining: ScoredEntry[] = candidates.map((prop) => {
@@ -1151,12 +1248,21 @@ function coldStartRank(params: {
     } else {
       baseScore = 0.65 * sQ + 0.35 * sP;
     }
+    const { distanceKm, sGeo } = computePropertyGeo(prop, userLocation);
+    let finalScore = baseScore;
+    if (sGeo !== null) {
+      finalScore = contentScores
+        ? 0.88 * baseScore + 0.12 * sGeo
+        : 0.85 * baseScore + 0.15 * sGeo;
+    }
     return {
       prop,
-      score: round4(baseScore),
+      score: round4(finalScore),
       sContent: sC,
       sQuality: sQ,
       sPopularity: sP,
+      sGeo,
+      distanceKm,
     };
   });
 
@@ -1178,7 +1284,7 @@ function coldStartRank(params: {
     }
   }
 
-  return selected.map(({ prop, score, sContent, sQuality, sPopularity }) => {
+  return selected.map(({ prop, score, sContent, sQuality, sPopularity, sGeo, distanceKm }) => {
     const reasons =
       contentScores && sContent >= 0.12
         ? buildPersonalizedReasons({
@@ -1193,8 +1299,10 @@ function coldStartRank(params: {
             sPopularity,
             interactedProvinces: interactedProvinces ?? new Set(),
             interactedTypes: interactedTypes ?? new Set(),
+            distanceKm,
+            sGeo,
           })
-        : buildColdStartReasons(prop, sQuality, sPopularity);
+        : buildColdStartReasons(prop, sQuality, sPopularity, distanceKm, sGeo);
 
     const item: RecommendationItem = {
       propertyId: prop.id,
@@ -1208,6 +1316,12 @@ function coldStartRank(params: {
         sCompat: 0,
         sQuality: round4(sQuality),
         sPopularity: round4(sPopularity),
+        ...(userLocation
+          ? {
+              sGeo: sGeo !== null ? round4(sGeo) : null,
+              distanceKm: distanceKm !== null ? round2(distanceKm) : null,
+            }
+          : {}),
       };
     }
     return item;
@@ -1217,7 +1331,8 @@ function coldStartRank(params: {
 async function fallbackRecommendForUser(
   userId: number | null,
   limit: number,
-  debug: boolean
+  debug: boolean,
+  userLocation: UserLocation | null = null
 ): Promise<Omit<RecommendationResult, 'meta'> & { meta: Omit<RecommendationMeta, 'latencyMs'> }> {
   const [snapshot, userCtx] = await Promise.all([
     getFallbackCatalogSnapshot(),
@@ -1231,6 +1346,7 @@ async function fallbackRecommendForUser(
       candidates: snapshot.properties,
       limit,
       debug,
+      userLocation,
     });
     return {
       recommendations,
@@ -1260,6 +1376,7 @@ async function fallbackRecommendForUser(
       contentScores: hasUsableBehavior ? contentScores : undefined,
       interactedProvinces,
       interactedTypes,
+      userLocation,
     });
     return {
       recommendations,
@@ -1284,23 +1401,30 @@ async function fallbackRecommendForUser(
     const matchTier: MatchTier = matchedCount === totalPets ? 'all_pets' : 'partial_pets';
 
     let energySum = 0;
+    let sizeFitSum = 0;
     const energyLabels: Array<[number, EnergyBucket, string]> = [];
     for (const pet of matchedPets) {
       const { score: efScore, matched } = computePetEnergyFacilityScore(pet, prop);
       energySum += efScore;
+      sizeFitSum += computePetSizeFitScore(pet, prop);
       energyLabels.push(...matched);
     }
 
-    const sEnergyFacility = energySum / matchedCount;
-    const sCompat = 0.65 * sEnergyFacility + 0.35 * (matchedCount / totalPets);
+    const avgEnergyScore = energySum / matchedCount;
+    const avgSizeFit = sizeFitSum / matchedCount;
+    const coverage = matchedCount / totalPets;
+    const sCompat = 0.55 * avgEnergyScore + 0.3 * coverage + 0.15 * avgSizeFit;
 
     const idx = snapshot.propIdxById.get(prop.id) ?? 0;
     const sContent = contentScores[idx] ?? 0;
     const sQuality = snapshot.qualityScores.get(prop.id) ?? 0;
     const sPopularity = snapshot.popularityScores.get(prop.id) ?? 0;
 
-    const finalScore =
+    const baseHybridScore =
       0.4 * sContent + 0.3 * sCompat + 0.2 * sQuality + 0.1 * sPopularity;
+    const { distanceKm, sGeo } = computePropertyGeo(prop, userLocation);
+    const finalScore =
+      sGeo !== null ? 0.88 * baseHybridScore + 0.12 * sGeo : baseHybridScore;
     const roundedScore = round4(finalScore);
 
     const reasons = buildPersonalizedReasons({
@@ -1315,6 +1439,8 @@ async function fallbackRecommendForUser(
       sPopularity,
       interactedProvinces,
       interactedTypes,
+      distanceKm,
+      sGeo,
     });
 
     const item: RecommendationItem = {
@@ -1329,6 +1455,12 @@ async function fallbackRecommendForUser(
         sCompat: round4(sCompat),
         sQuality: round4(sQuality),
         sPopularity: round4(sPopularity),
+        ...(userLocation
+          ? {
+              sGeo: sGeo !== null ? round4(sGeo) : null,
+              distanceKm: distanceKm !== null ? round2(distanceKm) : null,
+            }
+          : {}),
       };
     }
 
@@ -1511,12 +1643,22 @@ function mapMlResponse(
       matchReasons: Array.isArray(item.match_reasons) ? item.match_reasons.slice(0, 3) : [],
     };
     if (includeBreakdown && item.score_breakdown) {
-      mapped.scoreBreakdown = {
+      const bd: ScoreBreakdown = {
         sContent: item.score_breakdown.s_content,
         sCompat: item.score_breakdown.s_compat,
         sQuality: item.score_breakdown.s_quality,
         sPopularity: item.score_breakdown.s_popularity,
       };
+      if (item.score_breakdown.s_geo !== undefined && item.score_breakdown.s_geo !== null) {
+        bd.sGeo = item.score_breakdown.s_geo;
+      }
+      if (
+        item.score_breakdown.distance_km !== undefined &&
+        item.score_breakdown.distance_km !== null
+      ) {
+        bd.distanceKm = item.score_breakdown.distance_km;
+      }
+      mapped.scoreBreakdown = bd;
     }
     return mapped;
   });
@@ -1561,12 +1703,16 @@ async function fetchFromMlService<T>(
 export async function getUserOrColdStartRecommendations(
   userId: number | null,
   limit = 50,
-  debug = false
+  debug = false,
+  userLocation: UserLocation | null = null
 ): Promise<RecommendationResult> {
   const clampedLimit = Math.min(50, Math.max(1, limit));
+  const locKey = userLocation
+    ? `:loc=${userLocation.lat.toFixed(2)},${userLocation.lng.toFixed(2)}`
+    : '';
   const cacheKey = `${REC_CACHE_PREFIX}user:${userId ?? 'guest'}:limit=${clampedLimit}:debug=${
     debug ? '1' : '0'
-  }`;
+  }${locKey}`;
 
   const cached = await cacheService.get<RecommendationResult>(cacheKey);
   if (cached) {
@@ -1577,10 +1723,15 @@ export async function getUserOrColdStartRecommendations(
   let result: RecommendationResult;
 
   try {
+    const locQuery = userLocation
+      ? `&lat=${encodeURIComponent(String(userLocation.lat))}&lng=${encodeURIComponent(
+          String(userLocation.lng)
+        )}`
+      : '';
     const endpoint =
       userId !== null
-        ? `/ml/v1/recommend/user/${userId}?limit=${clampedLimit}&debug=${debug}`
-        : `/ml/v1/recommend/cold-start?limit=${clampedLimit}&debug=${debug}`;
+        ? `/ml/v1/recommend/user/${userId}?limit=${clampedLimit}&debug=${debug}${locQuery}`
+        : `/ml/v1/recommend/cold-start?limit=${clampedLimit}&debug=${debug}${locQuery}`;
     const mlResp = await fetchFromMlService<MlApiRecommendationResponse>(endpoint, 'GET');
     const latencyMs = Math.max(1, Date.now() - startedAt);
     result = mapMlResponse(mlResp, latencyMs, debug);
@@ -1589,7 +1740,7 @@ export async function getUserOrColdStartRecommendations(
       '[RecommendationService] ML service unavailable, using in-process fallback:',
       err instanceof Error ? err.message : err
     );
-    const fb = await fallbackRecommendForUser(userId, clampedLimit, debug);
+    const fb = await fallbackRecommendForUser(userId, clampedLimit, debug, userLocation);
     result = {
       recommendations: fb.recommendations,
       meta: {
