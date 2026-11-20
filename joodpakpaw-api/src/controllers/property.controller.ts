@@ -5,6 +5,10 @@ import { AppError } from '../middlewares/errorHandler';
 import { normalizePetName } from './lookup.controller';
 import { cacheService } from '../services/cache.service';
 import {
+  invalidateAllRecommendationCaches,
+  triggerMlRefresh,
+} from '../services/recommendation.service';
+import {
   syncPropertyBookingCount as syncPropertyBookingCountCanonical,
 } from '../services/bookingLifecycle.service';
 /**
@@ -24,7 +28,7 @@ export function toSafeIsoString(dateVal: any, fallback?: string): string {
 /**
  * Helper to fetch user's favorite property map (propertyId -> folderId)
  */
-async function getUserFavoriteMap(userId?: number): Promise<Map<number, number>> {
+export async function getUserFavoriteMap(userId?: number): Promise<Map<number, number>> {
   const favMap = new Map<number, number>();
   if (!userId) return favMap;
 
@@ -273,7 +277,10 @@ export function formatPropertyDto(
  * Invalidate all property-related caches.
  */
 export async function invalidatePropertyCaches(): Promise<number> {
-  return cacheService.delByPrefix('properties:');
+  const deleted = await cacheService.delByPrefix('properties:');
+  await invalidateAllRecommendationCaches();
+  triggerMlRefresh();
+  return deleted;
 }
 
 /**
@@ -356,6 +363,124 @@ export async function getProperties(
         ...cached,
         data: personalizedData,
       });
+      return;
+    }
+
+    if (req.query.ids !== undefined) {
+      const rawIds = Array.isArray(req.query.ids)
+        ? req.query.ids.join(',')
+        : String(req.query.ids);
+      const tokens = rawIds
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+      if (tokens.length === 0 || tokens.length > 50) {
+        throw new AppError(
+          'ids must contain between 1 and 50 positive integers.',
+          400,
+          'T-2007'
+        );
+      }
+
+      const parsedIds: number[] = [];
+      const seenIds = new Set<number>();
+      for (const tok of tokens) {
+        if (!/^\d+$/.test(tok)) {
+          throw new AppError('ids must be comma-separated positive integers.', 400, 'T-2007');
+        }
+        const num = parseInt(tok, 10);
+        if (!Number.isSafeInteger(num) || num <= 0) {
+          throw new AppError('ids must be comma-separated positive integers.', 400, 'T-2007');
+        }
+        if (!seenIds.has(num)) {
+          seenIds.add(num);
+          parsedIds.push(num);
+        }
+      }
+
+      const dbProperties = await prisma.property.findMany({
+        where: {
+          id: { in: parsedIds },
+          isActive: true,
+          deletedAt: null,
+          isBannedByAdmin: false,
+          host: {
+            deletedAt: null,
+            bannedAt: null,
+            isBannedAllProperties: false,
+          },
+        },
+        include: {
+          images: {
+            where: { deletedAt: null },
+            orderBy: { id: 'asc' },
+            take: 3,
+          },
+          propertyType: true,
+          roomCategories: {
+            where: { deletedAt: null },
+            select: {
+              id: true,
+              basePrice: true,
+              pets: {
+                select: {
+                  pet: true,
+                },
+              },
+            },
+            orderBy: { basePrice: 'asc' },
+          },
+          host: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+              isVerifiedHost: true,
+            },
+          },
+        },
+      });
+
+      const anonymousFavMap = new Map<number, number>();
+      const byId = new Map<number, any>();
+      for (const p of dbProperties) {
+        const dto = formatPropertyDto(p, anonymousFavMap);
+        const { _bookingCount, ...rest } = dto;
+        byId.set(p.id, rest);
+      }
+
+      const orderedData = parsedIds.map((id) => byId.get(id)).filter(Boolean);
+      const baseBatchResponse = {
+        code: 'S-0000',
+        message: 'Success',
+        data: orderedData,
+        pagination: {
+          page: 1,
+          limit: orderedData.length,
+          totalRows: orderedData.length,
+          totalPages: orderedData.length > 0 ? 1 : 0,
+        },
+      };
+
+      await cacheService.set(cacheKey, baseBatchResponse, 60);
+
+      if (req.user?.id) {
+        const favMap = await getUserFavoriteMap(req.user.id);
+        const personalizedData = orderedData.map((p: any) => ({
+          ...p,
+          isFavorite: favMap.has(p.id),
+          favoriteFolderId: favMap.get(p.id) ?? null,
+        }));
+        res.status(200).json({
+          ...baseBatchResponse,
+          data: personalizedData,
+        });
+        return;
+      }
+
+      res.status(200).json(baseBatchResponse);
       return;
     }
 

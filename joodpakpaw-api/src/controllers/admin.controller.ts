@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../database/prisma';
 import { AppError, FieldValidationError } from '../middlewares/errorHandler';
 import { deleteObjectFromS3 } from '../services/storage.service';
-import { cacheService } from '../services/cache.service';
+import { invalidatePropertyCaches } from './property.controller';
 import { createNotificationSafe } from '../services/notification.service';
 import {
   restoreCalendarQuotaInTx,
@@ -937,7 +937,7 @@ export async function handleReportAction(
 
     // 2. Clear property caches and sync booking count
     if (affectedPropertyIds.length > 0) {
-      void cacheService.delByPrefix('properties:');
+      void invalidatePropertyCaches();
       for (const pid of affectedPropertyIds) {
         void syncPropertyBookingCountSafe(pid);
       }

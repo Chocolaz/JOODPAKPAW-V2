@@ -3,10 +3,13 @@ import path from 'path';
 import { prisma } from '../database/prisma';
 import { AppError, FieldValidationError } from '../middlewares/errorHandler';
 import { uploadMultipleImagesAsWebp, deleteObjectFromS3 } from '../services/storage.service';
-import { formatPropertyDto, syncPropertyMinPrice } from './property.controller';
+import {
+  formatPropertyDto,
+  invalidatePropertyCaches,
+  syncPropertyMinPrice,
+} from './property.controller';
 import { getPropertyAppealCycleStats } from './report.controller';
 import { normalizePetName } from './lookup.controller';
-import { cacheService } from '../services/cache.service';
 import {
   MAX_ADVANCE_BOOKING_DAYS,
   TERMINAL_BOOKING_STATUSES,
@@ -601,7 +604,7 @@ export async function createHostProperty(
       ? await formatHostPropertyWithUnbanStats(fullProp)
       : { id: created.id, title: created.title };
 
-    await cacheService.delByPrefix('properties:');
+    await invalidatePropertyCaches();
 
     res.status(201).json({
       code: 'S-0000',
@@ -790,7 +793,7 @@ export async function updateHostProperty(
       ? await formatHostPropertyWithUnbanStats(fullProp)
       : { id: propertyId };
 
-    await cacheService.delByPrefix('properties:');
+    await invalidatePropertyCaches();
 
     res.status(200).json({
       code: 'S-0000',
@@ -886,7 +889,7 @@ export async function deleteHostProperty(
       }),
     ]);
 
-    await cacheService.delByPrefix('properties:');
+    await invalidatePropertyCaches();
 
     res.status(200).json({
       code: 'S-0000',
@@ -993,7 +996,7 @@ export async function updateHostPropertyIsActive(
       ? await formatHostPropertyWithUnbanStats(fullProp)
       : { id: propertyId, isActive: updated.isActive };
 
-    await cacheService.delByPrefix('properties:');
+    await invalidatePropertyCaches();
 
     res.status(200).json({
       code: 'S-0000',
@@ -1337,7 +1340,7 @@ export async function createHostRoomCategory(
     });
 
     await syncPropertyMinPrice(propertyId);
-    await cacheService.delByPrefix('properties:');
+    await invalidatePropertyCaches();
 
     res.status(201).json({
       code: 'S-0000',
@@ -1607,7 +1610,7 @@ export async function updateHostRoomCategory(
       : { id: roomId };
 
     await syncPropertyMinPrice(propertyId);
-    await cacheService.delByPrefix('properties:');
+    await invalidatePropertyCaches();
 
     res.status(200).json({
       code: 'S-0000',
@@ -1716,7 +1719,7 @@ export async function deleteHostRoomCategory(
     });
 
     await syncPropertyMinPrice(propertyId);
-    await cacheService.delByPrefix('properties:');
+    await invalidatePropertyCaches();
 
     res.status(200).json({
       code: 'S-0000',
@@ -2016,7 +2019,7 @@ export async function updateRoomCategoryCalendars(
     });
 
     await syncPropertyMinPrice(propertyId);
-    await cacheService.delByPrefix('properties:');
+    await invalidatePropertyCaches();
 
     res.status(200).json({
       code: 'S-0000',

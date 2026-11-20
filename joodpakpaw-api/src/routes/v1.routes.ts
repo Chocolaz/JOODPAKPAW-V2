@@ -12,6 +12,7 @@ import { notificationRouter } from './notification.routes';
 import { verificationRouter } from './verification.routes';
 import { reportRouter } from './report.routes';
 import { adminRouter } from './admin.routes';
+import { userBehaviorRouter } from './userBehavior.routes';
 
 export const v1Router = Router();
 
@@ -40,6 +41,7 @@ v1Router.get('/', (_req: Request, res: Response) => {
       reports: '/api/v1/reports',
       admin: '/api/v1/admin',
       recommendations: '/api/v1/properties/recommend',
+      userBehaviors: '/api/v1/user-behaviors',
     },
   });
 });
@@ -58,3 +60,4 @@ v1Router.use('/chat-rooms', chatRouter);
 v1Router.use('/user-verifications', verificationRouter);
 v1Router.use('/reports', reportRouter);
 v1Router.use('/admin', adminRouter);
+v1Router.use('/user-behaviors', userBehaviorRouter);
