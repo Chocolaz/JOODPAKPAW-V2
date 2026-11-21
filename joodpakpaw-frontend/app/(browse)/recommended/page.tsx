@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Compass, Heart } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { getLowestPrice } from '@/lib/utils'
+import { readGeoCache, writeGeoCache } from '@/lib/geoCache'
 import { PropertyList } from '@/app/_components/PropertyList'
 import { useAuth } from '@/app/_components/AuthContext'
 import { useBrowseFilters } from '@/app/_hooks/useBrowseFilters'
@@ -21,12 +22,20 @@ export default function RecommendedPage() {
   } | null>(null)
 
   useEffect(() => {
+    const cached = readGeoCache()
+    if (cached) {
+      setUserLocation(cached)
+      return
+    }
     navigator.geolocation?.getCurrentPosition(
-      (pos) =>
-        setUserLocation({
+      (pos) => {
+        const coords = {
           lat: pos.coords.latitude,
           lon: pos.coords.longitude,
-        }),
+        }
+        writeGeoCache(coords.lat, coords.lon)
+        setUserLocation(coords)
+      },
       () => {}
     )
   }, [])

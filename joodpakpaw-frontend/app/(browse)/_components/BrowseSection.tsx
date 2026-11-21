@@ -2,7 +2,6 @@
 
 import { useRef } from 'react'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { PropertyCard } from '@/app/_components/PropertyCard'
 import { Property } from '@/types'
@@ -53,12 +52,7 @@ export function BrowseSection({
   const displayProperties = properties.slice(0, SECTION_LIMIT)
 
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="mb-10 lg:mb-0 lg:py-10 lg:border-b lg:border-gray-100"
-    >
+    <section className="mb-10 lg:mb-0 lg:py-10 lg:border-b lg:border-gray-100">
       {/* Section header */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4 lg:mb-6">
         <div className="min-w-0">
@@ -147,6 +141,6 @@ export function BrowseSection({
           </div>
         )}
       </div>
-    </motion.section>
+    </section>
   )
 }

@@ -35,6 +35,7 @@ export function useRecommendedProperties(
     {
       dedupingInterval: 30000,
       revalidateOnFocus: false,
+      keepPreviousData: true,
     }
   )
 
@@ -43,7 +44,7 @@ export function useRecommendedProperties(
     totalRows: data?.totalRows ?? 0,
     totalPages: data?.totalPages ?? 0,
     meta: data?.meta ?? null,
-    isLoading: authLoading || isLoading,
+    isLoading: authLoading || (!data && !error) || (isLoading && !data),
     isValidating,
     error,
     mutate,
