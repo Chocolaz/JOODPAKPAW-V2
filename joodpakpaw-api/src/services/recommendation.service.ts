@@ -417,11 +417,12 @@ function computePetEnergyFacilityScore(
   let checks: Array<[string, number, string]>;
   if (bucket === 'high') {
     checks = [
-      ['outdoor play area', 0.35, 'Outdoor Play Area'],
-      ['indoor play area', 0.25, 'Indoor Play Area'],
-      ['__room_area_6__', 0.2, 'Spacious Room'],
-      ['cctv 24h', 0.1, 'CCTV 24h'],
-      ['daily updates', 0.1, 'Daily Updates'],
+      ['outdoor play area', 0.30, 'Outdoor Play Area'],
+      ['swimming pool', 0.20, 'Swimming Pool'],
+      ['indoor play area', 0.20, 'Indoor Play Area'],
+      ['__room_area_6__', 0.15, 'Spacious Room'],
+      ['cctv 24h', 0.10, 'CCTV 24h'],
+      ['daily updates', 0.05, 'Daily Updates'],
     ];
   } else if (bucket === 'medium') {
     checks = [
@@ -463,7 +464,7 @@ function buildSyntheticPetQuery(pets: UserPetData[]): string {
     if (pet.sizeName) tokens.push(cleanTokenText(pet.sizeName));
     const bucket = energyBucket(pet.energyRating);
     if (bucket === 'high') {
-      tokens.push('Outdoor Play Area Indoor Play Area CCTV 24h Daily Updates');
+      tokens.push('Outdoor Play Area Swimming Pool Indoor Play Area CCTV 24h Daily Updates');
     } else if (bucket === 'medium') {
       tokens.push('Indoor Play Area Air Conditioning Daily Updates CCTV 24h Outdoor Play Area');
     } else {

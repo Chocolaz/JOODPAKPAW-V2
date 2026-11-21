@@ -388,13 +388,97 @@ def test_stage2_energy_facility_compatibility() -> None:
 
     high_on_active, _ = compute_pet_energy_facility_score(high_energy_dog, p_active)
     high_on_calm, _ = compute_pet_energy_facility_score(high_energy_dog, p_calm)
-    assert high_on_active == pytest.approx(1.0)
+    assert high_on_active == pytest.approx(0.80)
     assert high_on_active > high_on_calm
 
     low_on_calm, _ = compute_pet_energy_facility_score(low_energy_cat, p_calm)
     low_on_active, _ = compute_pet_energy_facility_score(low_energy_cat, p_active)
     assert low_on_calm == pytest.approx(1.0)
     assert low_on_calm > low_on_active
+
+
+def test_high_energy_swimming_pool_affinity_and_reason() -> None:
+    def _make_dog_prop(pid: int, facilities: list[str]) -> PropertyData:
+        return PropertyData(
+            id=pid,
+            host_id=50 + pid,
+            title="Active Paws Boarding",
+            description="Comfortable boarding stay for active dogs",
+            property_type="Pet Resort",
+            province="Bangkok",
+            district="Bang Na",
+            min_price=1000.0,
+            avg_rating=4.0,
+            review_count=2,
+            booking_count=1,
+            favorite_count=0,
+            view_count_30d=10,
+            facilities=facilities,
+            room_categories=[
+                RoomCategoryData(
+                    id=pid * 10,
+                    pet_size_category_id=3,
+                    size_code=3,
+                    size_name="Large (15-30 kg)",
+                    min_weight=15.0,
+                    max_weight=30.0,
+                    room_area_sqm=5.0,
+                    pet_type_ids=frozenset({1}),
+                )
+            ],
+            allowed_pet_type_ids={1},
+            allowed_pet_type_names=["สุนัข (Dog)"],
+            pet_size_names=["Large (15-30 kg)"],
+            max_room_area_sqm=5.0,
+        )
+
+    p_no_pool = _make_dog_prop(101, ["CCTV 24h", "Daily Updates"])
+    p_with_pool = _make_dog_prop(102, ["Swimming Pool", "CCTV 24h", "Daily Updates"])
+    p_full_high = _make_dog_prop(
+        103,
+        [
+            "Outdoor Play Area",
+            "Swimming Pool",
+            "Indoor Play Area",
+            "CCTV 24h",
+            "Daily Updates",
+        ],
+    )
+    p_full_high.max_room_area_sqm = 8.0
+
+    high_energy_dog = UserPetData(
+        id=1,
+        name="Bolt",
+        pet_type_id=1,
+        pet_type_name="สุนัข (Dog)",
+        breed_name="Golden Retriever",
+        weight=22.0,
+        pet_size_category_id=3,
+        size_code=3,
+        size_name="Large (15-30 kg)",
+        energy_rating=5,
+    )
+
+    score_no_pool, _ = compute_pet_energy_facility_score(high_energy_dog, p_no_pool)
+    score_with_pool, _ = compute_pet_energy_facility_score(high_energy_dog, p_with_pool)
+    score_full_high, _ = compute_pet_energy_facility_score(high_energy_dog, p_full_high)
+    assert score_no_pool == pytest.approx(0.15)
+    assert score_with_pool == pytest.approx(0.35)
+    assert score_with_pool > score_no_pool
+    assert score_full_high == pytest.approx(1.0)
+
+    user = UserContextData(user_id=70, pets=[high_energy_dog])
+    engine = HybridRecommender(data_source=FakeDataSource([p_no_pool, p_with_pool], {70: user}))
+    res = engine.recommend_for_user(user_id=70, limit=5, debug=True)
+
+    rec_ids = [r.property_id for r in res.recommendations]
+    assert rec_ids == [102, 101]
+    top_rec, second_rec = res.recommendations[0], res.recommendations[1]
+    assert top_rec.score > second_rec.score
+    assert top_rec.score_breakdown is not None and second_rec.score_breakdown is not None
+    assert top_rec.score_breakdown.s_compat > second_rec.score_breakdown.s_compat
+    assert top_rec.score_breakdown.s_content > second_rec.score_breakdown.s_content
+    assert "Swimming Pool · High-energy match" in top_rec.match_reasons
 
 
 def test_multi_pet_energy_reason_uses_matched_pet_bucket() -> None:

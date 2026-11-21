@@ -192,11 +192,12 @@ def compute_pet_energy_facility_score(
 
     if bucket == "high":
         checks = [
-            ("outdoor play area", 0.35, "Outdoor Play Area"),
-            ("indoor play area", 0.25, "Indoor Play Area"),
-            ("__room_area_6__", 0.20, "Spacious Room"),
+            ("outdoor play area", 0.30, "Outdoor Play Area"),
+            ("swimming pool", 0.20, "Swimming Pool"),
+            ("indoor play area", 0.20, "Indoor Play Area"),
+            ("__room_area_6__", 0.15, "Spacious Room"),
             ("cctv 24h", 0.10, "CCTV 24h"),
-            ("daily updates", 0.10, "Daily Updates"),
+            ("daily updates", 0.05, "Daily Updates"),
         ]
     elif bucket == "medium":
         checks = [
@@ -236,7 +237,7 @@ def _build_synthetic_pet_query(pets: list[UserPetData]) -> str:
             tokens.append(_clean_token_text(pet.size_name))
         bucket = _energy_bucket(pet.energy_rating)
         if bucket == "high":
-            tokens.append("Outdoor Play Area Indoor Play Area CCTV 24h Daily Updates")
+            tokens.append("Outdoor Play Area Swimming Pool Indoor Play Area CCTV 24h Daily Updates")
         elif bucket == "medium":
             tokens.append("Indoor Play Area Air Conditioning Daily Updates CCTV 24h Outdoor Play Area")
         else:
