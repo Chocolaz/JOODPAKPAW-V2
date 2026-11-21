@@ -18,7 +18,7 @@ import {
   Cat,
   Clock,
   TrendingUp,
-  Sparkles,
+  Heart,
 } from 'lucide-react'
 import { useBrowseFilters } from '@/app/_hooks/useBrowseFilters'
 import { useRecentlyViewed } from '@/app/_hooks/useRecentlyViewed'
@@ -485,10 +485,17 @@ export default function Home() {
                             : 'Top-rated pet-friendly stays across Thailand'
                         }
                         icon={
-                          <Sparkles
-                            className="w-5 h-5 text-accent-orange"
-                            strokeWidth={1.75}
-                          />
+                          isAuthenticated ? (
+                            <Heart
+                              className="w-5 h-5 text-deep-teal/70"
+                              strokeWidth={1.5}
+                            />
+                          ) : (
+                            <Compass
+                              className="w-5 h-5 text-deep-teal/70"
+                              strokeWidth={1.5}
+                            />
+                          )
                         }
                         properties={recommendedProperties}
                         totalCount={recommendedTotal}

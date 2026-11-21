@@ -141,7 +141,8 @@ export default function PropertyDetailPage() {
   const [reportOpen, setReportOpen] = useState(false)
   const { track } = useRecentlyViewed()
   const trackedPropertyRef = useRef<number | null>(null)
-  const { properties: recommendations } = useSimilarProperties(property?.id, 12)
+  const { properties: recommendations, isLoading: recommendationsLoading } =
+    useSimilarProperties(property?.id, 12)
 
   useEffect(() => {
     if (property?.id) track(property.id)
@@ -339,16 +340,36 @@ export default function PropertyDetailPage() {
       </div>
 
       {/* Recommendations Section */}
-      {recommendations.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
+      {recommendationsLoading ? (
+        <section className="mt-16 px-4 md:px-8 lg:px-2">
+          <div className="max-w-6xl mx-auto">
+            <h2 className="text-xl md:text-2xl font-baloo2 font-semibold text-deep-teal mb-6">
+              Similar Properties
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 lg:gap-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i}>
+                  <div className="aspect-square w-full rounded-2xl bg-gray-100" />
+                  <div className="mt-2 space-y-2">
+                    <div className="h-4 w-3/4 rounded bg-gray-100" />
+                    <div className="h-3 w-1/2 rounded bg-gray-100" />
+                    <div className="h-3 w-1/3 rounded bg-gray-100" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : recommendations.length > 0 ? (
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
           whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: 'easeOut' }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
           viewport={{ once: true }}
           className="mt-16 px-4 md:px-8 lg:px-2"
         >
           <div className="max-w-6xl mx-auto">
-            <h2 className="text-2xl md:text-3xl font-baloo2 font-bold mb-6">
+            <h2 className="text-xl md:text-2xl font-baloo2 font-semibold text-deep-teal mb-6">
               Similar Properties
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 lg:gap-6">
@@ -360,14 +381,15 @@ export default function PropertyDetailPage() {
                     key={rec.id}
                     property={rec}
                     href={`/detail/${rec.id}?propertyChain=${newChain}`}
+                    showHeartIcon={isAuthenticated}
                     showMatchReason={true}
                   />
                 )
               })}
             </div>
           </div>
-        </motion.div>
-      )}
+        </motion.section>
+      ) : null}
 
       <ReportPropertyDrawer
         propertyId={property.id}

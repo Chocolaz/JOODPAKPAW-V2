@@ -14,7 +14,6 @@ interface BrowseSectionProps {
   title: string
   subtitle?: string
   icon?: React.ReactNode
-  headerAction?: React.ReactNode
   properties: Property[]
   totalCount?: number
   showHeartIcon?: boolean
@@ -27,7 +26,6 @@ export function BrowseSection({
   title,
   subtitle,
   icon,
-  headerAction,
   properties,
   totalCount,
   showHeartIcon,
@@ -78,7 +76,6 @@ export function BrowseSection({
                 {title}
               </h5>
             )}
-            {headerAction}
           </div>
           {subtitle && (
             <p className="text-xs lg:text-sm text-neutral-gray mt-0.5">{subtitle}</p>
@@ -135,7 +132,7 @@ export function BrowseSection({
           >
             <Link
               href={seeAllHref}
-              className="group flex flex-col items-center justify-center gap-2 aspect-square w-full rounded-2xl bg-white border border-gray-100 shadow-sm hover:border-deep-teal/40 hover:shadow-md transition-all duration-200 p-4 text-center"
+              className="group flex flex-col items-center justify-center gap-2 aspect-square w-full rounded-2xl bg-white border border-gray-100 shadow-sm hover:border-deep-teal/40 hover:shadow-md transition-[border-color,box-shadow] duration-200 ease-out p-4 text-center"
             >
               <div className="w-10 h-10 rounded-full bg-deep-teal/5 flex items-center justify-center text-deep-teal group-hover:bg-deep-teal group-hover:text-white transition-colors duration-200">
                 <ChevronRight className="w-5 h-5 stroke-[1.5] transition-transform duration-200 group-hover:translate-x-0.5" />
@@ -143,7 +140,7 @@ export function BrowseSection({
               <span className="text-sm font-semibold text-deep-teal group-hover:text-accent-orange transition-colors">
                 See All
               </span>
-              <span className="text-xs text-neutral-gray">
+              <span className="text-xs text-neutral-gray tabular-nums">
                 {count} listings
               </span>
             </Link>

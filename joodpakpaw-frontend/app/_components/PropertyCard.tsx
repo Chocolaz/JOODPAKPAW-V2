@@ -5,7 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { cn, getLowestPrice, getPetPolicy, assetPath, getApiImageUrl } from '@/lib/utils'
-import { Globe, GlobeLock, Heart, Star, Ban, Sparkles } from 'lucide-react'
+import { Globe, GlobeLock, Heart, Star, Ban } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FavoriteDrawer } from './FavoriteDrawer'
 import { useAuth } from '@/app/_components/AuthContext'
@@ -138,7 +138,7 @@ export function PropertyCard({
               unoptimized
               onLoad={() => setIsImageLoaded(true)}
               className={cn(
-                'object-cover rounded-2xl transition-all duration-300',
+                'object-cover rounded-2xl transition-opacity duration-300 ease-out',
                 isImageLoaded ? 'opacity-100' : 'opacity-0'
               )}
               onError={() => {
@@ -213,7 +213,7 @@ export function PropertyCard({
                       : 'text-gray-300'
                   )}
                 />
-                <span className="text-xs md:text-sm lg:text-sm xl:text-base font-medium text-gray-700">
+                <span className="text-xs md:text-sm lg:text-sm xl:text-base font-medium text-gray-700 tabular-nums">
                   {property.avgRating > 0 ? property.avgRating.toFixed(1) : 'New'}
                 </span>
               </div>
@@ -233,13 +233,16 @@ export function PropertyCard({
             )}
 
             {showMatchReason && property.matchReasons && property.matchReasons.length > 0 && (
-              <div
-                title={property.matchReasons.join(' • ')}
-                className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full bg-deep-teal/5 border border-deep-teal/10 px-2 py-0.5 text-[11px] font-medium text-deep-teal"
+              <p
+                title={property.matchReasons.join(' · ')}
+                className="mt-1.5 flex items-center gap-1.5 min-w-0 text-[11px] font-medium text-deep-teal/80"
               >
-                <Sparkles className="h-3 w-3 shrink-0 text-accent-orange" />
+                <span
+                  aria-hidden="true"
+                  className="w-1.5 h-1.5 rounded-full bg-accent-orange shrink-0"
+                />
                 <span className="truncate">{property.matchReasons[0]}</span>
-              </div>
+              </p>
             )}
           </div>
         </Link>
