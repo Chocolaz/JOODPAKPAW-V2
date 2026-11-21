@@ -2,7 +2,6 @@
 
 import { useRef } from 'react'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { PropertyCard } from '@/app/_components/PropertyCard'
 import { Property } from '@/types'
@@ -12,27 +11,32 @@ const SECTION_LIMIT = 7
 
 interface BrowseSectionProps {
   title: string
+  subtitle?: string
   icon?: React.ReactNode
   properties: Property[]
   totalCount?: number
   showHeartIcon?: boolean
   showPetPolicyChip?: boolean
+  showMatchReason?: boolean
   seeAllHref?: string
 }
 
 export function BrowseSection({
   title,
+  subtitle,
   icon,
   properties,
   totalCount,
   showHeartIcon,
   showPetPolicyChip,
+  showMatchReason,
   seeAllHref,
 }: BrowseSectionProps) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+
   if (properties.length === 0) return null
 
   const count = totalCount ?? properties.length
-  const scrollRef = useRef<HTMLDivElement>(null)
 
   const scroll = (dir: 'left' | 'right') => {
     if (!scrollRef.current) return
@@ -48,27 +52,27 @@ export function BrowseSection({
   const displayProperties = properties.slice(0, SECTION_LIMIT)
 
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="mb-10 lg:mb-0 lg:py-10 lg:border-b lg:border-gray-100"
-    >
+    <section className="mb-10 lg:mb-0 lg:py-10 lg:border-b lg:border-gray-100">
       {/* Section header */}
-      <div className="flex items-center justify-between mb-4 lg:mb-6">
-        <div className="flex items-center gap-2">
-          {icon}
-          {seeAllHref && count > SECTION_LIMIT ? (
-            <Link href={seeAllHref} className="group flex items-center gap-1.5">
-              <h5 className="text-lg lg:text-xl xl:text-2xl font-semibold text-deep-teal underline-offset-4 group-hover:underline group-hover:text-accent-orange transition-colors">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4 lg:mb-6">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            {icon}
+            {seeAllHref && count > SECTION_LIMIT ? (
+              <Link href={seeAllHref} className="group flex items-center gap-1.5">
+                <h5 className="text-lg lg:text-xl xl:text-2xl font-semibold text-deep-teal underline-offset-4 group-hover:underline group-hover:text-accent-orange transition-colors">
+                  {title}
+                </h5>
+                <ChevronRight className="w-4 h-4 lg:w-5 lg:h-5 text-neutral-gray group-hover:text-accent-orange transition-colors translate-x-0 group-hover:translate-x-0.5 duration-200" />
+              </Link>
+            ) : (
+              <h5 className="text-lg lg:text-xl xl:text-2xl font-semibold text-deep-teal">
                 {title}
               </h5>
-              <ChevronRight className="w-4 h-4 lg:w-5 lg:h-5 text-neutral-gray group-hover:text-accent-orange transition-colors translate-x-0 group-hover:translate-x-0.5 duration-200" />
-            </Link>
-          ) : (
-            <h5 className="text-lg lg:text-xl xl:text-2xl font-semibold text-deep-teal">
-              {title}
-            </h5>
+            )}
+          </div>
+          {subtitle && (
+            <p className="text-xs lg:text-sm text-neutral-gray mt-0.5">{subtitle}</p>
           )}
         </div>
 
@@ -109,6 +113,7 @@ export function BrowseSection({
               property={property}
               showPetPolicyChip={showPetPolicyChip}
               showHeartIcon={showHeartIcon}
+              showMatchReason={showMatchReason}
             />
           </div>
         ))}
@@ -121,7 +126,7 @@ export function BrowseSection({
           >
             <Link
               href={seeAllHref}
-              className="group flex flex-col items-center justify-center gap-2 aspect-square w-full rounded-2xl bg-white border border-gray-100 shadow-sm hover:border-deep-teal/40 hover:shadow-md transition-all duration-200 p-4 text-center"
+              className="group flex flex-col items-center justify-center gap-2 aspect-square w-full rounded-2xl bg-white border border-gray-100 shadow-sm hover:border-deep-teal/40 hover:shadow-md transition-[border-color,box-shadow] duration-200 ease-out p-4 text-center"
             >
               <div className="w-10 h-10 rounded-full bg-deep-teal/5 flex items-center justify-center text-deep-teal group-hover:bg-deep-teal group-hover:text-white transition-colors duration-200">
                 <ChevronRight className="w-5 h-5 stroke-[1.5] transition-transform duration-200 group-hover:translate-x-0.5" />
@@ -129,13 +134,13 @@ export function BrowseSection({
               <span className="text-sm font-semibold text-deep-teal group-hover:text-accent-orange transition-colors">
                 See All
               </span>
-              <span className="text-xs text-neutral-gray">
+              <span className="text-xs text-neutral-gray tabular-nums">
                 {count} listings
               </span>
             </Link>
           </div>
         )}
       </div>
-    </motion.section>
+    </section>
   )
 }

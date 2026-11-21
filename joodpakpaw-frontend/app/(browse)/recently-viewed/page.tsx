@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Clock } from 'lucide-react'
-import { getProperties, getPropertyById } from '@/lib/api'
+import { getPropertiesByIds } from '@/lib/api'
 import { Property } from '@/types'
 import { useAuth } from '@/app/_components/AuthContext'
 import { useRecentlyViewed } from '@/app/_hooks/useRecentlyViewed'
@@ -24,20 +24,31 @@ export default function RecentlyViewedPage() {
       return
     }
 
+    let cancelled = false
+
     const fetchProperties = async () => {
       setIsLoading(true)
       try {
-        const promises = ids.map((id) => getPropertyById(String(id)))
-        const results = await Promise.all(promises)
-        setProperties(results.map((r) => r.property))
+        const fetched = await getPropertiesByIds(ids)
+        if (cancelled) return
+        const byId = new Map<number, Property>(fetched.map((p) => [p.id, p]))
+        const ordered = ids
+          .map((id) => byId.get(id))
+          .filter((p): p is Property => p != null)
+        setProperties(ordered)
       } catch (err) {
         console.error('Failed to fetch recently viewed properties:', err)
       } finally {
-        setIsLoading(false)
+        if (!cancelled) {
+          setIsLoading(false)
+        }
       }
     }
 
     fetchProperties()
+    return () => {
+      cancelled = true
+    }
   }, [ids])
 
   const filtered = properties

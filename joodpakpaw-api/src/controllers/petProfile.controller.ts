@@ -3,6 +3,7 @@ import { prisma } from '../database/prisma';
 import { AppError } from '../middlewares/errorHandler';
 import { uploadImageAsWebp, deleteObjectFromS3 } from '../services/storage.service';
 import { reconcileLifecycleBookings } from '../services/bookingLifecycle.service';
+import { invalidateUserRecommendationCache } from '../services/recommendation.service';
 
 /**
  * Calculates pet age in whole years from birthDate.
@@ -354,6 +355,8 @@ export async function createPetProfile(
       },
     });
 
+    await invalidateUserRecommendationCache(userId);
+
     const formatted = formatPetProfileDto(createdPet);
 
     res.status(201).json({
@@ -539,6 +542,8 @@ export async function updatePetProfile(
       },
     });
 
+    await invalidateUserRecommendationCache(userId);
+
     const formatted = formatPetProfileDto(updatedPet);
 
     res.status(200).json({
@@ -623,6 +628,8 @@ export async function deletePetProfile(
     if (pet.image) {
       await deleteObjectFromS3(pet.image);
     }
+
+    await invalidateUserRecommendationCache(userId);
 
     res.status(200).json({
       code: 'S-0000',

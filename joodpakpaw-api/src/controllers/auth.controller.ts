@@ -7,7 +7,12 @@ import { config } from '../config/env';
 import { AppError, FieldValidationError } from '../middlewares/errorHandler';
 import { UserRoleInfo } from '../middlewares/auth.middleware';
 import { uploadImageAsWebp, deleteObjectFromS3 } from '../services/storage.service';
+import { emailService } from '../services/email.service';
 import { getAccountAppealCycleStats } from './report.controller';
+
+function isProductionEnv(): boolean {
+  return process.env.NODE_ENV === 'production' || config.env === 'production';
+}
 
 // In-memory store for OTP reference codes & active refresh tokens (cloud free-tier compatible)
 const otpRefCodeStore = new Map<string, { refCode: string; expiresAt: number }>();
@@ -289,6 +294,12 @@ export async function signUp(
       expiresAt: otpExpiredAt.getTime(),
     });
 
+    void emailService.sendOtpEmail(createdUser.email, otp, refCode).catch((err) => {
+      console.error('[Auth] Failed to send sign-up OTP email:', err);
+    });
+
+    const isProd = isProductionEnv();
+
     res.status(201).json({
       code: 'S-0000',
       message: 'User registered successfully. Please verify OTP.',
@@ -299,7 +310,7 @@ export async function signUp(
         lastName: createdUser.lastName,
         phone: createdUser.phone,
         refCode,
-        ...(config.env !== 'production' ? { otp, debugOtp: otp } : {}),
+        ...(!isProd ? { otp, debugOtp: otp } : {}),
       },
     });
   } catch (error) {
@@ -482,12 +493,18 @@ export async function resendOtp(
       expiresAt: otpExpiredAt.getTime(),
     });
 
+    void emailService.sendOtpEmail(user.email, otp, refCode).catch((err) => {
+      console.error('[Auth] Failed to send resend OTP email:', err);
+    });
+
+    const isProd = isProductionEnv();
+
     res.status(200).json({
       code: 'S-0000',
       message: 'OTP resent successfully',
       data: {
         refCode,
-        ...(config.env !== 'production' ? { otp, debugOtp: otp } : {}),
+        ...(!isProd ? { otp, debugOtp: otp } : {}),
       },
     });
   } catch (error) {
@@ -726,12 +743,18 @@ export async function forgotPassword(
       })
     ).toString('base64');
 
+    const resetUrl = `${config.frontendUrl.replace(/\/+$/, '')}/authen/reset-password?payload=${encodeURIComponent(payload)}`;
+    void emailService.sendPasswordResetEmail(user.email, resetUrl).catch((err) => {
+      console.error('[Auth] Failed to send password reset email:', err);
+    });
+
+    const isProd = isProductionEnv();
+
     res.status(200).json({
       code: 'S-0000',
       message: 'Password reset link sent',
       data: {
-        resetPasswordToken: resetToken,
-        payload,
+        ...(!isProd ? { resetPasswordToken: resetToken, payload } : {}),
       },
     });
   } catch (error) {

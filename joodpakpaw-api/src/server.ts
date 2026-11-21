@@ -10,6 +10,7 @@ import {
   initSocketServer,
   closeSocketServer,
 } from './services/socket.service';
+import { cacheService } from './services/cache.service';
 
 const app = createApp();
 const server = http.createServer(app);
@@ -46,6 +47,7 @@ async function handleShutdown(signal: string) {
   if (isShuttingDown) return;
   isShuttingDown = true;
   stopBookingLifecycleScheduler();
+  cacheService.destroy();
   console.log(`\n[JoodPakPaw API] Received ${signal}. Starting graceful shutdown...`);
 
   // Force shutdown after 10 seconds timeout

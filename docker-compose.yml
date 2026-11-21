@@ -75,6 +75,31 @@ services:
     networks:
       - joodpakpaw-network
 
+  joodpakpaw-ml:
+    build:
+      context: ./joodpakpaw-ml
+      dockerfile: Dockerfile
+    container_name: joodpakpaw-ml
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      PORT: 5000
+      DATABASE_URL: postgresql://joodpakpaw:joodpakpaw_password@joodpakpaw-postgres:5432/joodpakpaw_db?schema=public
+      SNAPSHOT_TTL_SECONDS: 60
+      TIME_DECAY_LAMBDA: 0.05
+    depends_on:
+      joodpakpaw-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - joodpakpaw-network
+
   joodpakpaw-api:
     build:
       context: ./joodpakpaw-api
@@ -97,6 +122,8 @@ services:
       JWT_SECRET: joodpakpaw_super_secret_jwt_key_2026_dev
       JWT_REFRESH_SECRET: joodpakpaw_super_secret_refresh_jwt_key_2026_dev
       FRONTEND_URL: http://localhost:3000
+      ML_SERVICE_URL: http://joodpakpaw-ml:5000
+      ML_TIMEOUT_MS: 1500
     depends_on:
       joodpakpaw-postgres:
         condition: service_healthy
@@ -104,6 +131,8 @@ services:
         condition: service_healthy
       joodpakpaw-minio:
         condition: service_healthy
+      joodpakpaw-ml:
+        condition: service_started
     networks:
       - joodpakpaw-network
 

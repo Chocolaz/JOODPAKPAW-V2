@@ -52,7 +52,15 @@ export const BOOKING_ERROR_CODES = {
   NOT_FOUND: 'DB-1002',
 } as const
 import { FavoriteFolderDetail } from '@/types/favorite'
-import type { PropertiesResponse } from '@/types/property'
+import type {
+  PropertiesResponse,
+  RecommendationMeta,
+  MlSampleProperty,
+  MlSampleUser,
+  MlStatusResponse,
+  MlRefreshResponse,
+  PaginationInfo,
+} from '@/types/property'
 import type { HostProfileResponse, HostReviewsResponse } from '@/types/hostProfile'
 import type { AdminReportsResponse, AdminReportDetail, ReportAction } from '@/types/adminReport'
 import type { ReportCategoriesResponse } from '@/types/report'
@@ -450,11 +458,29 @@ export const getHostReviews = async (
   }
 }
 
-export const getRecommendedProperties = async (page = 1, limit = 20): Promise<PropertiesResponse> => {
+export const getRecommendedProperties = async (
+  page = 1,
+  limit = 20,
+  options?: { lat?: number | null; lng?: number | null }
+): Promise<PropertiesResponse> => {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  })
+  if (
+    typeof options?.lat === 'number' &&
+    Number.isFinite(options.lat) &&
+    typeof options?.lng === 'number' &&
+    Number.isFinite(options.lng)
+  ) {
+    params.set('lat', String(options.lat))
+    params.set('lng', String(options.lng))
+  }
+
   const res = await request<any>({
-    endpoint: `api/v1/properties/recommend?page=${page}&limit=${limit}`,
+    endpoint: `api/v1/properties/recommend?${params.toString()}`,
     method: 'GET',
-    requiresAuth: true,
+    sendAuthIfAvailable: true,
     errorContext: 'Get Recommended Properties',
   })
   const propertiesList: Property[] = Array.isArray(res?.data)
@@ -476,6 +502,7 @@ export const getRecommendedProperties = async (page = 1, limit = 20): Promise<Pr
     ...res,
     data: propertiesList,
     pagination,
+    meta: res?.meta,
     totalRows: pagination.totalRows,
     totalPages: pagination.totalPages,
     limit: pagination.limit,
@@ -504,7 +531,56 @@ export const getPropertyRecommendations = async (
     ...res,
     properties,
     data: res?.data ?? { properties },
+    meta: res?.meta,
   }
+}
+
+export const getPropertiesByIds = async (
+  ids: (number | string)[]
+): Promise<Property[]> => {
+  const uniqueIds: number[] = []
+  const seen = new Set<number>()
+
+  for (const raw of ids) {
+    const str = String(raw).trim()
+    if (!/^\d+$/.test(str)) continue
+    const num = parseInt(str, 10)
+    if (!Number.isSafeInteger(num) || num <= 0 || seen.has(num)) continue
+    seen.add(num)
+    uniqueIds.push(num)
+  }
+
+  if (uniqueIds.length === 0) return []
+
+  const chunks: number[][] = []
+  for (let i = 0; i < uniqueIds.length; i += 50) {
+    chunks.push(uniqueIds.slice(i, i + 50))
+  }
+
+  const responses = await Promise.all(
+    chunks.map((chunk) =>
+      request<any>({
+        endpoint: `api/v1/properties?ids=${chunk.join(',')}`,
+        method: 'GET',
+        sendAuthIfAvailable: true,
+        errorContext: 'Get Properties By IDs',
+      })
+    )
+  )
+
+  const byId = new Map<number, Property>()
+  for (const res of responses) {
+    const list: Property[] = Array.isArray(res?.data)
+      ? res.data
+      : Array.isArray(res?.data?.properties)
+      ? res.data.properties
+      : []
+    for (const prop of list) {
+      byId.set(prop.id, prop)
+    }
+  }
+
+  return uniqueIds.map((id) => byId.get(id)).filter((p): p is Property => p != null)
 }
 
 export const trackPropertyView = (propertyId: number): Promise<void> => {
@@ -1840,4 +1916,149 @@ export const rejectVerification = (id: number, rejectDescription: string): Promi
     requiresAuth: true,
     errorContext: 'Reject Verification',
   })
+}
+
+// --- Admin ML Inspector Functions ---
+export const getAdminMlStatus = async (): Promise<MlStatusResponse> => {
+  const res = await request<any>({
+    endpoint: 'api/v1/admin/ml/status',
+    method: 'GET',
+    requiresAuth: true,
+    errorContext: 'Get Admin ML Status',
+    cache: 'no-store',
+  })
+  return (res?.data ?? res) as MlStatusResponse
+}
+
+export const refreshAdminMlCache = async (): Promise<MlRefreshResponse> => {
+  const res = await request<any>({
+    endpoint: 'api/v1/admin/ml/refresh',
+    method: 'POST',
+    requiresAuth: true,
+    errorContext: 'Refresh Admin ML Cache',
+  })
+  return (res?.data ?? res) as MlRefreshResponse
+}
+
+export interface AdminMlInspectParams {
+  mode: 'user' | 'cold-start' | 'similar'
+  asUserId?: number
+  propertyId?: number
+  limit?: number
+  lat?: number | null
+  lng?: number | null
+}
+
+export interface AdminMlInspectResponse {
+  data: Property[]
+  meta?: RecommendationMeta
+  pagination?: PaginationInfo
+}
+
+export const getAdminMlInspect = async (
+  params: AdminMlInspectParams
+): Promise<AdminMlInspectResponse> => {
+  const limit = Math.min(50, Math.max(1, params.limit ?? 12))
+  const hasValidCoords =
+    typeof params.lat === 'number' &&
+    Number.isFinite(params.lat) &&
+    typeof params.lng === 'number' &&
+    Number.isFinite(params.lng)
+  let endpoint: string
+
+  if (params.mode === 'similar') {
+    if (!params.propertyId || params.propertyId <= 0) {
+      throw new Error('propertyId is required for similar inspection mode')
+    }
+    endpoint = `api/v1/properties/recommend/property/${params.propertyId}?debug=true&limit=${limit}`
+  } else if (params.mode === 'user') {
+    const query = new URLSearchParams({
+      debug: 'true',
+      limit: String(limit),
+    })
+    if (params.asUserId && params.asUserId > 0) {
+      query.set('asUserId', String(params.asUserId))
+    }
+    if (hasValidCoords) {
+      query.set('lat', String(params.lat))
+      query.set('lng', String(params.lng))
+    }
+    endpoint = `api/v1/properties/recommend?${query.toString()}`
+  } else {
+    const query = new URLSearchParams({
+      debug: 'true',
+      asUserId: 'guest',
+      limit: String(limit),
+    })
+    if (hasValidCoords) {
+      query.set('lat', String(params.lat))
+      query.set('lng', String(params.lng))
+    }
+    endpoint = `api/v1/properties/recommend?${query.toString()}`
+  }
+
+  const res = await request<any>({
+    endpoint,
+    method: 'GET',
+    requiresAuth: true,
+    errorContext: 'Inspect Admin ML Recommendations',
+    cache: 'no-store',
+  })
+
+  const data: Property[] = Array.isArray(res?.data)
+    ? res.data
+    : Array.isArray(res?.data?.properties)
+    ? res.data.properties
+    : Array.isArray(res?.properties)
+    ? res.properties
+    : []
+
+  return {
+    data,
+    meta: res?.meta,
+    pagination: res?.pagination,
+  }
+}
+
+export const searchAdminMlUsers = async (
+  q: string,
+  limit = 10
+): Promise<MlSampleUser[]> => {
+  const query = new URLSearchParams({
+    q: q.trim(),
+    limit: String(Math.min(50, Math.max(1, limit))),
+  })
+  const res = await request<any>({
+    endpoint: `api/v1/admin/ml/users/search?${query.toString()}`,
+    method: 'GET',
+    requiresAuth: true,
+    errorContext: 'Search Admin ML Users',
+    cache: 'no-store',
+  })
+  if (Array.isArray(res?.data)) return res.data as MlSampleUser[]
+  if (Array.isArray(res?.data?.users)) return res.data.users as MlSampleUser[]
+  if (Array.isArray(res?.users)) return res.users as MlSampleUser[]
+  return []
+}
+
+export const searchAdminMlProperties = async (
+  q: string,
+  limit = 10
+): Promise<MlSampleProperty[]> => {
+  const query = new URLSearchParams({
+    q: q.trim(),
+    limit: String(Math.min(50, Math.max(1, limit))),
+  })
+  const res = await request<any>({
+    endpoint: `api/v1/admin/ml/properties/search?${query.toString()}`,
+    method: 'GET',
+    requiresAuth: true,
+    errorContext: 'Search Admin ML Properties',
+    cache: 'no-store',
+  })
+  if (Array.isArray(res?.data)) return res.data as MlSampleProperty[]
+  if (Array.isArray(res?.data?.properties))
+    return res.data.properties as MlSampleProperty[]
+  if (Array.isArray(res?.properties)) return res.properties as MlSampleProperty[]
+  return []
 }

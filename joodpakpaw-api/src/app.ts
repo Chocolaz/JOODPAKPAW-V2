@@ -9,6 +9,7 @@ import { errorHandler, notFoundHandler } from './middlewares/errorHandler';
 
 export function createApp(): Application {
   const app: Application = express();
+  app.set('trust proxy', 1);
 
   // Security headers
   app.use(
@@ -19,18 +20,37 @@ export function createApp(): Application {
   );
 
   // CORS configuration
-  const allowedOrigins = [
-    config.frontendUrl,
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-  ];
+  const allowedOrigins = Array.from(
+    new Set(
+      [
+        config.frontendUrl,
+        ...config.corsOrigins,
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+      ].filter(Boolean)
+    )
+  );
 
   app.use(
     cors({
       origin: (origin, callback) => {
+        const isProd =
+          process.env.NODE_ENV === 'production' || config.env === 'production';
+
         // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
-        if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+        if (!origin || allowedOrigins.includes(origin)) {
           callback(null, true);
+        } else if (
+          !isProd &&
+          (origin.endsWith('.vercel.app') ||
+            origin.startsWith('http://localhost:'))
+        ) {
+          callback(null, true);
+        } else if (isProd && config.corsOrigins.includes(origin)) {
+          callback(null, true);
+        } else if (isProd) {
+          // Strictly omit CORS headers for untrusted origins in production
+          callback(null, false);
         } else {
           callback(null, true); // Allow dev access while maintaining headers
         }

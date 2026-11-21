@@ -12,6 +12,12 @@ import {
   approveVerification,
   rejectVerification,
 } from '../controllers/verification.controller';
+import {
+  getAdminMlStatus,
+  refreshAdminMlCache,
+  searchAdminMlUsers,
+  searchAdminMlProperties,
+} from '../controllers/recommendation.controller';
 import { authenticateToken, requireRoles } from '../middlewares/auth.middleware';
 
 export const adminRouter = Router();
@@ -35,3 +41,9 @@ adminRouter.get('/user-verifications/paginate', getAdminVerifications);
 adminRouter.get('/user-verifications/:id', getAdminVerificationById);
 adminRouter.patch('/user-verifications/:id/approve', approveVerification);
 adminRouter.patch('/user-verifications/:id/reject', rejectVerification);
+
+// Admin ML Inspector & Cache Refresh
+adminRouter.get('/ml/status', getAdminMlStatus);
+adminRouter.get('/ml/users/search', searchAdminMlUsers);
+adminRouter.get('/ml/properties/search', searchAdminMlProperties);
+adminRouter.post('/ml/refresh', refreshAdminMlCache);

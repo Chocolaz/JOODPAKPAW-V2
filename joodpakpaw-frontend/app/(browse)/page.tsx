@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { PageHeader } from '@/app/_components/PageHeader'
 import { PropertyList } from '@/app/_components/PropertyList'
-import { getProperties, getRecommendedProperties, getPropertyById } from '@/lib/api'
+import { getProperties, getPropertiesByIds } from '@/lib/api'
+import { readGeoCache, writeGeoCache } from '@/lib/geoCache'
 import { Property } from '@/types'
 import { useAuth } from '@/app/_components/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -11,7 +12,6 @@ import {
   SearchX,
   Compass,
   Star,
-  Heart,
   Loader2,
   Tag,
   MapPin,
@@ -19,10 +19,12 @@ import {
   Cat,
   Clock,
   TrendingUp,
+  Heart,
 } from 'lucide-react'
 import { useBrowseFilters } from '@/app/_hooks/useBrowseFilters'
 import { useRecentlyViewed } from '@/app/_hooks/useRecentlyViewed'
 import { useFeaturedSections } from '@/app/_hooks/useFeaturedSections'
+import { useRecommendedProperties } from '@/app/_hooks/useRecommendedProperties'
 import { BrowseSection } from './_components/BrowseSection'
 
 function haversineDistance(
@@ -65,18 +67,23 @@ export default function Home() {
   const [pagedTotalRows, setPagedTotalRows] = useState<number | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
 
-  const [recommendedProperties, setRecommendedProperties] = useState<
-    Property[]
-  >([])
-  const [recommendedTotal, setRecommendedTotal] = useState(0)
-
-  const { isAuthenticated, user } = useAuth()
+  const { isAuthenticated, user, loading: authLoading } = useAuth()
   const { searchQuery, filters, buildSeeAllUrl } = useBrowseFilters()
   const { ids: recentlyViewedIds } = useRecentlyViewed()
   const [userLocation, setUserLocation] = useState<{
     lat: number
     lon: number
   } | null>(null)
+  const recommendedLocation = useMemo(
+    () =>
+      userLocation ? { lat: userLocation.lat, lng: userLocation.lon } : null,
+    [userLocation]
+  )
+  const {
+    properties: recommendedProperties,
+    totalRows: recommendedTotal,
+    isLoading: isRecommendedLoading,
+  } = useRecommendedProperties(1, RECOMMEND_LIMIT, recommendedLocation)
 
   const [filterResults, setFilterResults] = useState<Property[]>([])
   const [filterTotal, setFilterTotal] = useState(0)
@@ -117,9 +124,6 @@ export default function Home() {
   const totalPages = pagedTotalPages ?? (featured?.allPropertiesTotalPages || 1)
   const totalRows = pagedTotalRows ?? (featured?.allPropertiesTotal || 0)
 
-  // Combined loading state: only true during initial network fetch when no cached data exists
-  const isLoading = isFeaturedLoading && !featured
-
   const fetchMoreProperties = useCallback(
     async (nextPage: number) => {
       setLoadingMore(true)
@@ -154,12 +158,20 @@ export default function Home() {
   )
 
   useEffect(() => {
+    const cached = readGeoCache()
+    if (cached) {
+      setUserLocation(cached)
+      return
+    }
     navigator.geolocation?.getCurrentPosition(
-      (pos) =>
-        setUserLocation({
+      (pos) => {
+        const coords = {
           lat: pos.coords.latitude,
           lon: pos.coords.longitude,
-        }),
+        }
+        writeGeoCache(coords.lat, coords.lon)
+        setUserLocation(coords)
+      },
       () => {}
     )
   }, [])
@@ -202,23 +214,6 @@ export default function Home() {
     filters.minRating,
     filters.maxPrice,
   ])
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setRecommendedProperties([])
-      setRecommendedTotal(0)
-      return
-    }
-    getRecommendedProperties(1, RECOMMEND_LIMIT)
-      .then((res) => {
-        setRecommendedProperties(res.data)
-        setRecommendedTotal(res.totalRows)
-      })
-      .catch(() => {
-        setRecommendedProperties([])
-        setRecommendedTotal(0)
-      })
-  }, [isAuthenticated])
 
   // Exclude the current user's own properties
   const visibleProperties = useMemo(() => {
@@ -265,49 +260,112 @@ export default function Home() {
   const dogFriendly = sectionData.dogFriendly
   const catFriendly = sectionData.catFriendly
 
-  const [recentlyViewedFullProperties, setRecentlyViewedFullProperties] = useState<Property[]>([])
+  const [extraRecentlyViewedMap, setExtraRecentlyViewedMap] = useState<
+    Map<number, Property>
+  >(() => new Map())
+  const [settledRecentlyViewedIds, setSettledRecentlyViewedIds] = useState<
+    Set<number>
+  >(() => new Set())
+
+  const loadedPoolMap = useMemo(() => {
+    const map = new Map<number, Property>(extraRecentlyViewedMap)
+    for (const prop of [
+      ...visibleProperties,
+      ...sectionData.topRated,
+      ...sectionData.bestValue,
+      ...sectionData.newListings,
+      ...sectionData.trending,
+      ...sectionData.dogFriendly,
+      ...sectionData.catFriendly,
+      ...recommendedProperties,
+    ]) {
+      map.set(prop.id, prop)
+    }
+    return map
+  }, [
+    visibleProperties,
+    sectionData,
+    recommendedProperties,
+    extraRecentlyViewedMap,
+  ])
+
+  const coreFeedsSettled =
+    !authLoading && !(!featured && isFeaturedLoading) && !isRecommendedLoading
+
+  const missingRecentlyViewedIds = useMemo(() => {
+    if (!coreFeedsSettled || recentlyViewedIds.length === 0) return []
+    return recentlyViewedIds.filter(
+      (id) => !loadedPoolMap.has(id) && !settledRecentlyViewedIds.has(id)
+    )
+  }, [
+    coreFeedsSettled,
+    recentlyViewedIds,
+    loadedPoolMap,
+    settledRecentlyViewedIds,
+  ])
+
+  const missingRecentlyViewedKey = useMemo(
+    () => missingRecentlyViewedIds.join(','),
+    [missingRecentlyViewedIds]
+  )
 
   useEffect(() => {
-    if (recentlyViewedIds.length === 0) {
-      setRecentlyViewedFullProperties([])
+    if (
+      !coreFeedsSettled ||
+      isFiltering ||
+      missingRecentlyViewedIds.length === 0
+    ) {
       return
     }
 
-    const fetchRecentlyViewed = async () => {
-      // Create a pool of all currently loaded properties to avoid redundant API calls
-      const allLoaded = [
-        ...visibleProperties,
-        ...sectionData.topRated,
-        ...sectionData.bestValue,
-        ...sectionData.newListings,
-        ...sectionData.trending,
-        ...sectionData.dogFriendly,
-        ...sectionData.catFriendly,
-      ]
+    let cancelled = false
+    const idsToFetch = missingRecentlyViewedIds
 
-      try {
-        const promises = recentlyViewedIds.map(async (id) => {
-          const existing = allLoaded.find((p) => p.id === id)
-          if (existing) return existing
-
-          try {
-            const res = await getPropertyById(String(id))
-            return res.property
-          } catch (err) {
-            console.error(`Failed to fetch recently viewed property ${id}:`, err)
-            return null
-          }
+    getPropertiesByIds(idsToFetch)
+      .then((fetched) => {
+        if (cancelled) return
+        if (fetched.length > 0) {
+          setExtraRecentlyViewedMap((prev) => {
+            const next = new Map(prev)
+            for (const prop of fetched) {
+              next.set(prop.id, prop)
+            }
+            return next
+          })
+        }
+        setSettledRecentlyViewedIds((prev) => {
+          const next = new Set(prev)
+          for (const id of idsToFetch) next.add(id)
+          return next
         })
-
-        const results = await Promise.all(promises)
-        setRecentlyViewedFullProperties(results.filter((p): p is Property => p != null))
-      } catch (err) {
+      })
+      .catch((err) => {
         console.error('Error fetching recently viewed properties:', err)
-      }
-    }
+        if (cancelled) return
+        setSettledRecentlyViewedIds((prev) => {
+          const next = new Set(prev)
+          for (const id of idsToFetch) next.add(id)
+          return next
+        })
+      })
 
-    fetchRecentlyViewed()
-  }, [recentlyViewedIds, visibleProperties, sectionData])
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coreFeedsSettled, isFiltering, missingRecentlyViewedKey])
+
+  const resolvedRecentlyViewed = useMemo(() => {
+    if (recentlyViewedIds.length === 0) return []
+    return recentlyViewedIds
+      .map((id) => loadedPoolMap.get(id))
+      .filter((p): p is Property => p != null)
+  }, [recentlyViewedIds, loadedPoolMap])
+
+  // Unified initial loading gate: wait for auth, featured sections, recommended feed,
+  // and any batch lookup for recently viewed IDs absent from the loaded pool.
+  const isLoading =
+    !coreFeedsSettled || (!isFiltering && missingRecentlyViewedIds.length > 0)
 
   return (
     <div>
@@ -358,131 +416,130 @@ export default function Home() {
                 </div>
               )}
 
-              <AnimatePresence mode="wait">
-                {isLoading ? (
-                  <motion.div
-                    key="skeleton"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="space-y-0 lg:pt-2"
-                  >
-                    {Array.from({ length: 3 }).map((_, si) => (
-                      <div
-                        key={si}
-                        className="mb-10 lg:mb-0 lg:py-10 lg:border-b lg:border-gray-100 animate-pulse"
-                      >
-                        {/* Section header */}
-                        <div className="flex items-center gap-2 mb-4 lg:mb-6">
-                          <div className="w-5 h-5 bg-gray-200 rounded-full" />
-                          <div className="h-5 bg-gray-200 rounded w-28" />
-                        </div>
-                        {/* Cards row */}
-                        <div className="flex gap-4 overflow-hidden -mx-5 px-5 lg:mx-0 lg:px-0">
-                          {Array.from({ length: 7 }).map((_, ci) => (
-                            <div
-                              key={ci}
-                              className="w-44 shrink-0 lg:w-[calc((100%-6*1rem)/7)]"
-                            >
-                              <div className="aspect-square w-full bg-gray-200 rounded-[20px]" />
-                              <div className="mt-2 space-y-2">
-                                <div className="h-4 bg-gray-200 rounded w-3/4" />
-                                <div className="h-3 bg-gray-200 rounded w-1/2" />
-                                <div className="h-3 bg-gray-200 rounded w-1/3" />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+              {isLoading ? (
+                <div className="space-y-0 lg:pt-2">
+                  {Array.from({ length: 3 }).map((_, si) => (
+                    <div
+                      key={si}
+                      className="mb-10 lg:mb-0 lg:py-10 lg:border-b lg:border-gray-100 animate-pulse"
+                    >
+                      {/* Section header */}
+                      <div className="flex items-center gap-2 mb-4 lg:mb-6">
+                        <div className="w-5 h-5 bg-gray-200 rounded-full" />
+                        <div className="h-5 bg-gray-200 rounded w-28" />
                       </div>
-                    ))}
-                  </motion.div>
-                ) : isFiltering ? (
-                  /* Flat results — search or filter active */
-                  <motion.div
-                    key="filtered-results"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.25 }}
-                  >
-                    <AnimatePresence mode="wait">
-                      {isFilterLoading ? (
-                        <motion.div
-                          key="filter-skeleton"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ duration: 0.15 }}
-                          className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4"
-                        >
-                          {Array.from({ length: 14 }).map((_, i) => (
-                            <div key={i} className="animate-pulse">
-                              <div className="aspect-square w-full bg-gray-200 rounded-[20px]" />
-                              <div className="mt-2 space-y-2">
-                                <div className="h-4 bg-gray-200 rounded w-3/4" />
-                                <div className="h-3 bg-gray-200 rounded w-1/2" />
-                              </div>
+                      {/* Cards row */}
+                      <div className="flex gap-4 overflow-hidden -mx-5 px-5 lg:mx-0 lg:px-0">
+                        {Array.from({ length: 7 }).map((_, ci) => (
+                          <div
+                            key={ci}
+                            className="w-44 shrink-0 lg:w-[calc((100%-6*1rem)/7)]"
+                          >
+                            <div className="aspect-square w-full bg-gray-200 rounded-[20px]" />
+                            <div className="mt-2 space-y-2">
+                              <div className="h-4 bg-gray-200 rounded w-3/4" />
+                              <div className="h-3 bg-gray-200 rounded w-1/2" />
+                              <div className="h-3 bg-gray-200 rounded w-1/3" />
                             </div>
-                          ))}
-                        </motion.div>
-                      ) : filterResults.length === 0 ? (
-                        <EmptyState
-                          searchQuery={searchQuery}
-                          hasFilters={hasActiveFilters}
-                        />
-                      ) : (
-                        <motion.div
-                          key="filter-results"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          <PropertyList
-                            properties={filterResults}
-                            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4"
-                            showPetPolicyChip={true}
-                            showHeartIcon={isAuthenticated}
-                          />
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </motion.div>
-                ) : (
-                  /* Sectioned browse — no active search or filters */
-                  <motion.div
-                    key="sections"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.25 }}
-                    className="lg:pt-2"
-                  >
-                    {/* Recently Viewed */}
-                    {recentlyViewedFullProperties.length > 0 && (
-                      <BrowseSection
-                        title="Recently Viewed"
-                        icon={<Clock className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />}
-                        properties={recentlyViewedFullProperties}
-                        totalCount={recentlyViewedFullProperties.length}
-                        showHeartIcon={isAuthenticated}
-                        showPetPolicyChip={true}
-                        seeAllHref={buildSeeAllUrl('/recently-viewed')}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : isFiltering ? (
+                /* Flat results — search or filter active */
+                <div>
+                  <AnimatePresence mode="wait">
+                    {isFilterLoading ? (
+                      <motion.div
+                        key="filter-skeleton"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4"
+                      >
+                        {Array.from({ length: 14 }).map((_, i) => (
+                          <div key={i} className="animate-pulse">
+                            <div className="aspect-square w-full bg-gray-200 rounded-[20px]" />
+                            <div className="mt-2 space-y-2">
+                              <div className="h-4 bg-gray-200 rounded w-3/4" />
+                              <div className="h-3 bg-gray-200 rounded w-1/2" />
+                            </div>
+                          </div>
+                        ))}
+                      </motion.div>
+                    ) : filterResults.length === 0 ? (
+                      <EmptyState
+                        searchQuery={searchQuery}
+                        hasFilters={hasActiveFilters}
                       />
+                    ) : (
+                      <motion.div
+                        key="filter-results"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <PropertyList
+                          properties={filterResults}
+                          className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4"
+                          showPetPolicyChip={true}
+                          showHeartIcon={isAuthenticated}
+                        />
+                      </motion.div>
                     )}
+                  </AnimatePresence>
+                </div>
+              ) : (
+                /* Sectioned browse — no active search or filters */
+                <div className="lg:pt-2">
+                  {/* Recently Viewed */}
+                  {resolvedRecentlyViewed.length > 0 && (
+                    <BrowseSection
+                      title="Recently Viewed"
+                      icon={<Clock className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />}
+                      properties={resolvedRecentlyViewed}
+                      totalCount={resolvedRecentlyViewed.length}
+                      showHeartIcon={isAuthenticated}
+                      showPetPolicyChip={true}
+                      seeAllHref={buildSeeAllUrl('/recently-viewed')}
+                    />
+                  )}
 
-                    {/* Recommended slot — authenticated only */}
-                    {isAuthenticated && recommendedProperties.length > 0 && (
+                    {/* Recommended slot — personalized when authenticated, cold-start picks for guests */}
+                    {recommendedProperties.length > 0 && (
                       <BrowseSection
-                        title="Recommended for You"
+                        title={
+                          isAuthenticated
+                            ? 'Recommended for You'
+                            : 'Popular Picks to Get Started'
+                        }
+                        subtitle={
+                          isAuthenticated
+                            ? undefined
+                            : 'Top-rated pet-friendly stays across Thailand'
+                        }
                         icon={
-                          <Heart className="w-5 h-5 text-deep-teal/70" strokeWidth={1.5} />
+                          isAuthenticated ? (
+                            <Heart
+                              className="w-5 h-5 text-deep-teal/70"
+                              strokeWidth={1.5}
+                            />
+                          ) : (
+                            <Compass
+                              className="w-5 h-5 text-deep-teal/70"
+                              strokeWidth={1.5}
+                            />
+                          )
                         }
                         properties={recommendedProperties}
                         totalCount={recommendedTotal}
-                        showHeartIcon={true}
+                        showHeartIcon={isAuthenticated}
                         showPetPolicyChip={true}
+                        showMatchReason={true}
                         seeAllHref={buildSeeAllUrl('/recommended')}
                       />
                     )}
@@ -574,9 +631,8 @@ export default function Home() {
                         )}
                       </>
                     )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                </div>
+              )}
             </>
           )
         })()}

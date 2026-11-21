@@ -58,9 +58,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <title>JOODPAKPAW</title>
-        <meta name="description" content="Booking petsitting made easy" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+        <title>JoodPakPaw — Trusted Pet Boarding &amp; Homestay</title>
+        <meta
+          name="description"
+          content="Find verified, pet-safe boarding hotels, homestays, and resorts across Thailand tailored to your pet's species, size, and energy level."
+        />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
       <body className={`${afacad.variable} ${baloo2.variable} ${sarabun.variable} ${prompt.variable} bg-white`}>
         <AuthWrapper>

@@ -13,7 +13,6 @@ import {
   getFavoriteFolders,
   addFavorite,
   deleteFavoriteProperty,
-  trackPropertyView,
 } from '@/lib/api'
 import { ApiError } from '@/lib/errorHandling'
 import { toast } from 'sonner'
@@ -26,6 +25,7 @@ interface PropertyCardProps {
   showStatusIcon?: boolean
   showPetPolicyChip?: boolean
   showHeartIcon?: boolean
+  showMatchReason?: boolean
   favoriteFolderId?: number
 }
 
@@ -37,6 +37,7 @@ export function PropertyCard({
   showStatusIcon = false,
   showPetPolicyChip = false,
   showHeartIcon = false,
+  showMatchReason = false,
   favoriteFolderId,
 }: PropertyCardProps) {
   const { user } = useAuth()
@@ -61,14 +62,6 @@ export function PropertyCard({
 
   const lowestPrice = getLowestPrice(property.roomCategories)
   const petPolicy = getPetPolicy(property.pets)
-
-  const handleCardClick = () => {
-    if (user) {
-      trackPropertyView(property.id)
-        .then(() => console.log(`[trackPropertyView] property ${property.id} tracked for user ${user.id}`))
-        .catch(() => {})
-    }
-  }
 
   const handleHeartClick = async (e: React.MouseEvent) => {
     e.preventDefault()
@@ -134,7 +127,7 @@ export function PropertyCard({
       <div className="transition-colors duration-200">
         {/* Image Box */}
         <div className="w-full aspect-square relative rounded-2xl overflow-hidden bg-gray-100 border border-gray-100 group-hover:border-gray-200/80 shadow-sm transition-colors">
-          <Link href={finalHref} className="relative block w-full h-full" onClick={handleCardClick}>
+          <Link href={finalHref} className="relative block w-full h-full">
             {!isImageLoaded && (
               <Skeleton className="absolute inset-0 w-full h-full rounded-2xl bg-gray-200 animate-pulse" />
             )}
@@ -145,7 +138,7 @@ export function PropertyCard({
               unoptimized
               onLoad={() => setIsImageLoaded(true)}
               className={cn(
-                'object-cover rounded-2xl transition-all duration-300',
+                'object-cover rounded-2xl transition-opacity duration-300 ease-out',
                 isImageLoaded ? 'opacity-100' : 'opacity-0'
               )}
               onError={() => {
@@ -200,7 +193,7 @@ export function PropertyCard({
         </div>
 
         {/* Content */}
-        <Link href={finalHref} onClick={handleCardClick}>
+        <Link href={finalHref}>
           <div className="mt-2 px-0.5">
             <p className="text-sm md:text-base lg:text-base xl:text-lg font-medium text-deep-teal truncate">
               {property.title}
@@ -220,7 +213,7 @@ export function PropertyCard({
                       : 'text-gray-300'
                   )}
                 />
-                <span className="text-xs md:text-sm lg:text-sm xl:text-base font-medium text-gray-700">
+                <span className="text-xs md:text-sm lg:text-sm xl:text-base font-medium text-gray-700 tabular-nums">
                   {property.avgRating > 0 ? property.avgRating.toFixed(1) : 'New'}
                 </span>
               </div>
@@ -236,6 +229,19 @@ export function PropertyCard({
             {lowestPrice !== null && (
               <p className="font-semibold text-xs md:text-sm lg:text-sm xl:text-base text-deep-teal tabular-nums">
                 ฿{lowestPrice.toLocaleString()}
+              </p>
+            )}
+
+            {showMatchReason && property.matchReasons && property.matchReasons.length > 0 && (
+              <p
+                title={property.matchReasons.join(' · ')}
+                className="mt-1.5 flex items-center gap-1.5 min-w-0 text-[11px] font-medium text-deep-teal/80"
+              >
+                <span
+                  aria-hidden="true"
+                  className="w-1.5 h-1.5 rounded-full bg-accent-orange shrink-0"
+                />
+                <span className="truncate">{property.matchReasons[0]}</span>
               </p>
             )}
           </div>

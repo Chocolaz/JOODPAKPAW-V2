@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { getPropertyById, getPropertyRecommendations } from '@/lib/api'
+import { useState, useEffect, useRef } from 'react'
+import { getPropertyById, trackPropertyView } from '@/lib/api'
 import { ErrorState } from '@/app/profile/_components/ErrorState'
 import { usePropertyLoader } from '@/app/_hooks/usePropertyLoader'
+import { useSimilarProperties } from '@/app/_hooks/useSimilarProperties'
 import { PropertyImageGallery } from '@/app/_components/property-detail/PropertyImageGallery'
 import { PropertyHeader } from '@/app/_components/property-detail/PropertyHeader'
 import { PropertyFacilities } from '@/app/_components/property-detail/PropertyFacilities'
@@ -21,7 +22,6 @@ import { useRecentlyViewed } from '@/app/_hooks/useRecentlyViewed'
 import { Skeleton } from '@/components/ui/skeleton'
 import { motion } from 'framer-motion'
 import { PropertyCard } from '@/app/_components/PropertyCard'
-import type { Property } from '@/types'
 
 function PropertyDetailSkeleton() {
   return (
@@ -140,27 +140,22 @@ export default function PropertyDetailPage() {
   const { user, isAuthenticated } = useAuth()
   const [reportOpen, setReportOpen] = useState(false)
   const { track } = useRecentlyViewed()
-  const [recommendations, setRecommendations] = useState<Property[]>([])
-  const [recommendationsLoading, setRecommendationsLoading] = useState(false)
+  const trackedPropertyRef = useRef<number | null>(null)
+  const { properties: recommendations, isLoading: recommendationsLoading } =
+    useSimilarProperties(property?.id, 12)
 
   useEffect(() => {
     if (property?.id) track(property.id)
   }, [property?.id])
 
   useEffect(() => {
-    if (!property?.id) return
+    if (!property?.id || !isAuthenticated || !user) return
+    if (user.id === property.hostId) return
+    if (trackedPropertyRef.current === property.id) return
 
-    setRecommendationsLoading(true)
-    getPropertyRecommendations(property.id, 12)
-      .then((res) => {
-        setRecommendations(res.properties || [])
-      })
-      .catch((err) => {
-        console.error('Failed to load recommendations:', err)
-        setRecommendations([])
-      })
-      .finally(() => setRecommendationsLoading(false))
-  }, [property?.id])
+    trackedPropertyRef.current = property.id
+    trackPropertyView(property.id).catch(() => {})
+  }, [property?.id, property?.hostId, isAuthenticated, user])
 
   const handleShare = async () => {
     if (navigator.share && property) {
@@ -345,16 +340,36 @@ export default function PropertyDetailPage() {
       </div>
 
       {/* Recommendations Section */}
-      {recommendations.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
+      {recommendationsLoading ? (
+        <section className="mt-16 px-4 md:px-8 lg:px-2">
+          <div className="max-w-6xl mx-auto">
+            <h2 className="text-xl md:text-2xl font-baloo2 font-semibold text-deep-teal mb-6">
+              Similar Properties
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 lg:gap-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i}>
+                  <div className="aspect-square w-full rounded-2xl bg-gray-100" />
+                  <div className="mt-2 space-y-2">
+                    <div className="h-4 w-3/4 rounded bg-gray-100" />
+                    <div className="h-3 w-1/2 rounded bg-gray-100" />
+                    <div className="h-3 w-1/3 rounded bg-gray-100" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : recommendations.length > 0 ? (
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
           whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: 'easeOut' }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
           viewport={{ once: true }}
           className="mt-16 px-4 md:px-8 lg:px-2"
         >
           <div className="max-w-6xl mx-auto">
-            <h2 className="text-2xl md:text-3xl font-baloo2 font-bold mb-6">
+            <h2 className="text-xl md:text-2xl font-baloo2 font-semibold text-deep-teal mb-6">
               Similar Properties
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 lg:gap-6">
@@ -366,13 +381,15 @@ export default function PropertyDetailPage() {
                     key={rec.id}
                     property={rec}
                     href={`/detail/${rec.id}?propertyChain=${newChain}`}
+                    showHeartIcon={isAuthenticated}
+                    showMatchReason={true}
                   />
                 )
               })}
             </div>
           </div>
-        </motion.div>
-      )}
+        </motion.section>
+      ) : null}
 
       <ReportPropertyDrawer
         propertyId={property.id}

@@ -2,6 +2,7 @@ process.env.NODE_ENV = 'test';
 import http from 'http'
 import fs from 'fs'
 import path from 'path'
+import { spawn, ChildProcess } from 'child_process'
 import { pathToFileURL } from 'url'
 import { createApp } from '../app'
 import { prisma, checkDatabaseHealth } from '../database/prisma'
@@ -12,9 +13,15 @@ import { reconcileLifecycleBookings, syncPropertyBookingCount, sendUpcomingCheck
 import { createNotificationSafe } from '../services/notification.service'
 import { initSocketServer, emitToUser, getSocketServer } from '../services/socket.service'
 import { cacheService } from '../services/cache.service'
+import { invalidateAllRecommendationCaches } from '../services/recommendation.service'
 import { AppError } from '../middlewares/errorHandler'
 import jwt from 'jsonwebtoken'
-import { config } from '../config/env'
+import {
+  config,
+  assertProductionSecrets,
+  DEFAULT_JWT_SECRET,
+  DEFAULT_JWT_REFRESH_SECRET,
+} from '../config/env'
 
 interface TestResult {
   name: string
@@ -43,7 +50,7 @@ function makeRequest(
   method = 'GET',
   body?: unknown,
   headers: Record<string, string> = {}
-): Promise<{ statusCode: number; body: any }> {
+): Promise<{ statusCode: number; body: any; headers: http.IncomingHttpHeaders }> {
   return new Promise((resolve, reject) => {
     const payload = body !== undefined ? JSON.stringify(body) : undefined
     const reqHeaders: Record<string, string> = { ...headers }
@@ -67,7 +74,7 @@ function makeRequest(
           try {
             parsed = JSON.parse(data)
           } catch {}
-          resolve({ statusCode: res.statusCode || 0, body: parsed })
+          resolve({ statusCode: res.statusCode || 0, body: parsed, headers: res.headers })
         })
       }
     )
@@ -255,6 +262,46 @@ function installPrismaAuthMock() {
     chatMessageCreate: (prisma.chatMessage as any).create,
     chatMessageUpdateMany: (prisma.chatMessage as any).updateMany,
     chatMessageAttachmentFindMany: (prisma.chatMessageAttachment as any).findMany,
+    propertyTypeFindUnique: prisma.propertyType.findUnique,
+    propertyTypeFindFirst: prisma.propertyType.findFirst,
+    petSizeCategoryFindUnique: prisma.petSizeCategory.findUnique,
+    petSizeCategoryFindFirst: prisma.petSizeCategory.findFirst,
+    propertyCount: prisma.property.count,
+    propertyCreate: prisma.property.create,
+    propertyUpdate: prisma.property.update,
+    propertyFacilityDeleteMany: prisma.propertyFacility.deleteMany,
+    propertyFacilityCreateMany: prisma.propertyFacility.createMany,
+    propertyImageUpdateMany: prisma.propertyImage.updateMany,
+    propertyImageCreateMany: prisma.propertyImage.createMany,
+    propertyImageFindMany: prisma.propertyImage.findMany,
+    bookingOrderCount: prisma.bookingOrder.count,
+    roomCategoryCount: prisma.roomCategory.count,
+    roomCategoryFindFirst: prisma.roomCategory.findFirst,
+    roomCategoryFindUnique: prisma.roomCategory.findUnique,
+    roomCategoryCreate: prisma.roomCategory.create,
+    roomCategoryUpdate: prisma.roomCategory.update,
+    roomCategoryUpdateMany: prisma.roomCategory.updateMany,
+    roomCategoryPetDeleteMany: prisma.roomCategoryPet.deleteMany,
+    roomCategoryPetCreateMany: prisma.roomCategoryPet.createMany,
+    roomCategoryFacilityDeleteMany: prisma.roomCategoryFacility.deleteMany,
+    roomCategoryFacilityCreateMany: prisma.roomCategoryFacility.createMany,
+    roomCategoryImageFindMany: prisma.roomCategoryImage.findMany,
+    roomCategoryImageUpdateMany: prisma.roomCategoryImage.updateMany,
+    roomCategoryImageCreateMany: prisma.roomCategoryImage.createMany,
+    petProfileFindMany: prisma.petProfile.findMany,
+    petProfileFindUnique: prisma.petProfile.findUnique,
+    petProfileFindFirst: prisma.petProfile.findFirst,
+    petProfileCreate: prisma.petProfile.create,
+    petProfileUpdate: prisma.petProfile.update,
+    bookingFindUnique: prisma.booking.findUnique,
+    bookingCreate: prisma.booking.create,
+    bookingUpdate: prisma.booking.update,
+    bookingPetProfileFindFirst: prisma.bookingPetProfile.findFirst,
+    roomCategoryCalendarFindUnique: prisma.roomCategoryCalendar.findUnique,
+    roomCategoryCalendarCreate: prisma.roomCategoryCalendar.create,
+    roomCategoryCalendarUpdate: prisma.roomCategoryCalendar.update,
+    prismaTransaction: prisma.$transaction,
+    prismaQueryRawUnsafe: prisma.$queryRawUnsafe,
   }
 
   ;(prisma.role as any).upsert = async (args: any) => {
@@ -1995,6 +2042,46 @@ function installPrismaAuthMock() {
       ;(prisma.chatMessage as any).create = originals.chatMessageCreate
       ;(prisma.chatMessage as any).updateMany = originals.chatMessageUpdateMany
       ;(prisma.chatMessageAttachment as any).findMany = originals.chatMessageAttachmentFindMany
+      prisma.propertyType.findUnique = originals.propertyTypeFindUnique
+      prisma.propertyType.findFirst = originals.propertyTypeFindFirst
+      prisma.petSizeCategory.findUnique = originals.petSizeCategoryFindUnique
+      prisma.petSizeCategory.findFirst = originals.petSizeCategoryFindFirst
+      prisma.property.count = originals.propertyCount
+      prisma.property.create = originals.propertyCreate
+      prisma.property.update = originals.propertyUpdate
+      prisma.propertyFacility.deleteMany = originals.propertyFacilityDeleteMany
+      prisma.propertyFacility.createMany = originals.propertyFacilityCreateMany
+      prisma.propertyImage.updateMany = originals.propertyImageUpdateMany
+      prisma.propertyImage.createMany = originals.propertyImageCreateMany
+      prisma.propertyImage.findMany = originals.propertyImageFindMany
+      prisma.bookingOrder.count = originals.bookingOrderCount
+      prisma.roomCategory.count = originals.roomCategoryCount
+      prisma.roomCategory.findFirst = originals.roomCategoryFindFirst
+      prisma.roomCategory.findUnique = originals.roomCategoryFindUnique
+      prisma.roomCategory.create = originals.roomCategoryCreate
+      prisma.roomCategory.update = originals.roomCategoryUpdate
+      prisma.roomCategory.updateMany = originals.roomCategoryUpdateMany
+      prisma.roomCategoryPet.deleteMany = originals.roomCategoryPetDeleteMany
+      prisma.roomCategoryPet.createMany = originals.roomCategoryPetCreateMany
+      prisma.roomCategoryFacility.deleteMany = originals.roomCategoryFacilityDeleteMany
+      prisma.roomCategoryFacility.createMany = originals.roomCategoryFacilityCreateMany
+      prisma.roomCategoryImage.findMany = originals.roomCategoryImageFindMany
+      prisma.roomCategoryImage.updateMany = originals.roomCategoryImageUpdateMany
+      prisma.roomCategoryImage.createMany = originals.roomCategoryImageCreateMany
+      prisma.petProfile.findMany = originals.petProfileFindMany
+      prisma.petProfile.findUnique = originals.petProfileFindUnique
+      prisma.petProfile.findFirst = originals.petProfileFindFirst
+      prisma.petProfile.create = originals.petProfileCreate
+      prisma.petProfile.update = originals.petProfileUpdate
+      prisma.booking.findUnique = originals.bookingFindUnique
+      prisma.booking.create = originals.bookingCreate
+      prisma.booking.update = originals.bookingUpdate
+      prisma.bookingPetProfile.findFirst = originals.bookingPetProfileFindFirst
+      prisma.roomCategoryCalendar.findUnique = originals.roomCategoryCalendarFindUnique
+      prisma.roomCategoryCalendar.create = originals.roomCategoryCalendarCreate
+      prisma.roomCategoryCalendar.update = originals.roomCategoryCalendarUpdate
+      ;(prisma as any).$transaction = originals.prismaTransaction
+      ;(prisma as any).$queryRawUnsafe = originals.prismaQueryRawUnsafe
     },
   }
 }
@@ -6210,6 +6297,1108 @@ async function main() {
     })
   } finally {
     mockDb.restore()
+  }
+
+  // ==========================================================================
+  // Sprint 4 (PBI-20): Live PostgreSQL + Live ML & 1.5s Fallback Tests
+  // ==========================================================================
+  console.log('\n🤖 Running Sprint 4 (PBI-20) Live DB, Live ML & Fallback Integration Tests...\n')
+
+  const originalMlUrl = config.mlServiceUrl
+  const originalMlTimeoutMs = config.mlTimeoutMs
+  let spawnedMlProc: ChildProcess | null = null
+  let hangServer: http.Server | null = null
+  const createdBehaviorUserIds: number[] = []
+  const sprint4StartedAt = new Date()
+
+  try {
+    await cacheService.flush()
+
+    // Ensure ML service is reachable (reuse if already running on config.mlServiceUrl, else spawn .venv uvicorn)
+    let mlLiveReady = false
+    try {
+      const probe = await fetch(`${config.mlServiceUrl}/health`, {
+        signal: AbortSignal.timeout(1000),
+      })
+      if (probe.ok) {
+        const body: any = await probe.json()
+        mlLiveReady = body?.status === 'ok' && body?.db_connected === true
+      }
+    } catch {
+      mlLiveReady = false
+    }
+
+    if (!mlLiveReady) {
+      const mlDir = path.resolve(__dirname, '../../../joodpakpaw-ml')
+      const venvPython = path.join(mlDir, '.venv', 'Scripts', 'python.exe')
+      const mlTestPort = 5055
+      if (!fs.existsSync(venvPython)) {
+        throw new Error(`ML Python venv not found at ${venvPython}`)
+      }
+      spawnedMlProc = spawn(
+        venvPython,
+        ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', String(mlTestPort)],
+        {
+          cwd: mlDir,
+          env: {
+            ...process.env,
+            DATABASE_URL: config.databaseUrl,
+            PORT: String(mlTestPort),
+          },
+          stdio: 'pipe',
+        }
+      )
+      config.mlServiceUrl = `http://127.0.0.1:${mlTestPort}`
+
+      const deadline = Date.now() + 15000
+      while (Date.now() < deadline) {
+        try {
+          const probe = await fetch(`${config.mlServiceUrl}/health`, {
+            signal: AbortSignal.timeout(800),
+          })
+          if (probe.ok) {
+            const body: any = await probe.json()
+            if (body?.status === 'ok') {
+              mlLiveReady = true
+              break
+            }
+          }
+        } catch {
+          // Wait and retry
+        }
+        await new Promise((r) => setTimeout(r, 300))
+      }
+      if (!mlLiveReady) {
+        throw new Error('Timed out waiting for spawned joodpakpaw-ml test server on port 5055')
+      }
+    }
+
+    const liveMlUrl = config.mlServiceUrl
+
+    // Sign in seeded live accounts
+    async function signInLive(email: string): Promise<{ token: string; userId: number }> {
+      const res = await makeRequest(pipePath, '/api/v1/auth/sign-in', 'POST', {
+        email,
+        password: 'Password123!',
+      })
+      if (res.statusCode !== 200 || !res.body?.data?.accessToken) {
+        throw new Error(`Failed live sign-in for ${email}: ${res.statusCode} ${JSON.stringify(res.body)}`)
+      }
+      return {
+        token: res.body.data.accessToken,
+        userId: res.body.data.user.id,
+      }
+    }
+
+    const [adminLive, host1Live, user1Live, user2Live, user4Live] = await Promise.all([
+      signInLive('admin@joodpakpaw.com'),
+      signInLive('host1@joodpakpaw.com'),
+      signInLive('user1@joodpakpaw.com'),
+      signInLive('user2@joodpakpaw.com'),
+      signInLive('user4@joodpakpaw.com'),
+    ])
+
+    const activeProps = await prisma.property.findMany({
+      where: {
+        isActive: true,
+        isBannedByAdmin: false,
+        deletedAt: null,
+        host: { deletedAt: null, isBannedAllProperties: false },
+      },
+      orderBy: { id: 'asc' },
+      take: 10,
+    })
+    if (activeProps.length < 3) {
+      throw new Error(`Expected at least 3 active seeded properties in live DB, found ${activeProps.length}`)
+    }
+
+    const host1OwnedProp = activeProps.find((p) => p.hostId === host1Live.userId)
+      ?? (await prisma.property.findFirst({
+        where: { hostId: host1Live.userId, deletedAt: null },
+      }))
+    const nonOwnedProp = activeProps.find((p) => p.hostId !== user1Live.userId) ?? activeProps[0]
+
+    // Test 61: /health includes ml block
+    await runTest('PBI-20: GET /health includes ml subsystem configuration', async () => {
+      const res = await makeRequest(pipePath, '/health')
+      if (res.statusCode !== 200) throw new Error(`Expected 200, got ${res.statusCode}`)
+      if (!res.body?.ml || res.body.ml.fallbackReady !== true) {
+        throw new Error(`Expected ml.fallbackReady=true in /health, got ${JSON.stringify(res.body?.ml)}`)
+      }
+      if (typeof res.body.ml.timeoutMs !== 'number' || typeof res.body.ml.url !== 'string') {
+        throw new Error(`Expected ml.url and ml.timeoutMs in /health, got ${JSON.stringify(res.body?.ml)}`)
+      }
+    })
+
+    // Test 62: View tracking, 10-min cooldown, self-view skip, 404 DB-1002
+    await runTest('PBI-20: POST /user-behaviors/view-property/:id tracks view, deduplicates within 10m & skips self-view', async () => {
+      const notFoundRes = await makeRequest(
+        pipePath,
+        '/api/v1/user-behaviors/view-property/9999999',
+        'POST',
+        undefined,
+        { Authorization: `Bearer ${user1Live.token}` }
+      )
+      if (notFoundRes.statusCode !== 404 || notFoundRes.body?.code !== 'DB-1002') {
+        throw new Error(`Expected 404 DB-1002, got ${notFoundRes.statusCode} ${JSON.stringify(notFoundRes.body)}`)
+      }
+
+      // Clean any very recent view for (user1, nonOwnedProp) within last 10 mins so test is deterministic
+      const viewCat = await prisma.userBehaviorCategory.findFirst({ where: { name: 'view' } })
+      if (viewCat) {
+        await prisma.userBehavior.deleteMany({
+          where: {
+            userId: user1Live.userId,
+            behaviorCategoryId: viewCat.id,
+            referenceTable: 'properties',
+            referenceRecord: String(nonOwnedProp.id),
+            createdAt: { gte: new Date(Date.now() - 10 * 60 * 1000) },
+          },
+        })
+      }
+
+      createdBehaviorUserIds.push(user1Live.userId)
+
+      const track1 = await makeRequest(
+        pipePath,
+        `/api/v1/user-behaviors/view-property/${nonOwnedProp.id}`,
+        'POST',
+        undefined,
+        { Authorization: `Bearer ${user1Live.token}` }
+      )
+      if (track1.statusCode !== 200 || track1.body?.data?.tracked !== true || track1.body?.data?.deduplicated !== false) {
+        throw new Error(`Expected first view tracked=true, got ${track1.statusCode} ${JSON.stringify(track1.body)}`)
+      }
+
+      const track2 = await makeRequest(
+        pipePath,
+        `/api/v1/user-behaviors/view-property/${nonOwnedProp.id}`,
+        'POST',
+        undefined,
+        { Authorization: `Bearer ${user1Live.token}` }
+      )
+      if (track2.statusCode !== 200 || track2.body?.data?.tracked !== false || track2.body?.data?.deduplicated !== true) {
+        throw new Error(`Expected second view deduplicated=true, got ${track2.statusCode} ${JSON.stringify(track2.body)}`)
+      }
+
+      if (host1OwnedProp) {
+        const selfView = await makeRequest(
+          pipePath,
+          `/api/v1/user-behaviors/view-property/${host1OwnedProp.id}`,
+          'POST',
+          undefined,
+          { Authorization: `Bearer ${host1Live.token}` }
+        )
+        if (selfView.statusCode !== 200 || selfView.body?.data?.skippedSelfView !== true || selfView.body?.data?.tracked !== false) {
+          throw new Error(`Expected self-view skipped, got ${selfView.statusCode} ${JSON.stringify(selfView.body)}`)
+        }
+      }
+    })
+
+    // Test 63: Live ML Mode personalized user1 & user2
+    await runTest('PBI-20: Live ML Mode returns personalized camelCase recommendations for user1 & user2', async () => {
+      config.mlServiceUrl = liveMlUrl
+      await invalidateAllRecommendationCaches()
+
+      const res1 = await makeRequest(pipePath, '/api/v1/properties/recommend?limit=8', 'GET', undefined, {
+        Authorization: `Bearer ${user1Live.token}`,
+      })
+      if (res1.statusCode !== 200 || res1.body?.meta?.source !== 'ml_service') {
+        throw new Error(`Expected 200 ml_service for user1, got ${res1.statusCode} ${JSON.stringify(res1.body?.meta)}`)
+      }
+      if (!Array.isArray(res1.body?.data) || res1.body.data.length === 0) {
+        throw new Error('Expected non-empty recommendations for user1')
+      }
+      const first = res1.body.data[0]
+      if (!Array.isArray(first.matchReasons) || first.matchReasons.length < 1 || first.matchReasons.length > 3) {
+        throw new Error(`Expected 1..3 matchReasons, got ${JSON.stringify(first.matchReasons)}`)
+      }
+      if (typeof first.recommendationScore !== 'number' || !['all_pets', 'partial_pets'].includes(first.matchTier)) {
+        throw new Error(`Invalid recommendationScore/matchTier on DTO: ${JSON.stringify(first)}`)
+      }
+      if (first.scoreBreakdown !== undefined) {
+        throw new Error('Non-admin recommend response must not include scoreBreakdown')
+      }
+
+      const res2 = await makeRequest(pipePath, '/api/v1/properties/recommend?limit=8', 'GET', undefined, {
+        Authorization: `Bearer ${user2Live.token}`,
+      })
+      if (res2.statusCode !== 200 || res2.body?.meta?.source !== 'ml_service' || res2.body.data.length === 0) {
+        throw new Error(`Expected 200 ml_service for user2, got ${res2.statusCode} ${JSON.stringify(res2.body?.meta)}`)
+      }
+    })
+
+    // Test 64: Live ML Mode multi-pet Tier A before Tier B (user4)
+    await runTest('PBI-20: Live ML Mode prioritizes Tier A (all_pets) before Tier B (partial_pets) for multi-pet user4', async () => {
+      config.mlServiceUrl = liveMlUrl
+      await invalidateAllRecommendationCaches()
+
+      const res = await makeRequest(pipePath, '/api/v1/properties/recommend?limit=20', 'GET', undefined, {
+        Authorization: `Bearer ${user4Live.token}`,
+      })
+      if (res.statusCode !== 200 || res.body?.meta?.source !== 'ml_service') {
+        throw new Error(`Expected 200 ml_service for user4, got ${res.statusCode} ${JSON.stringify(res.body?.meta)}`)
+      }
+      const items: any[] = res.body?.data || []
+      if (items.length === 0) throw new Error('Expected recommendations for user4')
+
+      let seenPartial = false
+      for (const item of items) {
+        if (item.matchTier === 'partial_pets') {
+          seenPartial = true
+        } else if (item.matchTier === 'all_pets' && seenPartial) {
+          throw new Error('Tier A (all_pets) appeared after Tier B (partial_pets)')
+        } else if (item.matchTier !== 'all_pets' && item.matchTier !== 'partial_pets') {
+          throw new Error(`Unexpected matchTier for user4: ${item.matchTier}`)
+        }
+      }
+    })
+
+    // Test 65: Live ML Mode excludes host1 self-owned properties
+    await runTest('PBI-20: Live ML Mode excludes self-owned properties for host1', async () => {
+      config.mlServiceUrl = liveMlUrl
+      await invalidateAllRecommendationCaches()
+
+      const res = await makeRequest(pipePath, '/api/v1/properties/recommend?limit=20', 'GET', undefined, {
+        Authorization: `Bearer ${host1Live.token}`,
+      })
+      if (res.statusCode !== 200 || res.body?.meta?.source !== 'ml_service') {
+        throw new Error(`Expected 200 ml_service for host1, got ${res.statusCode}`)
+      }
+      const selfOwned = (res.body?.data || []).filter((p: any) => p.hostId === host1Live.userId)
+      if (selfOwned.length > 0) {
+        throw new Error(`Found self-owned property in recommendations: ${selfOwned.map((p: any) => p.id)}`)
+      }
+    })
+
+    // Test 66: Live ML Mode Guest Cold-Start & Similar Properties
+    await runTest('PBI-20: Live ML Mode serves Guest Cold-Start and Similar Properties', async () => {
+      config.mlServiceUrl = liveMlUrl
+      await invalidateAllRecommendationCaches()
+
+      const guestRes = await makeRequest(pipePath, '/api/v1/properties/recommend?limit=6')
+      if (
+        guestRes.statusCode !== 200 ||
+        guestRes.body?.meta?.source !== 'ml_service' ||
+        guestRes.body?.meta?.strategy !== 'cold_start' ||
+        !Array.isArray(guestRes.body?.data) ||
+        guestRes.body.data.length === 0
+      ) {
+        throw new Error(`Unexpected guest cold-start response: ${guestRes.statusCode} ${JSON.stringify(guestRes.body?.meta)}`)
+      }
+      if (guestRes.body.data[0].matchTier !== 'cold_start') {
+        throw new Error(`Expected matchTier=cold_start, got ${guestRes.body.data[0].matchTier}`)
+      }
+
+      const simRes = await makeRequest(
+        pipePath,
+        `/api/v1/properties/recommend/property/${activeProps[0].id}?limit=4`
+      )
+      if (
+        simRes.statusCode !== 200 ||
+        simRes.body?.meta?.source !== 'ml_service' ||
+        simRes.body?.meta?.strategy !== 'similar_properties' ||
+        !Array.isArray(simRes.body?.data) ||
+        simRes.body.data.length === 0
+      ) {
+        throw new Error(`Unexpected similar properties response: ${simRes.statusCode} ${JSON.stringify(simRes.body?.meta)}`)
+      }
+      if (simRes.body.data.some((p: any) => p.id === activeProps[0].id)) {
+        throw new Error('Similar properties must exclude source property')
+      }
+    })
+
+    // Test 67: Strict Admin RBAC 403 A-3007
+    await runTest('PBI-20: Strict Admin RBAC (403 A-3007) blocks guest, user, and host on debug/asUserId/admin ml routes', async () => {
+      const checks: Array<{ path: string; method?: string; token?: string; expectedStatus: number; expectedCode: string }> = [
+        { path: '/api/v1/properties/recommend?debug=true', expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/properties/recommend?debug=true', token: user1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/properties/recommend?debug=true', token: host1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: `/api/v1/properties/recommend?asUserId=${user1Live.userId}`, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: `/api/v1/properties/recommend?asUserId=${user1Live.userId}`, token: user1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: `/api/v1/properties/recommend?asUserId=${user1Live.userId}`, token: host1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/properties/recommend?asUserId=guest', expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/properties/recommend?asUserId=guest', token: user1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/properties/recommend?asUserId=guest', token: host1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/properties/recommend?coldStart=true', expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/properties/recommend?coldStart=true', token: user1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: `/api/v1/properties/recommend/property/${activeProps[0].id}?debug=true`, token: user1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/admin/ml/status', expectedStatus: 401, expectedCode: 'A-3005' },
+        { path: '/api/v1/admin/ml/status', token: user1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/admin/ml/status', token: host1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/admin/ml/refresh', method: 'POST', token: user1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/admin/ml/refresh', method: 'POST', token: host1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+      ]
+
+      for (const c of checks) {
+        const headers: Record<string, string> = c.token ? { Authorization: `Bearer ${c.token}` } : {}
+        const res = await makeRequest(pipePath, c.path, c.method || 'GET', undefined, headers)
+        if (res.statusCode !== c.expectedStatus || res.body?.code !== c.expectedCode) {
+          throw new Error(
+            `RBAC check failed for ${c.method || 'GET'} ${c.path}: expected ${c.expectedStatus} ${c.expectedCode}, got ${res.statusCode} ${JSON.stringify(res.body)}`
+          )
+        }
+      }
+    })
+
+    // Test 68: Admin ML Inspector debug + /admin/ml/status + /admin/ml/refresh
+    await runTest('PBI-20: Admin gets 200 with scoreBreakdown on debug=true&asUserId= and /admin/ml/status & /refresh', async () => {
+      config.mlServiceUrl = liveMlUrl
+      await invalidateAllRecommendationCaches()
+
+      const debugRes = await makeRequest(
+        pipePath,
+        `/api/v1/properties/recommend?debug=true&asUserId=${user4Live.userId}&limit=4`,
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${adminLive.token}` }
+      )
+      if (debugRes.statusCode !== 200 || !Array.isArray(debugRes.body?.data) || debugRes.body.data.length === 0) {
+        throw new Error(`Expected 200 with data on admin debug, got ${debugRes.statusCode}`)
+      }
+      const bd = debugRes.body.data[0].scoreBreakdown
+      if (
+        !bd ||
+        typeof bd.sContent !== 'number' ||
+        typeof bd.sCompat !== 'number' ||
+        typeof bd.sQuality !== 'number' ||
+        typeof bd.sPopularity !== 'number'
+      ) {
+        throw new Error(`Expected camelCase scoreBreakdown, got ${JSON.stringify(bd)}`)
+      }
+
+      const statusRes = await makeRequest(pipePath, '/api/v1/admin/ml/status', 'GET', undefined, {
+        Authorization: `Bearer ${adminLive.token}`,
+      })
+      if (
+        statusRes.statusCode !== 200 ||
+        statusRes.body?.data?.mlServiceReachable !== true ||
+        statusRes.body?.data?.fallbackReady !== true ||
+        !(statusRes.body?.data?.catalogSize > 0)
+      ) {
+        throw new Error(`Unexpected /admin/ml/status: ${statusRes.statusCode} ${JSON.stringify(statusRes.body)}`)
+      }
+
+      const refreshRes = await makeRequest(pipePath, '/api/v1/admin/ml/refresh', 'POST', undefined, {
+        Authorization: `Bearer ${adminLive.token}`,
+      })
+      if (
+        refreshRes.statusCode !== 200 ||
+        refreshRes.body?.data?.refreshed !== true ||
+        refreshRes.body?.data?.mlServiceRefreshed !== true
+      ) {
+        throw new Error(`Unexpected /admin/ml/refresh: ${refreshRes.statusCode} ${JSON.stringify(refreshRes.body)}`)
+      }
+    })
+
+    // Test 68b: PBI-21 True Guest Cold-Start via asUserId=guest / coldStart=true & Dynamic sampleUsers/sampleProperties
+    await runTest('PBI-21: Admin Guest Cold-Start (asUserId=guest & coldStart=true) and dynamic /admin/ml/status sampleUsers & sampleProperties', async () => {
+      config.mlServiceUrl = liveMlUrl
+      await invalidateAllRecommendationCaches()
+
+      // Non-admin calling asUserId=guest gets 403 A-3007
+      const nonAdminGuest = await makeRequest(
+        pipePath,
+        '/api/v1/properties/recommend?asUserId=guest&limit=4',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${user1Live.token}` }
+      )
+      if (nonAdminGuest.statusCode !== 403 || nonAdminGuest.body?.code !== 'A-3007') {
+        throw new Error(`Expected 403 A-3007 for non-admin asUserId=guest, got ${nonAdminGuest.statusCode} ${JSON.stringify(nonAdminGuest.body)}`)
+      }
+
+      // Admin calling debug=true&asUserId=guest&limit=4 gets 200, strategy=cold_start & scoreBreakdown
+      const adminGuestRes = await makeRequest(
+        pipePath,
+        '/api/v1/properties/recommend?debug=true&asUserId=guest&limit=4',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${adminLive.token}` }
+      )
+      if (
+        adminGuestRes.statusCode !== 200 ||
+        adminGuestRes.body?.meta?.strategy !== 'cold_start' ||
+        !Array.isArray(adminGuestRes.body?.data) ||
+        adminGuestRes.body.data.length === 0
+      ) {
+        throw new Error(`Expected 200 cold_start for admin asUserId=guest, got ${adminGuestRes.statusCode} ${JSON.stringify(adminGuestRes.body?.meta)}`)
+      }
+      const guestBd = adminGuestRes.body.data[0].scoreBreakdown
+      if (
+        !guestBd ||
+        typeof guestBd.sContent !== 'number' ||
+        typeof guestBd.sCompat !== 'number' ||
+        typeof guestBd.sQuality !== 'number' ||
+        typeof guestBd.sPopularity !== 'number'
+      ) {
+        throw new Error(`Expected scoreBreakdown on admin asUserId=guest, got ${JSON.stringify(guestBd)}`)
+      }
+
+      // Admin calling debug=true&coldStart=true&limit=4 also runs true guest cold-start
+      const adminColdStartRes = await makeRequest(
+        pipePath,
+        '/api/v1/properties/recommend?debug=true&coldStart=true&limit=4',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${adminLive.token}` }
+      )
+      if (
+        adminColdStartRes.statusCode !== 200 ||
+        adminColdStartRes.body?.meta?.strategy !== 'cold_start' ||
+        !adminColdStartRes.body?.data?.[0]?.scoreBreakdown
+      ) {
+        throw new Error(`Expected 200 cold_start + scoreBreakdown for admin coldStart=true, got ${adminColdStartRes.statusCode} ${JSON.stringify(adminColdStartRes.body?.meta)}`)
+      }
+
+      // Admin /admin/ml/status returns dynamic sampleUsers & sampleProperties
+      const statusRes = await makeRequest(pipePath, '/api/v1/admin/ml/status', 'GET', undefined, {
+        Authorization: `Bearer ${adminLive.token}`,
+      })
+      if (statusRes.statusCode !== 200) {
+        throw new Error(`Expected 200 on /admin/ml/status, got ${statusRes.statusCode}`)
+      }
+      const sampleUsers: any[] = statusRes.body?.data?.sampleUsers
+      const sampleProperties: any[] = statusRes.body?.data?.sampleProperties
+      if (!Array.isArray(sampleUsers) || sampleUsers.length === 0) {
+        throw new Error(`Expected non-empty data.sampleUsers, got ${JSON.stringify(sampleUsers)}`)
+      }
+      if (!Array.isArray(sampleProperties) || sampleProperties.length === 0) {
+        throw new Error(`Expected non-empty data.sampleProperties, got ${JSON.stringify(sampleProperties)}`)
+      }
+
+      const usersWithPets = sampleUsers.filter((u) => Array.isArray(u.pets) && u.pets.length > 0)
+      if (usersWithPets.length === 0) {
+        throw new Error('Expected sampleUsers to include users with active petProfiles')
+      }
+
+      // Verify users with pets appear before users without pets, and no ephemeral test accounts
+      const ephemeralPrefixes = ['challenger_', 'smoke_', 'test_', 'qa_', 'audit_']
+      let seenWithoutPets = false
+      for (const u of sampleUsers) {
+        if (ephemeralPrefixes.some((p) => String(u.email || '').toLowerCase().startsWith(p))) {
+          throw new Error(`Ephemeral account leaked into sampleUsers: ${u.email}`)
+        }
+        if (typeof u.id !== 'number' || typeof u.email !== 'string' || !Array.isArray(u.roles) || typeof u.behaviorCount !== 'number') {
+          throw new Error(`Invalid sampleUser shape: ${JSON.stringify(u)}`)
+        }
+        if (u.pets.length === 0) {
+          seenWithoutPets = true
+        } else if (seenWithoutPets) {
+          throw new Error('User with active petProfiles appeared after a user without pets')
+        }
+      }
+
+      const samplePet = usersWithPets[0].pets[0]
+      if (typeof samplePet.id !== 'number' || typeof samplePet.name !== 'string' || typeof samplePet.species !== 'string' || !samplePet.species) {
+        throw new Error(`Invalid sampleUser pet shape: ${JSON.stringify(samplePet)}`)
+      }
+
+      const sampleProp = sampleProperties[0]
+      if (
+        typeof sampleProp.id !== 'number' ||
+        typeof sampleProp.title !== 'string' ||
+        typeof sampleProp.province !== 'string' ||
+        typeof sampleProp.avgRating !== 'number'
+      ) {
+        throw new Error(`Invalid sampleProperty shape: ${JSON.stringify(sampleProp)}`)
+      }
+    })
+
+    // Test 69: Batch GET /api/v1/properties?ids=...
+    await runTest('PBI-20: Batch GET /api/v1/properties?ids=... preserves requested order and validates invalid input', async () => {
+      const idsOrder = [activeProps[2].id, activeProps[0].id, activeProps[1].id]
+      const batchRes = await makeRequest(
+        pipePath,
+        `/api/v1/properties?ids=${idsOrder.join(',')}`
+      )
+      if (batchRes.statusCode !== 200 || !Array.isArray(batchRes.body?.data)) {
+        throw new Error(`Expected 200 batch array, got ${batchRes.statusCode}`)
+      }
+      const returnedIds = batchRes.body.data.map((p: any) => p.id)
+      if (JSON.stringify(returnedIds) !== JSON.stringify(idsOrder)) {
+        throw new Error(`Expected exact order ${JSON.stringify(idsOrder)}, got ${JSON.stringify(returnedIds)}`)
+      }
+
+      const invalidRes = await makeRequest(pipePath, '/api/v1/properties?ids=abc,-2')
+      if (invalidRes.statusCode !== 400 || invalidRes.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007 for invalid ids, got ${invalidRes.statusCode} ${JSON.stringify(invalidRes.body)}`)
+      }
+    })
+
+    // Test 70: In-Process Fallback Mode (<1500ms) for user4 Tier A/B & host1 self-owned exclusion
+    await runTest('PBI-20: In-Process Fallback Mode (<1500ms) preserves Tier A/B multi-pet safety and self-owned exclusion', async () => {
+      config.mlServiceUrl = 'http://127.0.0.1:59998'
+      await invalidateAllRecommendationCaches()
+
+      const fbUser4 = await makeRequest(pipePath, '/api/v1/properties/recommend?limit=20', 'GET', undefined, {
+        Authorization: `Bearer ${user4Live.token}`,
+      })
+      if (
+        fbUser4.statusCode !== 200 ||
+        fbUser4.body?.meta?.source !== 'in_process_fallback' ||
+        !(fbUser4.body?.meta?.latencyMs < 1500) ||
+        !Array.isArray(fbUser4.body?.data) ||
+        fbUser4.body.data.length === 0
+      ) {
+        throw new Error(`Fallback user4 failed: ${fbUser4.statusCode} ${JSON.stringify(fbUser4.body?.meta)}`)
+      }
+
+      let seenPartial = false
+      for (const item of fbUser4.body.data) {
+        if (!Array.isArray(item.matchReasons) || item.matchReasons.length === 0) {
+          throw new Error(`Expected matchReasons on fallback item ${item.id}`)
+        }
+        if (item.matchTier === 'partial_pets') seenPartial = true
+        if (item.matchTier === 'all_pets' && seenPartial) {
+          throw new Error('Fallback Tier A appeared after Tier B')
+        }
+      }
+
+      const fbHost1 = await makeRequest(pipePath, '/api/v1/properties/recommend?limit=20', 'GET', undefined, {
+        Authorization: `Bearer ${host1Live.token}`,
+      })
+      if (fbHost1.statusCode !== 200 || fbHost1.body?.meta?.source !== 'in_process_fallback' || !(fbHost1.body?.meta?.latencyMs < 1500)) {
+        throw new Error(`Fallback host1 failed: ${fbHost1.statusCode} ${JSON.stringify(fbHost1.body?.meta)}`)
+      }
+      if ((fbHost1.body?.data || []).some((p: any) => p.hostId === host1Live.userId)) {
+        throw new Error('Fallback must exclude host1 self-owned properties')
+      }
+    })
+
+    // Test 71: In-Process Fallback Mode (<1500ms) for Guest Cold-Start & Similar Properties + Admin Debug
+    await runTest('PBI-20: In-Process Fallback Mode (<1500ms) serves Guest Cold-Start, Similar Properties & Admin debug', async () => {
+      config.mlServiceUrl = 'http://127.0.0.1:59998'
+      await invalidateAllRecommendationCaches()
+
+      const fbGuest = await makeRequest(pipePath, '/api/v1/properties/recommend?limit=6')
+      if (
+        fbGuest.statusCode !== 200 ||
+        fbGuest.body?.meta?.source !== 'in_process_fallback' ||
+        fbGuest.body?.meta?.strategy !== 'cold_start' ||
+        !(fbGuest.body?.meta?.latencyMs < 1500) ||
+        !Array.isArray(fbGuest.body?.data) ||
+        fbGuest.body.data.length === 0
+      ) {
+        throw new Error(`Fallback guest cold-start failed: ${fbGuest.statusCode} ${JSON.stringify(fbGuest.body?.meta)}`)
+      }
+
+      const fbSimilar = await makeRequest(
+        pipePath,
+        `/api/v1/properties/recommend/property/${activeProps[0].id}?limit=4`
+      )
+      if (
+        fbSimilar.statusCode !== 200 ||
+        fbSimilar.body?.meta?.source !== 'in_process_fallback' ||
+        fbSimilar.body?.meta?.strategy !== 'similar_properties' ||
+        !(fbSimilar.body?.meta?.latencyMs < 1500) ||
+        !Array.isArray(fbSimilar.body?.data) ||
+        fbSimilar.body.data.length === 0
+      ) {
+        throw new Error(`Fallback similar properties failed: ${fbSimilar.statusCode} ${JSON.stringify(fbSimilar.body?.meta)}`)
+      }
+      if (fbSimilar.body.data.some((p: any) => p.id === activeProps[0].id)) {
+        throw new Error('Fallback similar properties must exclude source property')
+      }
+
+      const fbDebug = await makeRequest(
+        pipePath,
+        `/api/v1/properties/recommend?debug=true&asUserId=${user1Live.userId}&limit=4`,
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${adminLive.token}` }
+      )
+      if (
+        fbDebug.statusCode !== 200 ||
+        fbDebug.body?.meta?.source !== 'in_process_fallback' ||
+        !fbDebug.body?.data?.[0]?.scoreBreakdown
+      ) {
+        throw new Error(`Fallback admin debug failed: ${fbDebug.statusCode}`)
+      }
+    })
+
+    // Test 72: Timeout Fallback when ML service hangs beyond mlTimeoutMs
+    await runTest('PBI-20: AbortSignal timeout triggers in_process_fallback when ML service hangs', async () => {
+      hangServer = http.createServer((_req, res) => {
+        setTimeout(() => {
+          if (!res.writableEnded) {
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            res.end('{}')
+          }
+        }, 2500)
+      })
+      await new Promise<void>((resolve) => hangServer!.listen(0, '127.0.0.1', resolve))
+      const addr = hangServer.address() as { port: number }
+      config.mlServiceUrl = `http://127.0.0.1:${addr.port}`
+      config.mlTimeoutMs = 350
+      await invalidateAllRecommendationCaches()
+
+      const res = await makeRequest(pipePath, '/api/v1/properties/recommend?limit=4')
+      if (
+        res.statusCode !== 200 ||
+        res.body?.meta?.source !== 'in_process_fallback' ||
+        !Array.isArray(res.body?.data) ||
+        res.body.data.length === 0
+      ) {
+        throw new Error(`Expected timeout fallback, got ${res.statusCode} ${JSON.stringify(res.body?.meta)}`)
+      }
+    })
+
+    // Test 73: Similar properties error handling (404 DB-1002 & 400 T-2007)
+    await runTest('PBI-20: Similar properties validates propertyId (400 T-2007) and missing property (404 DB-1002)', async () => {
+      const badId = await makeRequest(pipePath, '/api/v1/properties/recommend/property/abc')
+      if (badId.statusCode !== 400 || badId.body?.code !== 'T-2007') {
+        throw new Error(`Expected 400 T-2007, got ${badId.statusCode} ${JSON.stringify(badId.body)}`)
+      }
+
+      const missingId = await makeRequest(pipePath, '/api/v1/properties/recommend/property/9999999')
+      if (missingId.statusCode !== 404 || missingId.body?.code !== 'DB-1002') {
+        throw new Error(`Expected 404 DB-1002, got ${missingId.statusCode} ${JSON.stringify(missingId.body)}`)
+      }
+    })
+
+    // Test 74: PF-1 Up-to-Max-Size (<=) parity for Choco (3.5kg Small Dog) & strict upper-bound for Milo (28.5kg Large Dog)
+    await runTest('PF-1: Small dog (user2 Choco 3.5kg) gets >= 5 dog properties & Large dog (user1 Milo 28.5kg) never matches Small-only rooms', async () => {
+      const dogPetRecord = await prisma.pet.findFirst({
+        where: { name: { contains: 'Dog', mode: 'insensitive' }, deletedAt: null },
+      })
+      if (!dogPetRecord) {
+        throw new Error('Seeded Dog pet type not found in DB')
+      }
+
+      const allCatalogProps = await prisma.property.findMany({
+        where: {
+          isActive: true,
+          isBannedByAdmin: false,
+          deletedAt: null,
+          host: { deletedAt: null, bannedAt: null, isBannedAllProperties: false },
+        },
+        include: {
+          roomCategories: {
+            where: { deletedAt: null },
+            include: {
+              petSizeCategory: true,
+              pets: true,
+            },
+          },
+        },
+      })
+      const propDetailsById = new Map(allCatalogProps.map((p) => [p.id, p]))
+
+      const modes: Array<{ label: string; url: string; expectedSource: string }> = [
+        { label: 'live_ml', url: liveMlUrl, expectedSource: 'ml_service' },
+        { label: 'in_process_fallback', url: 'http://127.0.0.1:59998', expectedSource: 'in_process_fallback' },
+      ]
+
+      for (const mode of modes) {
+        config.mlServiceUrl = mode.url
+        config.mlTimeoutMs = originalMlTimeoutMs
+        await invalidateAllRecommendationCaches()
+
+        const chocoRes = await makeRequest(pipePath, '/api/v1/properties/recommend?limit=20', 'GET', undefined, {
+          Authorization: `Bearer ${user2Live.token}`,
+        })
+        if (chocoRes.statusCode !== 200 || chocoRes.body?.meta?.source !== mode.expectedSource) {
+          throw new Error(`[${mode.label}] Expected 200 ${mode.expectedSource} for user2, got ${chocoRes.statusCode} ${JSON.stringify(chocoRes.body?.meta)}`)
+        }
+        const chocoItems: any[] = chocoRes.body?.data || []
+        if (chocoItems.length < 5) {
+          throw new Error(`[${mode.label}] Expected >= 5 dog-friendly properties for user2 (Choco 3.5kg), got ${chocoItems.length}`)
+        }
+        for (const item of chocoItems) {
+          const detail = propDetailsById.get(item.id)
+          const hasDogRoom = detail?.roomCategories.some((rc) =>
+            rc.pets.some((rp) => rp.petId === dogPetRecord.id)
+          )
+          if (!hasDogRoom) {
+            throw new Error(`[${mode.label}] Property ${item.id} returned for Choco does not have a Dog room`)
+          }
+        }
+
+        // Verify Milo (28.5kg Large Dog, owned by user1 alongside Luna Small Cat) never gets matched to a property
+        // whose Dog rooms are strictly Small/Medium (max < 28.5) as all_pets
+        const miloRes = await makeRequest(pipePath, '/api/v1/properties/recommend?limit=20', 'GET', undefined, {
+          Authorization: `Bearer ${user1Live.token}`,
+        })
+        if (miloRes.statusCode !== 200 || miloRes.body?.meta?.source !== mode.expectedSource) {
+          throw new Error(`[${mode.label}] Expected 200 ${mode.expectedSource} for user1, got ${miloRes.statusCode}`)
+        }
+        for (const item of miloRes.body?.data || []) {
+          if (item.matchTier === 'all_pets') {
+            const detail = propDetailsById.get(item.id)
+            const supportsLargeDog = detail?.roomCategories.some(
+              (rc) =>
+                rc.pets.some((rp) => rp.petId === dogPetRecord.id) &&
+                (rc.petSizeCategory === null || rc.petSizeCategory.max >= 28.5)
+            )
+            if (!supportsLargeDog) {
+              throw new Error(`[${mode.label}] Large dog Milo (28.5kg) matched Small/Medium-only dog room on property ${item.id} as all_pets`)
+            }
+          }
+        }
+      }
+    })
+
+    // Test 75: PF-3 Optional Location-Aware Soft Geo-Boost (?lat=&lng=)
+    await runTest('PF-3: ?lat=13.7563&lng=100.5018 applies Soft Geo-Boost (Near you reason & distanceKm) without dropping distant provinces', async () => {
+      const modes: Array<{ label: string; url: string; expectedSource: string }> = [
+        { label: 'live_ml', url: liveMlUrl, expectedSource: 'ml_service' },
+        { label: 'in_process_fallback', url: 'http://127.0.0.1:59998', expectedSource: 'in_process_fallback' },
+      ]
+
+      for (const mode of modes) {
+        config.mlServiceUrl = mode.url
+        config.mlTimeoutMs = originalMlTimeoutMs
+        await invalidateAllRecommendationCaches()
+
+        // Cold-start with Bangkok coordinates + admin debug
+        const coldGeoRes = await makeRequest(
+          pipePath,
+          '/api/v1/properties/recommend?debug=true&asUserId=guest&limit=50&lat=13.7563&lng=100.5018',
+          'GET',
+          undefined,
+          { Authorization: `Bearer ${adminLive.token}` }
+        )
+        if (coldGeoRes.statusCode !== 200 || coldGeoRes.body?.meta?.source !== mode.expectedSource) {
+          throw new Error(`[${mode.label}] Cold-start geo failed: ${coldGeoRes.statusCode} ${JSON.stringify(coldGeoRes.body?.meta)}`)
+        }
+        const coldItems: any[] = coldGeoRes.body?.data || []
+        const nearbyCold = coldItems.filter(
+          (item) =>
+            typeof item.scoreBreakdown?.distanceKm === 'number' &&
+            item.scoreBreakdown.distanceKm <= 35 &&
+            typeof item.scoreBreakdown?.sGeo === 'number' &&
+            Array.isArray(item.matchReasons) &&
+            item.matchReasons.length <= 3 &&
+            item.matchReasons.some((r: string) => r.startsWith('Near you ('))
+        )
+        if (nearbyCold.length === 0) {
+          throw new Error(`[${mode.label}] Expected at least 1 nearby Bangkok/Nonthaburi property with 'Near you (... km)' & distanceKm`)
+        }
+        const distantCold = coldItems.filter(
+          (item) =>
+            typeof item.scoreBreakdown?.distanceKm === 'number' &&
+            item.scoreBreakdown.distanceKm > 100
+        )
+        if (distantCold.length === 0) {
+          throw new Error(`[${mode.label}] Soft Geo-Boost dropped distant provinces (Chiang Mai/Phuket) completely`)
+        }
+
+        // Personalized user2 with Bangkok coordinates + admin debug
+        const persGeoRes = await makeRequest(
+          pipePath,
+          `/api/v1/properties/recommend?debug=true&asUserId=${user2Live.userId}&limit=50&lat=13.7563&lng=100.5018`,
+          'GET',
+          undefined,
+          { Authorization: `Bearer ${adminLive.token}` }
+        )
+        if (persGeoRes.statusCode !== 200 || persGeoRes.body?.meta?.source !== mode.expectedSource) {
+          throw new Error(`[${mode.label}] Personalized geo failed: ${persGeoRes.statusCode}`)
+        }
+        const persItems: any[] = persGeoRes.body?.data || []
+        const nearbyPers = persItems.filter(
+          (item) =>
+            typeof item.scoreBreakdown?.distanceKm === 'number' &&
+            item.scoreBreakdown.distanceKm <= 35 &&
+            typeof item.scoreBreakdown?.sGeo === 'number' &&
+            Array.isArray(item.matchReasons) &&
+            item.matchReasons.length <= 3 &&
+            item.matchReasons.some((r: string) => r.startsWith('Near you ('))
+        )
+        if (nearbyPers.length === 0) {
+          throw new Error(`[${mode.label}] Expected nearby personalized recommendation with 'Near you (... km)' & distanceKm`)
+        }
+      }
+
+      // Public guest call with valid lat/lng succeeds without scoreBreakdown; invalid/partial lat is ignored gracefully
+      const publicGeoRes = await makeRequest(pipePath, '/api/v1/properties/recommend?limit=10&lat=13.7563&lng=100.5018')
+      if (publicGeoRes.statusCode !== 200 || publicGeoRes.body?.data?.[0]?.scoreBreakdown !== undefined) {
+        throw new Error(`Public geo recommend failed or leaked scoreBreakdown: ${publicGeoRes.statusCode}`)
+      }
+      const partialLatRes = await makeRequest(pipePath, '/api/v1/properties/recommend?limit=4&lat=13.7563')
+      if (partialLatRes.statusCode !== 200 || !Array.isArray(partialLatRes.body?.data)) {
+        throw new Error(`Partial lat param should be ignored gracefully, got ${partialLatRes.statusCode}`)
+      }
+    })
+
+    // Test 76: PF-4 Scalable Admin ML Inspector APIs (featured caps, counts, & server-side search + RBAC)
+    await runTest('PF-4: Admin ML status caps samples (<=6 users, <=12 props) with totals & /users/search + /properties/search work with Admin RBAC', async () => {
+      config.mlServiceUrl = liveMlUrl
+      config.mlTimeoutMs = originalMlTimeoutMs
+      await invalidateAllRecommendationCaches()
+      await makeRequest(pipePath, '/api/v1/admin/ml/refresh', 'POST', undefined, {
+        Authorization: `Bearer ${adminLive.token}`,
+      })
+
+      const statusRes = await makeRequest(pipePath, '/api/v1/admin/ml/status', 'GET', undefined, {
+        Authorization: `Bearer ${adminLive.token}`,
+      })
+      if (statusRes.statusCode !== 200) {
+        throw new Error(`Expected 200 on /admin/ml/status, got ${statusRes.statusCode}`)
+      }
+      const statusData = statusRes.body?.data
+      if (
+        !Array.isArray(statusData?.sampleUsers) ||
+        statusData.sampleUsers.length === 0 ||
+        statusData.sampleUsers.length > 6
+      ) {
+        throw new Error(`Expected 1..6 featured sampleUsers, got ${statusData?.sampleUsers?.length}`)
+      }
+      if (
+        !Array.isArray(statusData?.sampleProperties) ||
+        statusData.sampleProperties.length === 0 ||
+        statusData.sampleProperties.length > 12
+      ) {
+        throw new Error(`Expected 1..12 featured sampleProperties, got ${statusData?.sampleProperties?.length}`)
+      }
+      if (
+        typeof statusData?.totalUsers !== 'number' ||
+        statusData.totalUsers < statusData.sampleUsers.length ||
+        typeof statusData?.totalActiveProperties !== 'number' ||
+        statusData.totalActiveProperties < statusData.sampleProperties.length
+      ) {
+        throw new Error(`Invalid totalUsers/totalActiveProperties in /admin/ml/status: ${JSON.stringify(statusData)}`)
+      }
+
+      // Admin search users (?q=user3 & ?q=user2 & exact numeric ID)
+      const userSearch3 = await makeRequest(pipePath, '/api/v1/admin/ml/users/search?q=user3&limit=10', 'GET', undefined, {
+        Authorization: `Bearer ${adminLive.token}`,
+      })
+      if (userSearch3.statusCode !== 200 || userSearch3.body?.code !== 'S-0000' || !Array.isArray(userSearch3.body?.data)) {
+        throw new Error(`Expected 200 array for /admin/ml/users/search?q=user3, got ${userSearch3.statusCode} ${JSON.stringify(userSearch3.body)}`)
+      }
+
+      const userSearch2 = await makeRequest(pipePath, '/api/v1/admin/ml/users/search?q=user2&limit=50', 'GET', undefined, {
+        Authorization: `Bearer ${adminLive.token}`,
+      })
+      if (
+        userSearch2.statusCode !== 200 ||
+        !Array.isArray(userSearch2.body?.data) ||
+        userSearch2.body.data.length === 0 ||
+        userSearch2.body.data.length > 20 ||
+        !userSearch2.body.data.some((u: any) => u.email === 'user2@joodpakpaw.com')
+      ) {
+        throw new Error(`Expected user2@joodpakpaw.com from /admin/ml/users/search?q=user2, got ${JSON.stringify(userSearch2.body)}`)
+      }
+
+      const userSearchById = await makeRequest(pipePath, `/api/v1/admin/ml/users/search?q=${user2Live.userId}`, 'GET', undefined, {
+        Authorization: `Bearer ${adminLive.token}`,
+      })
+      if (userSearchById.statusCode !== 200 || userSearchById.body?.data?.[0]?.id !== user2Live.userId) {
+        throw new Error(`Expected exact numeric ID match ${user2Live.userId}, got ${JSON.stringify(userSearchById.body?.data)}`)
+      }
+
+      // Admin search properties (?q=Chiang & exact numeric ID)
+      const propSearchChiang = await makeRequest(pipePath, '/api/v1/admin/ml/properties/search?q=Chiang&limit=10', 'GET', undefined, {
+        Authorization: `Bearer ${adminLive.token}`,
+      })
+      if (
+        propSearchChiang.statusCode !== 200 ||
+        propSearchChiang.body?.code !== 'S-0000' ||
+        !Array.isArray(propSearchChiang.body?.data) ||
+        propSearchChiang.body.data.length === 0
+      ) {
+        throw new Error(`Expected matching properties for /admin/ml/properties/search?q=Chiang, got ${propSearchChiang.statusCode} ${JSON.stringify(propSearchChiang.body)}`)
+      }
+
+      const propSearchById = await makeRequest(pipePath, `/api/v1/admin/ml/properties/search?q=${activeProps[0].id}`, 'GET', undefined, {
+        Authorization: `Bearer ${adminLive.token}`,
+      })
+      if (propSearchById.statusCode !== 200 || propSearchById.body?.data?.[0]?.id !== activeProps[0].id) {
+        throw new Error(`Expected exact numeric property ID match ${activeProps[0].id}, got ${JSON.stringify(propSearchById.body?.data)}`)
+      }
+
+      // Strict RBAC rejection on new search endpoints
+      const rbacChecks = [
+        { path: '/api/v1/admin/ml/users/search?q=user3', expectedStatus: 401, expectedCode: 'A-3005' },
+        { path: '/api/v1/admin/ml/users/search?q=user3', token: user1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/admin/ml/users/search?q=user3', token: host1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/admin/ml/properties/search?q=Chiang', expectedStatus: 401, expectedCode: 'A-3005' },
+        { path: '/api/v1/admin/ml/properties/search?q=Chiang', token: user1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+        { path: '/api/v1/admin/ml/properties/search?q=Chiang', token: host1Live.token, expectedStatus: 403, expectedCode: 'A-3007' },
+      ]
+      for (const c of rbacChecks) {
+        const headers: Record<string, string> = c.token ? { Authorization: `Bearer ${c.token}` } : {}
+        const res = await makeRequest(pipePath, c.path, 'GET', undefined, headers)
+        if (res.statusCode !== c.expectedStatus || res.body?.code !== c.expectedCode) {
+          throw new Error(`RBAC failed on ${c.path}: expected ${c.expectedStatus} ${c.expectedCode}, got ${res.statusCode} ${JSON.stringify(res.body)}`)
+        }
+      }
+    })
+
+    // Test 77: Enterprise Hardening P0 — Production forgot-password hides reset token/payload + fail-fast JWT secret guard
+    await runTest('P0 Security: forgot-password hides resetPasswordToken & payload in production and assertProductionSecrets enforces strong JWT secrets', async () => {
+      // 1. Verify fail-fast production secret guard
+      let threwDefaultSecret = false
+      try {
+        assertProductionSecrets({
+          env: 'production',
+          jwt: { secret: DEFAULT_JWT_SECRET, refreshSecret: 'strong_refresh_secret_prod_2026' },
+        })
+      } catch {
+        threwDefaultSecret = true
+      }
+      if (!threwDefaultSecret) {
+        throw new Error('Expected assertProductionSecrets to throw for default JWT_SECRET in production')
+      }
+
+      let threwDefaultRefresh = false
+      try {
+        assertProductionSecrets({
+          env: 'production',
+          jwt: { secret: 'strong_access_secret_prod_2026', refreshSecret: DEFAULT_JWT_REFRESH_SECRET },
+        })
+      } catch {
+        threwDefaultRefresh = true
+      }
+      if (!threwDefaultRefresh) {
+        throw new Error('Expected assertProductionSecrets to throw for default JWT_REFRESH_SECRET in production')
+      }
+
+      // Should NOT throw with strong secrets in production or defaults in test/dev
+      assertProductionSecrets({
+        env: 'production',
+        jwt: { secret: 'strong_access_secret_prod_2026', refreshSecret: 'strong_refresh_secret_prod_2026' },
+      })
+      assertProductionSecrets({
+        env: 'development',
+        jwt: { secret: DEFAULT_JWT_SECRET, refreshSecret: DEFAULT_JWT_REFRESH_SECRET },
+      })
+
+      // 2. Verify forgot-password hides resetPasswordToken & payload when NODE_ENV=production
+      const prevNodeEnv = process.env.NODE_ENV
+      try {
+        process.env.NODE_ENV = 'production'
+        const prodForgotRes = await makeRequest(pipePath, '/api/v1/auth/forgot-password', 'POST', {
+          email: 'user1@joodpakpaw.com',
+        })
+        if (prodForgotRes.statusCode !== 200 || prodForgotRes.body?.code !== 'S-0000') {
+          throw new Error(`Expected 200 S-0000 on production forgot-password, got ${prodForgotRes.statusCode} ${JSON.stringify(prodForgotRes.body)}`)
+        }
+        if (
+          prodForgotRes.body?.data?.resetPasswordToken !== undefined ||
+          prodForgotRes.body?.data?.payload !== undefined
+        ) {
+          throw new Error(`Security leak: resetPasswordToken/payload exposed in production response: ${JSON.stringify(prodForgotRes.body)}`)
+        }
+      } finally {
+        process.env.NODE_ENV = prevNodeEnv || 'test'
+        await prisma.user.updateMany({
+          where: { email: 'user1@joodpakpaw.com' },
+          data: { resetPasswordToken: null, resetPasswordExpiredAt: null },
+        })
+      }
+    })
+
+    // Test 78: Enterprise Hardening P0 — Strict CORS in production mode
+    await runTest('P0 Security: Strict CORS in production omits Access-Control-Allow-Origin for untrusted origins while allowing frontendUrl', async () => {
+      const prevNodeEnv = process.env.NODE_ENV
+      try {
+        process.env.NODE_ENV = 'production'
+
+        const evilRes = await makeRequest(pipePath, '/health', 'GET', undefined, {
+          Origin: 'https://evil.example.com',
+        })
+        if (evilRes.statusCode !== 200) {
+          throw new Error(`Expected 200 on /health, got ${evilRes.statusCode}`)
+        }
+        if (evilRes.headers['access-control-allow-origin'] !== undefined) {
+          throw new Error(
+            `CORS leak: expected no Access-Control-Allow-Origin for untrusted origin in production, got ${evilRes.headers['access-control-allow-origin']}`
+          )
+        }
+
+        const allowedRes = await makeRequest(pipePath, '/health', 'GET', undefined, {
+          Origin: config.frontendUrl,
+        })
+        if (allowedRes.statusCode !== 200) {
+          throw new Error(`Expected 200 on /health for frontendUrl, got ${allowedRes.statusCode}`)
+        }
+        if (allowedRes.headers['access-control-allow-origin'] !== config.frontendUrl) {
+          throw new Error(
+            `Expected Access-Control-Allow-Origin=${config.frontendUrl}, got ${allowedRes.headers['access-control-allow-origin']}`
+          )
+        }
+      } finally {
+        process.env.NODE_ENV = prevNodeEnv || 'test'
+      }
+    })
+
+    // Test 79: Enterprise Hardening P1 — Exact exotic pet safety parity in booking engine
+    await runTest('P1 Safety Parity: Booking rejects Bird (Kiwi) into Rabbit/Hamster-only room with 400 B-4004', async () => {
+      const user3Live = await signInLive('user3@joodpakpaw.com')
+      const kiwiPet = await prisma.petProfile.findFirst({
+        where: { guestId: user3Live.userId, name: 'Kiwi', deletedAt: null },
+        include: { petType: true },
+      })
+      if (!kiwiPet) {
+        throw new Error('Seeded Bird pet Kiwi for user3@joodpakpaw.com not found in live DB')
+      }
+
+      const ariProp = await prisma.property.findFirst({
+        where: { title: 'Ari Cozy Cat & Bunny Home', deletedAt: null },
+        include: {
+          roomCategories: {
+            where: { deletedAt: null },
+            include: { pets: { include: { pet: true } } },
+          },
+        },
+      })
+      const bunnyRoom = ariProp?.roomCategories.find(
+        (rc) =>
+          rc.name === 'Bunny & Small Pet Garden Room' ||
+          (rc.pets.some((p) => p.pet.name.toLowerCase().includes('rabbit')) &&
+            !rc.pets.some((p) => p.pet.name.toLowerCase().includes('bird')))
+      )
+      if (!bunnyRoom) {
+        throw new Error('Seeded Rabbit/Hamster-only room at Ari Cozy Cat & Bunny Home not found in live DB')
+      }
+
+      const checkIn = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10)
+      const checkOut = new Date(Date.now() + 11 * 86400000).toISOString().slice(0, 10)
+
+      const bookingRes = await makeRequest(
+        pipePath,
+        '/api/v1/bookings',
+        'POST',
+        {
+          bookingOrders: [
+            {
+              roomCategoryId: bunnyRoom.id,
+              checkInDate: checkIn,
+              checkOutDate: checkOut,
+              roomsBooked: 1,
+            },
+          ],
+          petProfileIds: [kiwiPet.id],
+        },
+        { Authorization: `Bearer ${user3Live.token}` }
+      )
+
+      if (bookingRes.statusCode !== 400 || bookingRes.body?.code !== 'B-4004') {
+        throw new Error(
+          `Expected 400 B-4004 when booking Bird (Kiwi) into Rabbit-only room, got ${bookingRes.statusCode} ${JSON.stringify(bookingRes.body)}`
+        )
+      }
+    })
+  } finally {
+    config.mlServiceUrl = originalMlUrl
+    config.mlTimeoutMs = originalMlTimeoutMs
+    if (hangServer) {
+      await new Promise<void>((resolve) => hangServer!.close(() => resolve()))
+    }
+    if (spawnedMlProc && !spawnedMlProc.killed) {
+      spawnedMlProc.kill('SIGTERM')
+    }
+    if (createdBehaviorUserIds.length > 0) {
+      await prisma.userBehavior.deleteMany({
+        where: {
+          userId: { in: createdBehaviorUserIds },
+          createdAt: { gte: sprint4StartedAt },
+        },
+      })
+    }
+    await invalidateAllRecommendationCaches()
     server.close()
     await prisma.$disconnect()
   }
