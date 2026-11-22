@@ -77,6 +77,9 @@ export function PropertyCard({
 
   const [activeImageIndex, setActiveImageIndex] = useState(0)
   const [isImageLoaded, setIsImageLoaded] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
+  const [isFocused, setIsFocused] = useState(false)
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
   const [failedIndices, setFailedIndices] = useState<Set<number>>(
     () => new Set()
   )
@@ -89,6 +92,41 @@ export function PropertyCard({
   useEffect(() => {
     setIsHeartClicked(property.isFavorite)
   }, [property.isFavorite])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setPrefersReducedMotion(mq.matches)
+    const handleChange = (e: MediaQueryListEvent) =>
+      setPrefersReducedMotion(e.matches)
+    mq.addEventListener('change', handleChange)
+    return () => mq.removeEventListener('change', handleChange)
+  }, [])
+
+  useEffect(() => {
+    if (
+      imageUrls.length <= 1 ||
+      isHovered ||
+      isFocused ||
+      prefersReducedMotion
+    ) {
+      return
+    }
+    const staggerMs = (Math.abs(property.id) % 6) * 420
+    let intervalId: ReturnType<typeof setInterval> | null = null
+    const timeoutId = setTimeout(() => {
+      intervalId = setInterval(() => {
+        setActiveImageIndex((prev) =>
+          prev >= imageUrls.length - 1 ? 0 : prev + 1
+        )
+      }, 3800)
+    }, staggerMs)
+
+    return () => {
+      clearTimeout(timeoutId)
+      if (intervalId) clearInterval(intervalId)
+    }
+  }, [imageUrls.length, isHovered, isFocused, prefersReducedMotion, property.id])
 
   const safeIndex =
     activeImageIndex < imageUrls.length ? activeImageIndex : 0
@@ -200,11 +238,23 @@ export function PropertyCard({
         isHighlighted && 'ring-2 ring-deep-teal ring-offset-2',
         className
       )}
-      onMouseEnter={() => onHoverChange?.(property.id)}
-      onMouseLeave={() => onHoverChange?.(null)}
+      onMouseEnter={() => {
+        setIsHovered(true)
+        onHoverChange?.(property.id)
+      }}
+      onMouseLeave={() => {
+        setIsHovered(false)
+        onHoverChange?.(null)
+      }}
+      onFocus={() => setIsFocused(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setIsFocused(false)
+        }
+      }}
     >
       {/* Image Box */}
-      <div className="w-full aspect-[4/3] sm:aspect-square relative rounded-2xl overflow-hidden bg-off-white/70 border border-gray-100 group-hover:border-gray-200 shadow-sm transition-colors">
+      <div className="w-full aspect-[4/3] sm:aspect-square relative rounded-2xl overflow-hidden bg-off-white/70 border border-border group-hover:border-foreground/20 transition-colors">
         <Link href={finalHref} className="relative block w-full h-full">
           {!isImageLoaded && (
             <Skeleton className="absolute inset-0 w-full h-full rounded-2xl bg-gray-200 animate-pulse motion-reduce:animate-none" />
@@ -303,19 +353,24 @@ export function PropertyCard({
               <ChevronRight className="w-4 h-4" />
             </button>
 
-            {/* Pagination Indicator Dots */}
-            <div
-              className="pointer-events-none absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2 py-1 rounded-full bg-black/25 backdrop-blur-xs"
-              aria-hidden="true"
-            >
+            {/* Clickable Pagination Indicator Dots */}
+            <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/40">
               {imageUrls.slice(0, 5).map((_, idx) => (
-                <span
+                <button
                   key={idx}
+                  type="button"
+                  aria-label={`Show photo ${idx + 1} of ${Math.min(imageUrls.length, 5)}`}
+                  aria-current={idx === safeIndex ? 'true' : undefined}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setActiveImageIndex(idx)
+                  }}
                   className={cn(
-                    'rounded-full transition-opacity duration-150',
+                    'rounded-full transition-opacity duration-150 p-0 cursor-pointer',
                     idx === safeIndex
-                      ? 'w-1.5 h-1.5 bg-white opacity-100'
-                      : 'w-1 h-1 bg-white/65 opacity-80'
+                      ? 'w-2 h-2 bg-white opacity-100'
+                      : 'w-1.5 h-1.5 bg-white/65 opacity-80 hover:opacity-100'
                   )}
                 />
               ))}

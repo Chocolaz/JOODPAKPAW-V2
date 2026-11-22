@@ -1,14 +1,15 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import {
   APIProvider,
   Map as GoogleMap,
   AdvancedMarker,
+  useMap,
 } from '@vis.gl/react-google-maps'
-import { Star, X, Plus, Minus, MapPin } from 'lucide-react'
+import { Star, X, Plus, Minus, MapPin, Navigation } from 'lucide-react'
 import { Property } from '@/types'
 import { PropertyCard } from '@/app/_components/PropertyCard'
 import {
@@ -18,12 +19,24 @@ import {
   getLowestPrice,
 } from '@/lib/utils'
 
+const BANGKOK_CENTER = { lat: 13.7563, lng: 100.5018 }
+
 interface HomeMapViewProps {
   properties: Property[]
   showTotalPrice: boolean
   checkIn?: string
   checkOut?: string
   showHeartIcon: boolean
+  userLocation?: { lat: number; lng: number } | null
+}
+
+function MapCenterSync({ center }: { center: { lat: number; lng: number } }) {
+  const map = useMap()
+  useEffect(() => {
+    if (!map) return
+    map.panTo(center)
+  }, [map, center.lat, center.lng])
+  return null
 }
 
 function getPinPriceLabel(
@@ -70,6 +83,7 @@ export function HomeMapView({
   checkIn,
   checkOut,
   showHeartIcon,
+  userLocation,
 }: HomeMapViewProps) {
   const [hoveredId, setHoveredId] = useState<number | null>(null)
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(
@@ -78,6 +92,21 @@ export function HomeMapView({
   const [zoomScale, setZoomScale] = useState(1)
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() || ''
+
+  const hasUserLocation = Boolean(
+    userLocation &&
+      Number.isFinite(userLocation.lat) &&
+      Number.isFinite(userLocation.lng)
+  )
+
+  const center = useMemo(
+    () => (hasUserLocation && userLocation ? userLocation : BANGKOK_CENTER),
+    [hasUserLocation, userLocation]
+  )
+
+  const centerLabel = hasUserLocation
+    ? 'Centered near you'
+    : 'Centered on Bangkok'
 
   const mappable = useMemo(
     () =>
@@ -96,46 +125,33 @@ export function HomeMapView({
     [properties]
   )
 
-  const center = useMemo(() => {
-    if (mappable.length === 0) return { lat: 13.7563, lng: 100.5018 }
-    const avgLat =
-      mappable.reduce((sum, item) => sum + item.lat, 0) / mappable.length
-    const avgLng =
-      mappable.reduce((sum, item) => sum + item.lng, 0) / mappable.length
-    return { lat: avgLat, lng: avgLng }
-  }, [mappable])
-
-  // Normalized 2D positions (12%..88%) for fallback coordinate map
+  // Normalized 2D positions centered around `center` (50%, 50%) for fallback coordinate map
   const normalizedPins = useMemo(() => {
     if (mappable.length === 0) return []
-    const lats = mappable.map((m) => m.lat)
-    const lngs = mappable.map((m) => m.lng)
-    const minLat = Math.min(...lats)
-    const maxLat = Math.max(...lats)
-    const minLng = Math.min(...lngs)
-    const maxLng = Math.max(...lngs)
-    const latSpan = maxLat - minLat || 0.08
-    const lngSpan = maxLng - minLng || 0.08
+    const maxLatDelta = Math.max(
+      0.06,
+      ...mappable.map((m) => Math.abs(m.lat - center.lat))
+    )
+    const maxLngDelta = Math.max(
+      0.06,
+      ...mappable.map((m) => Math.abs(m.lng - center.lng))
+    )
+    const latHalfSpan = maxLatDelta * 1.18
+    const lngHalfSpan = maxLngDelta * 1.18
 
     return mappable.map((item, idx) => {
-      const rawX =
-        mappable.length === 1
-          ? 50
-          : 14 + ((item.lng - minLng) / lngSpan) * 72
-      const rawY =
-        mappable.length === 1
-          ? 50
-          : 84 - ((item.lat - minLat) / latSpan) * 68
+      const rawX = 50 + ((item.lng - center.lng) / lngHalfSpan) * 38
+      const rawY = 50 - ((item.lat - center.lat) / latHalfSpan) * 36
       // Slight deterministic offset if multiple properties share exact coordinates
-      const jitterX = ((idx % 3) - 1) * 1.4
-      const jitterY = (Math.floor(idx / 3) % 2 === 0 ? -1 : 1) * 1.2
+      const jitterX = ((idx % 3) - 1) * 1.1
+      const jitterY = (Math.floor(idx / 3) % 2 === 0 ? -1 : 1) * 1.0
       return {
         ...item,
         x: Math.min(88, Math.max(12, rawX + jitterX)),
         y: Math.min(86, Math.max(14, rawY + jitterY)),
       }
     })
-  }, [mappable])
+  }, [mappable, center.lat, center.lng])
 
   const renderPreviewPopup = () => {
     if (!selectedProperty) return null
@@ -150,12 +166,12 @@ export function HomeMapView({
       selectedProperty.stayNights > 0
 
     return (
-      <div className="absolute bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:w-80 z-20 rounded-2xl bg-white border border-gray-200 shadow-xl overflow-hidden">
+      <div className="absolute bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:w-80 z-20 rounded-2xl bg-white border border-border overflow-hidden">
         <button
           type="button"
           aria-label="Close preview"
           onClick={() => setSelectedProperty(null)}
-          className="absolute top-2.5 right-2.5 z-10 w-8 h-8 rounded-full bg-white/95 text-foreground shadow-sm flex items-center justify-center hover:bg-gray-100 transition-colors"
+          className="absolute top-2.5 right-2.5 z-10 w-8 h-8 rounded-full bg-white/95 text-foreground flex items-center justify-center hover:bg-off-white transition-colors"
         >
           <X className="w-4 h-4" />
         </button>
@@ -188,9 +204,7 @@ export function HomeMapView({
               <span className="text-sm font-bold text-deep-teal tabular-nums">
                 {priceLabel}
                 <span className="text-xs font-normal text-neutral-gray ml-1">
-                  {hasStayTotal
-                    ? `total`
-                    : `/ night`}
+                  {hasStayTotal ? 'total' : '/ night'}
                 </span>
               </span>
               <span className="inline-flex items-center gap-0.5 text-xs font-medium text-foreground tabular-nums">
@@ -210,6 +224,12 @@ export function HomeMapView({
     if (apiKey) {
       return (
         <div className="relative w-full h-full">
+          {/* Center Status Pill */}
+          <div className="absolute top-3 left-3 z-10 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/95 border border-border text-xs font-medium text-deep-teal">
+            <Navigation className="w-3.5 h-3.5 text-accent-orange" />
+            <span>{centerLabel}</span>
+          </div>
+
           <APIProvider apiKey={apiKey}>
             <GoogleMap
               defaultCenter={center}
@@ -219,6 +239,7 @@ export function HomeMapView({
               disableDefaultUI={false}
               className="w-full h-full"
             >
+              <MapCenterSync center={center} />
               {mappable.map(({ property, lat, lng }) => {
                 const isActive =
                   hoveredId === property.id ||
@@ -234,10 +255,10 @@ export function HomeMapView({
                       onMouseEnter={() => setHoveredId(property.id)}
                       onMouseLeave={() => setHoveredId(null)}
                       className={cn(
-                        'px-3 py-1.5 rounded-full text-xs font-bold tabular-nums shadow-md border transition-transform duration-150',
+                        'px-3 py-1.5 rounded-full text-xs font-bold tabular-nums border transition-transform motion-reduce:transition-none duration-150',
                         isActive
                           ? 'bg-deep-teal text-white border-deep-teal scale-110 z-10'
-                          : 'bg-white text-foreground border-gray-200 hover:scale-105'
+                          : 'bg-white text-foreground border-border hover:scale-105'
                       )}
                     >
                       {getPinPriceLabel(property, showTotalPrice)}
@@ -252,7 +273,7 @@ export function HomeMapView({
       )
     }
 
-    // Graceful interactive coordinate pin map when Google Maps key is not set
+    // Graceful interactive coordinate pin map centered on user location or Bangkok
     return (
       <div
         className="relative w-full h-full overflow-hidden select-none"
@@ -263,13 +284,19 @@ export function HomeMapView({
           backgroundSize: '100% 100%, 100% 100%, 40px 40px, 40px 40px',
         }}
       >
-        {/* Map Header Pill */}
-        <div className="absolute top-3 left-3 z-10 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/95 border border-gray-200 shadow-xs text-xs font-medium text-deep-teal">
-          <MapPin className="w-3.5 h-3.5 text-accent-orange" />
-          <span className="tabular-nums">
-            {mappable.length}{' '}
-            {mappable.length === 1 ? 'stay on map' : 'stays on map'}
-          </span>
+        {/* Map Header Pills */}
+        <div className="absolute top-3 left-3 z-10 flex items-center gap-2 flex-wrap pr-14">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/95 border border-border text-xs font-medium text-deep-teal">
+            <Navigation className="w-3.5 h-3.5 text-accent-orange" />
+            <span>{centerLabel}</span>
+          </div>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/95 border border-border text-xs font-medium text-deep-teal">
+            <MapPin className="w-3.5 h-3.5 text-deep-teal" />
+            <span className="tabular-nums">
+              {mappable.length}{' '}
+              {mappable.length === 1 ? 'stay on map' : 'stays on map'}
+            </span>
+          </div>
         </div>
 
         {/* Zoom Controls */}
@@ -278,7 +305,7 @@ export function HomeMapView({
             type="button"
             aria-label="Zoom in"
             onClick={() => setZoomScale((z) => Math.min(1.4, z + 0.15))}
-            className="w-9 h-9 rounded-full bg-white border border-gray-200 shadow-xs flex items-center justify-center text-deep-teal hover:bg-off-white transition-colors"
+            className="w-9 h-9 rounded-full bg-white border border-border flex items-center justify-center text-deep-teal hover:bg-off-white transition-colors"
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -286,7 +313,7 @@ export function HomeMapView({
             type="button"
             aria-label="Zoom out"
             onClick={() => setZoomScale((z) => Math.max(0.85, z - 0.15))}
-            className="w-9 h-9 rounded-full bg-white border border-gray-200 shadow-xs flex items-center justify-center text-deep-teal hover:bg-off-white transition-colors"
+            className="w-9 h-9 rounded-full bg-white border border-border flex items-center justify-center text-deep-teal hover:bg-off-white transition-colors"
           >
             <Minus className="w-4 h-4" />
           </button>
@@ -294,9 +321,21 @@ export function HomeMapView({
 
         {/* Pins Layer */}
         <div
-          className="relative w-full h-full transition-transform duration-200"
+          className="relative w-full h-full transition-transform motion-reduce:transition-none duration-200"
           style={{ transform: `scale(${zoomScale})` }}
         >
+          {/* Reference Center Marker */}
+          <div
+            style={{ left: '50%', top: '50%' }}
+            className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 z-[5] flex flex-col items-center gap-1"
+            aria-hidden="true"
+          >
+            <span className="w-3.5 h-3.5 rounded-full bg-accent-orange ring-4 ring-accent-orange/25 border-2 border-white" />
+            <span className="px-2 py-0.5 rounded-full bg-white/90 text-[11px] font-semibold text-deep-teal border border-border">
+              {hasUserLocation ? 'You' : 'Bangkok'}
+            </span>
+          </div>
+
           {normalizedPins.map(({ property, x, y }) => {
             const isActive =
               hoveredId === property.id ||
@@ -310,10 +349,10 @@ export function HomeMapView({
                 onMouseLeave={() => setHoveredId(null)}
                 style={{ left: `${x}%`, top: `${y}%` }}
                 className={cn(
-                  'absolute -translate-x-1/2 -translate-y-1/2 px-3 py-1.5 rounded-full text-xs font-bold tabular-nums shadow-md border transition-transform duration-150',
+                  'absolute -translate-x-1/2 -translate-y-1/2 px-3 py-1.5 rounded-full text-xs font-bold tabular-nums border transition-transform motion-reduce:transition-none duration-150',
                   isActive
                     ? 'bg-deep-teal text-white border-deep-teal scale-110 z-20'
-                    : 'bg-white text-foreground border-gray-200 hover:border-deep-teal hover:scale-105 z-10'
+                    : 'bg-white text-foreground border-border hover:border-deep-teal hover:scale-105 z-10'
                 )}
               >
                 {getPinPriceLabel(property, showTotalPrice)}
@@ -324,7 +363,7 @@ export function HomeMapView({
 
         {mappable.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center p-6 text-center">
-            <p className="text-sm text-deep-teal font-medium bg-white/90 px-4 py-2 rounded-full border border-gray-200">
+            <p className="text-sm text-deep-teal font-medium bg-white/90 px-4 py-2 rounded-full border border-border">
               No map coordinates available for these stays.
             </p>
           </div>
@@ -338,7 +377,7 @@ export function HomeMapView({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       {/* Mobile: Map on top so users immediately explore pins */}
-      <div className="lg:hidden w-full h-[64vh] min-h-[400px] rounded-2xl overflow-hidden border border-gray-200 shadow-sm">
+      <div className="lg:hidden w-full h-[64vh] min-h-[400px] rounded-2xl overflow-hidden border border-border">
         {renderMapCanvas()}
       </div>
 
@@ -365,7 +404,7 @@ export function HomeMapView({
       </div>
 
       {/* Right 5 Cols: Desktop Sticky Map */}
-      <div className="hidden lg:block lg:col-span-5 sticky top-36 h-[calc(100vh-11rem)] rounded-2xl overflow-hidden border border-gray-200 shadow-sm">
+      <div className="hidden lg:block lg:col-span-5 sticky top-36 h-[calc(100vh-11rem)] rounded-2xl overflow-hidden border border-border">
         {renderMapCanvas()}
       </div>
     </div>

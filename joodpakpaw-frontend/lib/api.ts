@@ -2084,3 +2084,60 @@ export const searchAdminMlProperties = async (
   if (Array.isArray(res?.properties)) return res.properties as MlSampleProperty[]
   return []
 }
+
+// --- Locations (77 Thai Provinces) ---
+import { THAI_PROVINCES } from './thaiProvinces'
+
+export interface ProvinceOption {
+  id: number
+  code: string
+  nameEn: string
+  nameTh: string
+  propertyCount: number
+}
+
+function getThaiProvincesFallback(q?: string): ProvinceOption[] {
+  const term = q?.trim().toLowerCase()
+  if (!term) return THAI_PROVINCES
+  return THAI_PROVINCES.filter(
+    (p) =>
+      p.nameEn.toLowerCase().includes(term) ||
+      p.nameTh.toLowerCase().includes(term)
+  )
+}
+
+export const getProvinces = async (q?: string): Promise<ProvinceOption[]> => {
+  const trimmed = q?.trim()
+  const endpoint = trimmed
+    ? `api/v1/locations/provinces?${new URLSearchParams({ q: trimmed }).toString()}`
+    : 'api/v1/locations/provinces'
+
+  try {
+    const res = await request<any>({
+      endpoint,
+      method: 'GET',
+      errorContext: 'Get Provinces',
+    })
+    const rows = Array.isArray(res?.data)
+      ? res.data
+      : Array.isArray(res?.provinces)
+      ? res.provinces
+      : Array.isArray(res)
+      ? res
+      : []
+
+    if (rows.length > 0) {
+      return rows.map((row: any, idx: number) => ({
+        id: Number(row.id ?? row.code ?? idx + 1),
+        code: String(row.code ?? row.id ?? idx + 1),
+        nameEn: String(row.nameEn ?? row.name_en ?? ''),
+        nameTh: String(row.nameTh ?? row.name_th ?? ''),
+        propertyCount: Number(row.propertyCount ?? row.property_count ?? 0),
+      }))
+    }
+  } catch {
+    // Graceful client-side fallback to browser-safe 77 Thai provinces dataset
+  }
+
+  return getThaiProvincesFallback(trimmed)
+}

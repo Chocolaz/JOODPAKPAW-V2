@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { PropertyList } from '@/app/_components/PropertyList'
+import { PropertyCard } from '@/app/_components/PropertyCard'
 import { getProperties, getPropertiesByIds } from '@/lib/api'
 import { readGeoCache, writeGeoCache } from '@/lib/geoCache'
 import { PetProfile, Property } from '@/types'
@@ -14,7 +15,8 @@ import {
   List,
   ShieldCheck,
   X,
-  Loader2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import { useBrowseFilters } from '@/app/_hooks/useBrowseFilters'
 import { useRecentlyViewed } from '@/app/_hooks/useRecentlyViewed'
@@ -24,10 +26,40 @@ import { useBrowsePets } from './_components/BrowseLayoutClient'
 import { CategoryIconRail } from './_components/CategoryIconRail'
 import { BrowseHero } from './_components/BrowseHero'
 import { HomeMapView } from './_components/HomeMapView'
+import { cn } from '@/lib/utils'
 
 const RECOMMEND_LIMIT = 8
-const RECENT_LIMIT = 4
-const PAGE_SIZE = 24
+const RECENT_LIMIT = 12
+const PAGE_SIZE = 12
+
+function buildPageNumbers(
+  current: number,
+  total: number
+): (number | 'ellipsis')[] {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  const pages: (number | 'ellipsis')[] = [1]
+  const start = Math.max(2, current - 1)
+  const end = Math.min(total - 1, current + 1)
+  if (start > 2) pages.push('ellipsis')
+  for (let p = start; p <= end; p++) pages.push(p)
+  if (end < total - 1) pages.push('ellipsis')
+  pages.push(total)
+  return pages
+}
+
+function scrollToSectionTop(el: HTMLElement | null) {
+  if (!el || typeof window === 'undefined') return
+  const prefersReduced = window.matchMedia?.(
+    '(prefers-reduced-motion: reduce)'
+  ).matches
+  const top = el.getBoundingClientRect().top + window.scrollY - 140
+  window.scrollTo({
+    top: Math.max(0, top),
+    behavior: prefersReduced ? 'auto' : 'smooth',
+  })
+}
 
 export default function Home() {
   const {
@@ -36,10 +68,15 @@ export default function Home() {
     mutate: mutateFeatured,
   } = useFeaturedSections()
 
-  const [pagedProperties, setPagedProperties] = useState<Property[]>([])
-  const [page, setPage] = useState(1)
-  const [pagedTotalPages, setPagedTotalPages] = useState<number | null>(null)
-  const [loadingMore, setLoadingMore] = useState(false)
+  // Real backend pagination for "Explore verified stays" (limit = 12)
+  const [explorePage, setExplorePage] = useState(1)
+  const [exploreProperties, setExploreProperties] = useState<Property[]>([])
+  const [exploreTotalPages, setExploreTotalPages] = useState(1)
+  const [exploreTotalRows, setExploreTotalRows] = useState(0)
+  const [isExploreLoading, setIsExploreLoading] = useState(true)
+  const exploreRequestRef = useRef(0)
+  const exploreSectionRef = useRef<HTMLElement | null>(null)
+  const filteredSectionRef = useRef<HTMLElement | null>(null)
 
   // Airbnb default: Display total price is ON by default
   const [showTotalPrice, setShowTotalPrice] = useState(true)
@@ -83,8 +120,11 @@ export default function Home() {
     isLoading: isRecommendedLoading,
   } = useRecommendedProperties(1, RECOMMEND_LIMIT, recommendedLocation)
 
+  // Real backend pagination for filtered search results (limit = 12)
+  const [filterPage, setFilterPage] = useState(1)
   const [filterResults, setFilterResults] = useState<Property[]>([])
   const [filterTotal, setFilterTotal] = useState(0)
+  const [filterTotalPages, setFilterTotalPages] = useState(1)
   const [isFilterLoading, setIsFilterLoading] = useState(false)
 
   const filterKeyRef = useRef(0)
@@ -98,30 +138,28 @@ export default function Home() {
     }
   }, [isAuthenticated, mutateFeatured])
 
-  const allProperties = useMemo(() => {
-    const base = featured?.allProperties || []
-    if (pagedProperties.length === 0) return base
-    const seen = new Set(base.map((p) => p.id))
-    return [...base, ...pagedProperties.filter((p) => !seen.has(p.id))]
-  }, [featured?.allProperties, pagedProperties])
-
-  const totalPages = pagedTotalPages ?? (featured?.allPropertiesTotalPages || 1)
-
-  const fetchMoreProperties = useCallback(async (nextPage: number) => {
-    setLoadingMore(true)
+  // Fetch paginated "Explore verified stays"
+  const fetchExplorePage = useCallback(async (targetPage: number) => {
+    const reqId = ++exploreRequestRef.current
+    setIsExploreLoading(true)
     try {
-      const response = await getProperties(nextPage, PAGE_SIZE)
-      setPagedProperties((prev) => [...prev, ...response.data])
-      setPage(nextPage)
-      setPagedTotalPages(response.totalPages)
+      const response = await getProperties(targetPage, PAGE_SIZE)
+      if (reqId !== exploreRequestRef.current) return
+      setExploreProperties(response.data)
+      setExploreTotalPages(Math.max(1, response.totalPages || 1))
+      setExploreTotalRows(response.totalRows ?? response.data.length)
     } catch (error) {
-      console.error('Failed to load more properties:', error)
+      console.error('Failed to load explore properties:', error)
     } finally {
-      setLoadingMore(false)
+      if (reqId === exploreRequestRef.current) setIsExploreLoading(false)
     }
   }, [])
 
-  // Geo cache for personalized recommendations
+  useEffect(() => {
+    fetchExplorePage(explorePage)
+  }, [explorePage, isAuthenticated, fetchExplorePage])
+
+  // Geo cache for personalized recommendations & map default center
   useEffect(() => {
     const cached = readGeoCache()
     if (cached) {
@@ -141,43 +179,14 @@ export default function Home() {
     )
   }, [])
 
-  // Fetch filtered stays whenever any search/category/date/pet filter is active
+  // Reset pagination to page 1 whenever filters/category/search change
   const petTypesKey = petTypes.join(',')
   const petProfileIdsKey = petProfileIds.join(',')
   const facilitiesKey = facilities.join(',')
 
   useEffect(() => {
-    if (!hasActiveSearchOrFilters) {
-      setFilterResults([])
-      setFilterTotal(0)
-      return
-    }
-    const key = ++filterKeyRef.current
-    setIsFilterLoading(true)
-    getProperties(1, 50, {
-      search: searchQuery || undefined,
-      province: province || undefined,
-      checkIn: checkIn || undefined,
-      checkOut: checkOut || undefined,
-      petTypes: petTypesKey || undefined,
-      petSizeCategoryId: petSizeCategoryId || undefined,
-      petProfileIds: petProfileIdsKey || undefined,
-      facilities: facilitiesKey || undefined,
-      propertyType: propertyType || undefined,
-      minRating: minRating || undefined,
-      minPrice: minPrice || undefined,
-      maxPrice: maxPrice || undefined,
-      sortBy: sortBy || undefined,
-    })
-      .then((res) => {
-        if (key !== filterKeyRef.current) return
-        setFilterResults(res.data)
-        setFilterTotal(res.totalRows)
-      })
-      .catch(console.error)
-      .finally(() => {
-        if (key === filterKeyRef.current) setIsFilterLoading(false)
-      })
+    setFilterPage(1)
+    setExplorePage(1)
   }, [
     hasActiveSearchOrFilters,
     searchQuery,
@@ -195,11 +204,70 @@ export default function Home() {
     sortBy,
   ])
 
+  // Fetch filtered stays whenever any search/category/date/pet filter is active
+  useEffect(() => {
+    if (!hasActiveSearchOrFilters) {
+      setFilterResults([])
+      setFilterTotal(0)
+      setFilterTotalPages(1)
+      return
+    }
+    const key = ++filterKeyRef.current
+    setIsFilterLoading(true)
+    getProperties(filterPage, PAGE_SIZE, {
+      search: searchQuery || undefined,
+      province: province || undefined,
+      checkIn: checkIn || undefined,
+      checkOut: checkOut || undefined,
+      petTypes: petTypesKey || undefined,
+      petSizeCategoryId: petSizeCategoryId || undefined,
+      petProfileIds: petProfileIdsKey || undefined,
+      facilities: facilitiesKey || undefined,
+      propertyType: propertyType || undefined,
+      minRating: minRating || undefined,
+      minPrice: minPrice || undefined,
+      maxPrice: maxPrice || undefined,
+      sortBy: sortBy || undefined,
+    })
+      .then((res) => {
+        if (key !== filterKeyRef.current) return
+        setFilterResults(res.data)
+        setFilterTotal(res.totalRows ?? res.data.length)
+        setFilterTotalPages(Math.max(1, res.totalPages || 1))
+      })
+      .catch(console.error)
+      .finally(() => {
+        if (key === filterKeyRef.current) setIsFilterLoading(false)
+      })
+  }, [
+    hasActiveSearchOrFilters,
+    filterPage,
+    searchQuery,
+    province,
+    checkIn,
+    checkOut,
+    petTypesKey,
+    petSizeCategoryId,
+    petProfileIdsKey,
+    facilitiesKey,
+    propertyType,
+    minRating,
+    minPrice,
+    maxPrice,
+    sortBy,
+  ])
+
   // Exclude the current user's own properties from public browse
   const visibleProperties = useMemo(() => {
-    if (!user) return allProperties
-    return allProperties.filter((p) => p.hostId !== user.id)
-  }, [allProperties, user])
+    const source =
+      exploreProperties.length > 0
+        ? exploreProperties
+        : explorePage === 1
+        ? featured?.allProperties || []
+        : []
+    if (!user) return source
+    return source.filter((p) => p.hostId !== user.id)
+  }, [exploreProperties, explorePage, featured?.allProperties, user])
 
   // Recently viewed batch hydration (preserving coordinated initial loading gate)
   const [extraRecentlyViewedMap, setExtraRecentlyViewedMap] = useState<
@@ -213,6 +281,7 @@ export default function Home() {
     const map = new Map<number, Property>(extraRecentlyViewedMap)
     for (const prop of [
       ...visibleProperties,
+      ...(featured?.allProperties || []),
       ...(featured?.topRated || []),
       ...(featured?.bestValue || []),
       ...(featured?.newListings || []),
@@ -225,7 +294,10 @@ export default function Home() {
   }, [visibleProperties, featured, recommendedProperties, extraRecentlyViewedMap])
 
   const coreFeedsSettled =
-    !authLoading && !(!featured && isFeaturedLoading) && !isRecommendedLoading
+    !authLoading &&
+    !(!featured && isFeaturedLoading) &&
+    !isRecommendedLoading &&
+    !(explorePage === 1 && isExploreLoading && exploreProperties.length === 0)
 
   const missingRecentlyViewedIds = useMemo(() => {
     if (!coreFeedsSettled || recentlyViewedIds.length === 0) return []
@@ -322,6 +394,20 @@ export default function Home() {
     })
   }
 
+  const handleExplorePageChange = (nextPage: number) => {
+    if (nextPage === explorePage || nextPage < 1 || nextPage > exploreTotalPages)
+      return
+    setExplorePage(nextPage)
+    scrollToSectionTop(exploreSectionRef.current)
+  }
+
+  const handleFilterPageChange = (nextPage: number) => {
+    if (nextPage === filterPage || nextPage < 1 || nextPage > filterTotalPages)
+      return
+    setFilterPage(nextPage)
+    scrollToSectionTop(filteredSectionRef.current)
+  }
+
   const activeMapProperties = hasActiveSearchOrFilters
     ? filterResults
     : visibleProperties
@@ -344,7 +430,7 @@ export default function Home() {
 
       {/* Main Container */}
       <div className="max-w-[1440px] mx-auto px-5 lg:px-12 pt-5 pb-28 lg:pb-20 space-y-10">
-        {/* 2. Compact Warm Off-White 3D Clay Hospitality Banner */}
+        {/* 2. Warm Off-White Hospitality Banner */}
         {showHero && (
           <BrowseHero
             isAuthenticated={isAuthenticated}
@@ -411,7 +497,10 @@ export default function Home() {
                 ))}
               </div>
             ) : activeMapProperties.length === 0 ? (
-              <EmptyState onReset={resetAllFilters} isFiltering={hasActiveSearchOrFilters} />
+              <EmptyState
+                onReset={resetAllFilters}
+                isFiltering={hasActiveSearchOrFilters}
+              />
             ) : (
               <HomeMapView
                 properties={activeMapProperties}
@@ -419,12 +508,13 @@ export default function Home() {
                 checkIn={checkIn || undefined}
                 checkOut={checkOut || undefined}
                 showHeartIcon={isAuthenticated}
+                userLocation={recommendedLocation}
               />
             )}
           </section>
         ) : hasActiveSearchOrFilters ? (
           /* Filtered Search Results Grid */
-          <section className="space-y-5">
+          <section ref={filteredSectionRef} className="space-y-5">
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div className="min-w-0">
                 <h2 className="text-xl sm:text-2xl font-bold text-deep-teal break-words min-w-0">
@@ -445,7 +535,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={resetAllFilters}
-                className="inline-flex items-center gap-1.5 min-h-[40px] px-4 rounded-full border border-gray-200 hover:border-deep-teal text-sm font-medium text-deep-teal transition-colors"
+                className="inline-flex items-center gap-1.5 min-h-[40px] px-4 rounded-full border border-border hover:border-deep-teal text-sm font-medium text-deep-teal transition-colors"
               >
                 <X className="w-4 h-4" />
                 Clear all
@@ -470,21 +560,33 @@ export default function Home() {
             ) : filterResults.length === 0 ? (
               <EmptyState onReset={resetAllFilters} isFiltering={true} />
             ) : (
-              <PropertyList
-                properties={filterResults}
-                className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
-                showPetPolicyChip={true}
-                showHeartIcon={isAuthenticated}
-                showTotalPrice={showTotalPrice}
-                checkIn={checkIn || undefined}
-                checkOut={checkOut || undefined}
-              />
+              <>
+                <PropertyList
+                  properties={filterResults}
+                  className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
+                  showPetPolicyChip={true}
+                  showHeartIcon={isAuthenticated}
+                  showTotalPrice={showTotalPrice}
+                  checkIn={checkIn || undefined}
+                  checkOut={checkOut || undefined}
+                />
+                {filterTotalPages > 1 && (
+                  <PaginationBar
+                    currentPage={filterPage}
+                    totalPages={filterTotalPages}
+                    totalRows={filterTotal}
+                    pageSize={PAGE_SIZE}
+                    isLoading={isFilterLoading}
+                    onPageChange={handleFilterPageChange}
+                  />
+                )}
+              </>
             )}
           </section>
         ) : (
           /* Default Clean Airbnb Marketplace Home Flow */
           <div className="space-y-12">
-            {/* 3. Recently Viewed (compact 4-col rail, only when history exists) */}
+            {/* 3. Recently Viewed (Horizontal Scrollable Rail + "See all") */}
             {resolvedRecentlyViewed.length > 0 && (
               <section className="space-y-4">
                 <div className="flex items-baseline justify-between gap-4">
@@ -498,13 +600,21 @@ export default function Home() {
                     See all
                   </Link>
                 </div>
-                <PropertyList
-                  properties={resolvedRecentlyViewed}
-                  className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
-                  showPetPolicyChip={true}
-                  showHeartIcon={isAuthenticated}
-                  showTotalPrice={showTotalPrice}
-                />
+                <div className="flex gap-5 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
+                  {resolvedRecentlyViewed.map((property) => (
+                    <div
+                      key={property.id}
+                      className="w-[260px] sm:w-[280px] lg:w-[295px] shrink-0 snap-start"
+                    >
+                      <PropertyCard
+                        property={property}
+                        showPetPolicyChip={true}
+                        showHeartIcon={isAuthenticated}
+                        showTotalPrice={showTotalPrice}
+                      />
+                    </div>
+                  ))}
+                </div>
               </section>
             )}
 
@@ -543,8 +653,8 @@ export default function Home() {
               </section>
             )}
 
-            {/* 5. Explore Verified Stays (Unified 4-Col Airbnb Grid) */}
-            <section className="space-y-5">
+            {/* 5. Explore Verified Stays (Unified 4-Col Grid with Backend Pagination) */}
+            <section ref={exploreSectionRef} className="space-y-5">
               <div className="flex items-baseline justify-between gap-4">
                 <div className="min-w-0">
                   <h2 className="text-xl sm:text-2xl font-bold text-deep-teal break-words min-w-0">
@@ -556,7 +666,23 @@ export default function Home() {
                 </div>
               </div>
 
-              {visibleProperties.length === 0 ? (
+              {isExploreLoading ? (
+                <div className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                  {Array.from({ length: PAGE_SIZE }).map((_, idx) => (
+                    <div
+                      key={idx}
+                      className="animate-pulse motion-reduce:animate-none"
+                    >
+                      <div className="aspect-square w-full bg-gray-200 rounded-2xl" />
+                      <div className="mt-3 space-y-2">
+                        <div className="h-4 bg-gray-200 rounded w-3/4" />
+                        <div className="h-3.5 bg-gray-200 rounded w-1/2" />
+                        <div className="h-3.5 bg-gray-200 rounded w-1/3" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : visibleProperties.length === 0 ? (
                 <EmptyState onReset={resetAllFilters} isFiltering={false} />
               ) : (
                 <>
@@ -568,21 +694,14 @@ export default function Home() {
                     showTotalPrice={showTotalPrice}
                   />
 
-                  {page < totalPages && (
-                    <div className="flex justify-center pt-4">
-                      <button
-                        type="button"
-                        disabled={loadingMore}
-                        onClick={() => fetchMoreProperties(page + 1)}
-                        className="inline-flex items-center justify-center gap-2 min-h-[44px] px-7 rounded-full border border-deep-teal text-deep-teal font-semibold text-sm hover:bg-deep-teal hover:text-white transition-colors disabled:opacity-60"
-                      >
-                        {loadingMore && (
-                          <Loader2 className="w-4 h-4 animate-spin motion-reduce:animate-none" />
-                        )}
-                        {loadingMore ? 'Loading stays' : 'Load more stays'}
-                      </button>
-                    </div>
-                  )}
+                  <PaginationBar
+                    currentPage={explorePage}
+                    totalPages={exploreTotalPages}
+                    totalRows={exploreTotalRows || visibleProperties.length}
+                    pageSize={PAGE_SIZE}
+                    isLoading={isExploreLoading}
+                    onPageChange={handleExplorePageChange}
+                  />
                 </>
               )}
             </section>
@@ -608,7 +727,7 @@ export default function Home() {
                   {isAuthenticated ? (
                     <Link
                       href="/profile/host"
-                      className="inline-flex items-center justify-center min-h-[48px] px-7 rounded-full bg-accent-orange hover:bg-accent-orange/90 text-white font-semibold text-sm sm:text-base transition-colors shadow-sm"
+                      className="inline-flex items-center justify-center min-h-[48px] px-7 rounded-full bg-accent-orange hover:bg-accent-orange/90 text-white font-semibold text-sm sm:text-base transition-colors"
                     >
                       Become a verified host
                     </Link>
@@ -618,7 +737,7 @@ export default function Home() {
                       onClick={() =>
                         openAuthModal('login', { returnUrl: '/profile/host' })
                       }
-                      className="inline-flex items-center justify-center min-h-[48px] px-7 rounded-full bg-accent-orange hover:bg-accent-orange/90 text-white font-semibold text-sm sm:text-base transition-colors shadow-sm"
+                      className="inline-flex items-center justify-center min-h-[48px] px-7 rounded-full bg-accent-orange hover:bg-accent-orange/90 text-white font-semibold text-sm sm:text-base transition-colors"
                     >
                       Become a verified host
                     </button>
@@ -628,7 +747,7 @@ export default function Home() {
             </section>
 
             {/* Minimal Footer Colophon */}
-            <footer className="border-t border-gray-100 pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-sm text-neutral-gray">
+            <footer className="border-t border-border pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-sm text-neutral-gray">
               <div>
                 <p className="font-semibold text-deep-teal">JoodPakPaw</p>
                 <p className="text-xs text-neutral-gray mt-0.5">
@@ -675,14 +794,14 @@ export default function Home() {
         )}
       </div>
 
-      {/* Floating Bottom-Center "Show map" / "Show list" Pill */}
+      {/* Floating Bottom-Left "Show map" / "Show list" Pill */}
       {!isInitialLoading && (
         <button
           type="button"
           onClick={() =>
             setViewMode((prev) => (prev === 'list' ? 'map' : 'list'))
           }
-          className="fixed bottom-20 lg:bottom-8 left-1/2 -translate-x-1/2 z-40 inline-flex items-center gap-2 min-h-[46px] px-5 py-2.5 rounded-full bg-deep-teal text-white text-sm font-semibold shadow-lg hover:bg-deep-teal/95 active:scale-95 transition-transform motion-reduce:transition-none duration-150 hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-deep-teal"
+          className="fixed bottom-20 lg:bottom-8 left-4 sm:left-6 lg:left-10 z-40 inline-flex items-center gap-2 min-h-[46px] px-5 py-2.5 rounded-full bg-deep-teal text-white text-sm font-semibold shadow-lg hover:bg-deep-teal/95 active:scale-95 transition-transform motion-reduce:transition-none duration-150 hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-deep-teal"
         >
           {viewMode === 'list' ? (
             <>
@@ -701,6 +820,93 @@ export default function Home() {
   )
 }
 
+function PaginationBar({
+  currentPage,
+  totalPages,
+  totalRows,
+  pageSize,
+  isLoading,
+  onPageChange,
+}: {
+  currentPage: number
+  totalPages: number
+  totalRows: number
+  pageSize: number
+  isLoading: boolean
+  onPageChange: (page: number) => void
+}) {
+  if (totalRows <= 0) return null
+  const start = (currentPage - 1) * pageSize + 1
+  const end = Math.min(totalRows, currentPage * pageSize)
+  const pages = buildPageNumbers(currentPage, totalPages)
+
+  return (
+    <div className="pt-4 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
+      <p className="text-sm text-neutral-gray tabular-nums">
+        Showing {start} to {end} of {totalRows}{' '}
+        {totalRows === 1 ? 'stay' : 'stays'}
+      </p>
+
+      {totalPages > 1 && (
+        <nav
+          aria-label="Pagination"
+          className="flex items-center gap-1.5 flex-wrap justify-center"
+        >
+          <button
+            type="button"
+            disabled={isLoading || currentPage <= 1}
+            onClick={() => onPageChange(currentPage - 1)}
+            className="inline-flex items-center gap-1 min-h-[40px] px-3.5 rounded-full border border-border bg-white text-sm font-medium text-deep-teal hover:border-deep-teal active:scale-[0.98] disabled:opacity-45 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span>Previous</span>
+          </button>
+
+          <div className="flex items-center gap-1">
+            {pages.map((item, idx) =>
+              item === 'ellipsis' ? (
+                <span
+                  key={`ellipsis-${idx}`}
+                  className="w-9 h-9 inline-flex items-center justify-center text-sm text-neutral-gray select-none"
+                  aria-hidden="true"
+                >
+                  …
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  disabled={isLoading}
+                  aria-current={item === currentPage ? 'page' : undefined}
+                  onClick={() => onPageChange(item)}
+                  className={cn(
+                    'min-w-[40px] h-10 px-2 rounded-full text-sm font-semibold tabular-nums transition-colors active:scale-[0.97]',
+                    item === currentPage
+                      ? 'bg-deep-teal text-white'
+                      : 'text-foreground hover:bg-off-white hover:text-deep-teal'
+                  )}
+                >
+                  {item}
+                </button>
+              )
+            )}
+          </div>
+
+          <button
+            type="button"
+            disabled={isLoading || currentPage >= totalPages}
+            onClick={() => onPageChange(currentPage + 1)}
+            className="inline-flex items-center gap-1 min-h-[40px] px-3.5 rounded-full border border-border bg-white text-sm font-medium text-deep-teal hover:border-deep-teal active:scale-[0.98] disabled:opacity-45 disabled:cursor-not-allowed transition-colors"
+          >
+            <span>Next</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </nav>
+      )}
+    </div>
+  )
+}
+
 function EmptyState({
   isFiltering,
   onReset,
@@ -709,8 +915,8 @@ function EmptyState({
   onReset: () => void
 }) {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[38vh] gap-4 text-center py-12 px-4 rounded-3xl bg-off-white/60 border border-gray-100">
-      <div className="w-16 h-16 rounded-full bg-white border border-gray-200 flex items-center justify-center">
+    <div className="flex flex-col items-center justify-center min-h-[38vh] gap-4 text-center py-12 px-4 rounded-3xl bg-off-white/60 border border-border">
+      <div className="w-16 h-16 rounded-full bg-white border border-border flex items-center justify-center">
         <SearchX className="w-7 h-7 text-neutral-gray" />
       </div>
       <div className="space-y-1 max-w-sm">

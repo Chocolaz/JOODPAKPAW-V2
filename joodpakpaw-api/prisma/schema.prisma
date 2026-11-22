@@ -863,3 +863,19 @@ model UserBehavior {
   @@index([createdAt])
   @@map("user_behaviors")
 }
+
+// ==============================================================================
+// Domain 9: Master Locations (77 Official Thai Provinces)
+// ==============================================================================
+
+model Province {
+  id        Int      @id @default(autoincrement())
+  code      Int      @unique
+  nameEn    String   @map("name_en") @db.VarChar(100)
+  nameTh    String   @map("name_th") @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([nameEn])
+  @@index([nameTh])
+  @@map("provinces")
+}
