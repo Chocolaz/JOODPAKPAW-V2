@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { PropertyList } from '@/app/_components/PropertyList'
 import { PropertyCard } from '@/app/_components/PropertyCard'
 import { getProperties, getPropertiesByIds } from '@/lib/api'
@@ -26,11 +27,11 @@ import { useBrowsePets } from './_components/BrowseLayoutClient'
 import { CategoryIconRail } from './_components/CategoryIconRail'
 import { BrowseHero } from './_components/BrowseHero'
 import { HomeMapView } from './_components/HomeMapView'
-import { cn } from '@/lib/utils'
+import { cn, assetPath } from '@/lib/utils'
 
-const RECOMMEND_LIMIT = 8
+const RECOMMEND_LIMIT = 10
 const RECENT_LIMIT = 12
-const PAGE_SIZE = 12
+const PAGE_SIZE = 20
 
 function buildPageNumbers(
   current: number,
@@ -444,8 +445,8 @@ export default function Home() {
         {isInitialLoading ? (
           <div className="space-y-8">
             <div className="h-6 w-48 bg-gray-200 rounded-lg animate-pulse motion-reduce:animate-none" />
-            <div className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {Array.from({ length: 8 }).map((_, idx) => (
+            <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-5">
+              {Array.from({ length: 10 }).map((_, idx) => (
                 <div
                   key={idx}
                   className="animate-pulse motion-reduce:animate-none"
@@ -543,8 +544,8 @@ export default function Home() {
             </div>
 
             {isFilterLoading ? (
-              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                {Array.from({ length: 8 }).map((_, i) => (
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-5">
+                {Array.from({ length: 10 }).map((_, i) => (
                   <div
                     key={i}
                     className="animate-pulse motion-reduce:animate-none"
@@ -563,7 +564,7 @@ export default function Home() {
               <>
                 <PropertyList
                   properties={filterResults}
-                  className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
+                  className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-5"
                   showPetPolicyChip={true}
                   showHeartIcon={isAuthenticated}
                   showTotalPrice={showTotalPrice}
@@ -644,7 +645,7 @@ export default function Home() {
 
                 <PropertyList
                   properties={recommendedProperties.slice(0, RECOMMEND_LIMIT)}
-                  className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
+                  className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-5"
                   showPetPolicyChip={true}
                   showHeartIcon={isAuthenticated}
                   showMatchReason={true}
@@ -653,7 +654,7 @@ export default function Home() {
               </section>
             )}
 
-            {/* 5. Explore Verified Stays (Unified 4-Col Grid with Backend Pagination) */}
+            {/* 5. Explore Verified Stays (Unified 5-Col Desktop Grid with Even 20-Item Pagination) */}
             <section ref={exploreSectionRef} className="space-y-5">
               <div className="flex items-baseline justify-between gap-4">
                 <div className="min-w-0">
@@ -667,7 +668,7 @@ export default function Home() {
               </div>
 
               {isExploreLoading ? (
-                <div className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-5">
                   {Array.from({ length: PAGE_SIZE }).map((_, idx) => (
                     <div
                       key={idx}
@@ -688,7 +689,7 @@ export default function Home() {
                 <>
                   <PropertyList
                     properties={visibleProperties}
-                    className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
+                    className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-5"
                     showPetPolicyChip={true}
                     showHeartIcon={isAuthenticated}
                     showTotalPrice={showTotalPrice}
@@ -707,41 +708,52 @@ export default function Home() {
             </section>
 
             {/* 6. Two-Sided Marketplace Host Onboarding Band (Zero invented metrics) */}
-            <section className="rounded-3xl bg-deep-teal text-white px-6 py-8 sm:px-10 sm:py-10">
+            <section className="rounded-3xl bg-deep-teal text-white px-6 py-7 sm:px-10 sm:py-8">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-                <div className="space-y-2 max-w-xl min-w-0">
+                <div className="space-y-3 max-w-xl min-w-0">
                   <div className="inline-flex items-center gap-2 text-off-white/90 text-sm font-medium">
                     <ShieldCheck className="w-4 h-4 text-positive-green shrink-0" />
                     <span>Identity-verified host community</span>
                   </div>
-                  <h2 className="text-2xl sm:text-3xl font-bold text-white leading-tight break-words min-w-0">
+                  <h2 className="text-xl sm:text-2xl font-bold text-white leading-tight break-words min-w-0">
                     Open your home to travelling pets
                   </h2>
                   <p className="text-sm sm:text-base text-off-white/85 leading-relaxed">
                     Set your own room categories, daily availability calendar,
                     and pet safety rules as a verified JoodPakPaw host.
                   </p>
+                  <div className="pt-1">
+                    {isAuthenticated ? (
+                      <Link
+                        href="/profile/host"
+                        className="inline-flex items-center justify-center min-h-[46px] px-7 rounded-full bg-accent-orange hover:bg-accent-orange/90 active:scale-[0.98] text-white font-semibold text-sm sm:text-base transition-colors"
+                      >
+                        Become a verified host
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openAuthModal('login', { returnUrl: '/profile/host' })
+                        }
+                        className="inline-flex items-center justify-center min-h-[46px] px-7 rounded-full bg-accent-orange hover:bg-accent-orange/90 active:scale-[0.98] text-white font-semibold text-sm sm:text-base transition-colors"
+                      >
+                        Become a verified host
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                <div className="shrink-0">
-                  {isAuthenticated ? (
-                    <Link
-                      href="/profile/host"
-                      className="inline-flex items-center justify-center min-h-[48px] px-7 rounded-full bg-accent-orange hover:bg-accent-orange/90 text-white font-semibold text-sm sm:text-base transition-colors"
-                    >
-                      Become a verified host
-                    </Link>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        openAuthModal('login', { returnUrl: '/profile/host' })
-                      }
-                      className="inline-flex items-center justify-center min-h-[48px] px-7 rounded-full bg-accent-orange hover:bg-accent-orange/90 text-white font-semibold text-sm sm:text-base transition-colors"
-                    >
-                      Become a verified host
-                    </button>
-                  )}
+                <div className="shrink-0 w-full md:w-[290px] lg:w-[340px]">
+                  <div className="relative w-full aspect-[16/10] rounded-2xl overflow-hidden bg-off-white">
+                    <Image
+                      src={assetPath('/graphics/hero-clay-home.webp')}
+                      alt="Miniature 3D clay pet homestay waiting for travelling pets"
+                      fill
+                      sizes="(max-width: 768px) 100vw, 340px"
+                      className="object-cover object-center"
+                    />
+                  </div>
                 </div>
               </div>
             </section>
@@ -794,14 +806,14 @@ export default function Home() {
         )}
       </div>
 
-      {/* Floating Bottom-Left "Show map" / "Show list" Pill */}
+      {/* Floating Bottom-Right "Show map" / "Show list" Pill */}
       {!isInitialLoading && (
         <button
           type="button"
           onClick={() =>
             setViewMode((prev) => (prev === 'list' ? 'map' : 'list'))
           }
-          className="fixed bottom-20 lg:bottom-8 left-4 sm:left-6 lg:left-10 z-40 inline-flex items-center gap-2 min-h-[46px] px-5 py-2.5 rounded-full bg-deep-teal text-white text-sm font-semibold shadow-lg hover:bg-deep-teal/95 active:scale-95 transition-transform motion-reduce:transition-none duration-150 hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-deep-teal"
+          className="fixed bottom-20 lg:bottom-8 right-4 sm:right-6 lg:right-10 z-40 inline-flex items-center gap-2 min-h-[46px] px-5 py-2.5 rounded-full bg-deep-teal text-white text-sm font-semibold shadow-lg hover:bg-deep-teal/95 active:scale-95 transition-transform motion-reduce:transition-none duration-150 hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-deep-teal"
         >
           {viewMode === 'list' ? (
             <>

@@ -112,14 +112,14 @@ export function PropertyCard({
     ) {
       return
     }
-    const staggerMs = (Math.abs(property.id) % 6) * 420
+    const staggerMs = (Math.abs(property.id) % 4) * 350
     let intervalId: ReturnType<typeof setInterval> | null = null
     const timeoutId = setTimeout(() => {
       intervalId = setInterval(() => {
         setActiveImageIndex((prev) =>
           prev >= imageUrls.length - 1 ? 0 : prev + 1
         )
-      }, 3800)
+      }, 2800)
     }, staggerMs)
 
     return () => {
@@ -130,9 +130,6 @@ export function PropertyCard({
 
   const safeIndex =
     activeImageIndex < imageUrls.length ? activeImageIndex : 0
-  const currentImgSrc = failedIndices.has(safeIndex)
-    ? assetPath('/graphics/welcome.svg')
-    : imageUrls[safeIndex]
 
   const finalHref = useMemo(() => {
     if (href) return href
@@ -255,29 +252,45 @@ export function PropertyCard({
     >
       {/* Image Box */}
       <div className="w-full aspect-[4/3] sm:aspect-square relative rounded-2xl overflow-hidden bg-off-white/70 border border-border group-hover:border-foreground/20 transition-colors">
-        <Link href={finalHref} className="relative block w-full h-full">
+        <Link href={finalHref} className="relative block w-full h-full overflow-hidden">
           {!isImageLoaded && (
             <Skeleton className="absolute inset-0 w-full h-full rounded-2xl bg-gray-200 animate-pulse motion-reduce:animate-none" />
           )}
-          <Image
-            src={currentImgSrc}
-            alt={property.title}
-            fill
-            unoptimized
-            onLoad={() => setIsImageLoaded(true)}
-            className={cn(
-              'object-cover rounded-2xl transition-opacity duration-300 ease-out',
-              isImageLoaded ? 'opacity-100' : 'opacity-0'
-            )}
-            onError={() => {
-              setFailedIndices((prev) => {
-                const next = new Set(prev)
-                next.add(safeIndex)
-                return next
-              })
-              setIsImageLoaded(true)
-            }}
-          />
+          <div
+            className="flex h-full w-full transition-transform duration-500 ease-out motion-reduce:transition-none"
+            style={{ transform: `translateX(-${safeIndex * 100}%)` }}
+          >
+            {imageUrls.map((src, idx) => {
+              const resolvedSrc = failedIndices.has(idx)
+                ? assetPath('/graphics/welcome.svg')
+                : src
+              return (
+                <div key={`${property.id}-img-${idx}`} className="relative w-full h-full shrink-0">
+                  <Image
+                    src={resolvedSrc}
+                    alt={`${property.title} photo ${idx + 1}`}
+                    fill
+                    unoptimized
+                    onLoad={() => {
+                      if (idx === 0) setIsImageLoaded(true)
+                    }}
+                    className={cn(
+                      'object-cover transition-opacity duration-300 ease-out',
+                      isImageLoaded || idx > 0 ? 'opacity-100' : 'opacity-0'
+                    )}
+                    onError={() => {
+                      setFailedIndices((prev) => {
+                        const next = new Set(prev)
+                        next.add(idx)
+                        return next
+                      })
+                      if (idx === 0) setIsImageLoaded(true)
+                    }}
+                  />
+                </div>
+              )
+            })}
+          </div>
         </Link>
 
         {/* Top-left Pet Policy Chip */}
@@ -308,7 +321,7 @@ export function PropertyCard({
               aria-label={
                 isHeartClicked ? 'Remove from favorites' : 'Save to favorites'
               }
-              className="absolute top-2.5 right-2.5 p-1.5 rounded-full cursor-pointer bg-transparent border-none transition-transform duration-150 hover:scale-110"
+              className="absolute top-2.5 right-2.5 p-1.5 rounded-full cursor-pointer bg-transparent border-none transition-transform duration-150 hover:scale-110 active:scale-95 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-deep-teal"
               onClick={handleHeartClick}
             >
               <Heart
