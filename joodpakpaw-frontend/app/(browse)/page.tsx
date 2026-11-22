@@ -21,7 +21,6 @@ import {
 } from 'lucide-react'
 import { useBrowseFilters } from '@/app/_hooks/useBrowseFilters'
 import { useRecentlyViewed } from '@/app/_hooks/useRecentlyViewed'
-import { useFeaturedSections } from '@/app/_hooks/useFeaturedSections'
 import { useRecommendedProperties } from '@/app/_hooks/useRecommendedProperties'
 import { useBrowsePets } from './_components/BrowseLayoutClient'
 import { CategoryIconRail } from './_components/CategoryIconRail'
@@ -63,13 +62,7 @@ function scrollToSectionTop(el: HTMLElement | null) {
 }
 
 export default function Home() {
-  const {
-    featured,
-    isLoading: isFeaturedLoading,
-    mutate: mutateFeatured,
-  } = useFeaturedSections()
-
-  // Real backend pagination for "Explore verified stays" (limit = 12)
+  // Real backend pagination for "Explore verified stays" (limit = 20)
   const [explorePage, setExplorePage] = useState(1)
   const [exploreProperties, setExploreProperties] = useState<Property[]>([])
   const [exploreTotalPages, setExploreTotalPages] = useState(1)
@@ -129,15 +122,6 @@ export default function Home() {
   const [isFilterLoading, setIsFilterLoading] = useState(false)
 
   const filterKeyRef = useRef(0)
-
-  // Revalidate featured sections when auth status genuinely changes
-  const prevAuthRef = useRef(isAuthenticated)
-  useEffect(() => {
-    if (prevAuthRef.current !== isAuthenticated) {
-      prevAuthRef.current = isAuthenticated
-      mutateFeatured()
-    }
-  }, [isAuthenticated, mutateFeatured])
 
   // Fetch paginated "Explore verified stays"
   const fetchExplorePage = useCallback(async (targetPage: number) => {
@@ -260,15 +244,9 @@ export default function Home() {
 
   // Exclude the current user's own properties from public browse
   const visibleProperties = useMemo(() => {
-    const source =
-      exploreProperties.length > 0
-        ? exploreProperties
-        : explorePage === 1
-        ? featured?.allProperties || []
-        : []
-    if (!user) return source
-    return source.filter((p) => p.hostId !== user.id)
-  }, [exploreProperties, explorePage, featured?.allProperties, user])
+    if (!user) return exploreProperties
+    return exploreProperties.filter((p) => p.hostId !== user.id)
+  }, [exploreProperties, user])
 
   // Recently viewed batch hydration (preserving coordinated initial loading gate)
   const [extraRecentlyViewedMap, setExtraRecentlyViewedMap] = useState<
@@ -280,23 +258,14 @@ export default function Home() {
 
   const loadedPoolMap = useMemo(() => {
     const map = new Map<number, Property>(extraRecentlyViewedMap)
-    for (const prop of [
-      ...visibleProperties,
-      ...(featured?.allProperties || []),
-      ...(featured?.topRated || []),
-      ...(featured?.bestValue || []),
-      ...(featured?.newListings || []),
-      ...(featured?.trending || []),
-      ...recommendedProperties,
-    ]) {
+    for (const prop of [...visibleProperties, ...recommendedProperties]) {
       map.set(prop.id, prop)
     }
     return map
-  }, [visibleProperties, featured, recommendedProperties, extraRecentlyViewedMap])
+  }, [visibleProperties, recommendedProperties, extraRecentlyViewedMap])
 
   const coreFeedsSettled =
     !authLoading &&
-    !(!featured && isFeaturedLoading) &&
     !isRecommendedLoading &&
     !(explorePage === 1 && isExploreLoading && exploreProperties.length === 0)
 

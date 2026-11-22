@@ -3,7 +3,19 @@
 import { Property } from '@/types'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useSyncExternalStore } from 'react'
+
+function subscribeReducedMotion(cb: () => void) {
+  if (typeof window === 'undefined' || !window.matchMedia) return () => {}
+  const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+  mq.addEventListener('change', cb)
+  return () => mq.removeEventListener('change', cb)
+}
+
+function getReducedMotionSnapshot() {
+  if (typeof window === 'undefined' || !window.matchMedia) return false
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
 import {
   cn,
   getLowestPrice,
@@ -79,29 +91,28 @@ export function PropertyCard({
   const [isImageLoaded, setIsImageLoaded] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
+  const prefersReducedMotion = useSyncExternalStore(
+    subscribeReducedMotion,
+    getReducedMotionSnapshot,
+    () => false
+  )
   const [failedIndices, setFailedIndices] = useState<Set<number>>(
     () => new Set()
   )
-  const [isHeartClicked, setIsHeartClicked] = useState(property.isFavorite)
+  const [favoriteOverride, setFavoriteOverride] = useState<{
+    propVal: boolean
+    val: boolean
+  } | null>(null)
+  const isHeartClicked =
+    favoriteOverride && favoriteOverride.propVal === property.isFavorite
+      ? favoriteOverride.val
+      : property.isFavorite
+  const setIsHeartClicked = (val: boolean) =>
+    setFavoriteOverride({ propVal: property.isFavorite, val })
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [currentFolderId, setCurrentFolderId] = useState<number | null>(
     favoriteFolderId ?? null
   )
-
-  useEffect(() => {
-    setIsHeartClicked(property.isFavorite)
-  }, [property.isFavorite])
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
-    setPrefersReducedMotion(mq.matches)
-    const handleChange = (e: MediaQueryListEvent) =>
-      setPrefersReducedMotion(e.matches)
-    mq.addEventListener('change', handleChange)
-    return () => mq.removeEventListener('change', handleChange)
-  }, [])
 
   useEffect(() => {
     if (
@@ -270,6 +281,7 @@ export function PropertyCard({
                     src={resolvedSrc}
                     alt={`${property.title} photo ${idx + 1}`}
                     fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                     unoptimized
                     onLoad={() => {
                       if (idx === 0) setIsImageLoaded(true)
