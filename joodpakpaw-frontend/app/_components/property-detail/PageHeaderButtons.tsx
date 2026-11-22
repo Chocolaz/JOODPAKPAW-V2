@@ -27,38 +27,47 @@ export function PageHeaderButtons({
   onDataChange,
   onReportClick,
 }: PageHeaderButtonsProps) {
+  const pillBtnClass =
+    'w-11 h-11 inline-flex items-center justify-center rounded-full bg-white border border-border shadow-sm text-deep-teal hover:bg-neutral-50 active:bg-neutral-100 transition-colors cursor-pointer'
+
   return (
     <>
       <button
+        type="button"
+        aria-label="Go back"
         onClick={onBackClick}
-        className="fixed top-4 left-4 z-10 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow hover:bg-gray-100 transition"
+        className={`fixed top-4 left-4 z-10 ${pillBtnClass}`}
       >
-        <ChevronLeft className="w-6 h-6 text-gray-800" />
+        <ChevronLeft className="w-5 h-5" />
       </button>
 
       <div className="fixed top-4 right-4 z-10 flex items-center gap-2">
         {onReportClick && (
           <button
+            type="button"
+            aria-label="Report this property"
             onClick={onReportClick}
-            className="p-2 bg-white/80 backdrop-blur-sm rounded-full shadow hover:bg-gray-100 transition"
+            className={`${pillBtnClass} text-neutral-gray hover:text-deep-teal`}
             title="Report this property"
           >
-            <Flag className="w-5 h-5 text-gray-500" />
+            <Flag className="w-5 h-5" />
           </button>
         )}
         <button
+          type="button"
+          aria-label="Share property"
           onClick={onShareClick}
-          className="p-2 bg-white/80 backdrop-blur-sm rounded-full shadow hover:bg-gray-100 transition"
+          className={pillBtnClass}
         >
-          <Share2 className="w-5 h-5 text-gray-800" />
+          <Share2 className="w-5 h-5" />
         </button>
         {onGlobeClick && (
           <button
+            type="button"
+            aria-label={isPropertyActive ? 'Unpublish Property' : 'Publish Property'}
             onClick={onGlobeClick}
-            className={`p-2 bg-white/80 backdrop-blur-sm rounded-full shadow transition ${
-              disablePublish
-                ? 'cursor-not-allowed opacity-50'
-                : 'hover:bg-gray-100'
+            className={`${pillBtnClass} ${
+              disablePublish ? 'cursor-not-allowed opacity-50' : ''
             }`}
             title={
               disablePublish
@@ -69,9 +78,9 @@ export function PageHeaderButtons({
             }
           >
             {isPropertyActive ? (
-              <Globe className="w-5 h-5 text-gray-800" />
+              <Globe className="w-5 h-5" />
             ) : (
-              <GlobeLock className="w-5 h-5 text-gray-800" />
+              <GlobeLock className="w-5 h-5" />
             )}
           </button>
         )}

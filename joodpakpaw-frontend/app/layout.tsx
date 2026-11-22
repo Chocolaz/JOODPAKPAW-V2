@@ -53,7 +53,7 @@ export default function RootLayout({
 }) {
   const pathname = usePathname()
   const isAdmin = pathname.startsWith('/admin')
-  const showBottomNav = !pathname.startsWith('/authen') && !isAdmin && !pathname.startsWith('/chat')
+  const showBottomNav = !pathname.startsWith('/authen') && !isAdmin && !pathname.startsWith('/chat/')
 
   return (
     <html lang="en">

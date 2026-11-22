@@ -13,24 +13,39 @@ interface AppHeaderProps {
 
 export const AppHeader = ({ title, backPath, useBack, menu }: AppHeaderProps) => {
   const router = useRouter()
-  const showBack = backPath || useBack
+  const showBack = Boolean(backPath || useBack)
 
   return (
-    <header className="fixed top-0 z-40 flex items-center justify-between w-full h-14 px-4 md:px-6 bg-white border-b-2">
-      <div className="w-10">
-        {showBack && (
-          <button
-            onClick={() => (useBack ? router.back() : router.push(backPath!))}
-            className="p-2 rounded-full hover:bg-gray-100 transition-colors duration-200 ease-in-out -ml-2"
-          >
-            <ChevronLeft className="w-6 h-6 text-neutral-gray" />
-          </button>
+    <header className="fixed top-0 inset-x-0 z-40 bg-white border-b border-border pt-[env(safe-area-inset-top)]">
+      <div className="flex items-center justify-between gap-2 h-14 px-4 md:px-6">
+        {showBack ? (
+          <>
+            <button
+              type="button"
+              aria-label="Go back"
+              onClick={() => (useBack ? router.back() : router.push(backPath!))}
+              className="min-w-11 min-h-11 -ml-2 inline-flex items-center justify-center rounded-full text-deep-teal hover:bg-neutral-50 active:bg-neutral-100 transition-colors shrink-0 cursor-pointer"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+            <h2 className="font-semibold text-deep-teal truncate flex-1">
+              {title}
+            </h2>
+            <div className="min-w-10 flex items-center justify-end shrink-0">
+              {menu}
+            </div>
+          </>
+        ) : (
+          <>
+            <h2 className="font-bold text-deep-teal truncate flex-1">
+              {title}
+            </h2>
+            <div className="flex items-center justify-end gap-1 shrink-0">
+              {menu}
+            </div>
+          </>
         )}
       </div>
-      <h2 className="text-xl font-semibold text-deep-teal absolute left-1/2 -translate-x-1/2">
-        {title}
-      </h2>
-      <div className="min-w-10 flex items-center justify-end">{menu}</div>
     </header>
   )
 }

@@ -1,92 +1,146 @@
 'use client'
 
+import Link from 'next/link'
 import { useNormalizedPathname } from '@/app/_hooks/useNormalizedPathname'
 import { useNotifications } from '@/app/_components/NotificationContext'
 import { useChat } from '@/app/_components/ChatContext'
-import Link from 'next/link'
-import { motion } from 'framer-motion'
-import BellIcon from '@/public/icons/nav/Bell.svg'
-import ChatIcon from '@/public/icons/nav/Chat.svg'
-import HeartIcon from '@/public/icons/nav/Heart.svg'
-import HomeIcon from '@/public/icons/nav/Home.svg'
-import ProfileIcon from '@/public/icons/nav/Profile.svg'
+import { cn } from '@/lib/utils'
+import {
+  Bell,
+  Compass,
+  Heart,
+  MessageCircle,
+  User,
+} from 'lucide-react'
+
+const DISCOVERY_PATHS = [
+  '/top-rated',
+  '/new-listings',
+  '/recommended',
+  '/best-value',
+  '/near-you',
+  '/dog-friendly',
+  '/cat-friendly',
+  '/recently-viewed',
+  '/trending',
+]
+
+function shouldHideBottomNav(path: string): boolean {
+  if (
+    path.startsWith('/authen') ||
+    path.startsWith('/admin') ||
+    path.startsWith('/chat/') ||
+    path.startsWith('/detail/') ||
+    path.startsWith('/booking') ||
+    path.startsWith('/profile/host') ||
+    path.startsWith('/profile/pets/add')
+  ) {
+    return true
+  }
+
+  // Deep numeric detail routes: /[propertyId], /profile/bookings/[id], /profile/pets/[id], /profile/reports/[id]
+  if (/^\/\d+$/.test(path)) return true
+  if (/^\/profile\/bookings\/\d+$/.test(path)) return true
+  if (/^\/profile\/pets\/\d+$/.test(path)) return true
+  if (/^\/profile\/reports\/\d+$/.test(path)) return true
+
+  return false
+}
 
 export function BottomNav() {
   const normalizedPath = useNormalizedPathname()
   const { unreadCount } = useNotifications()
   const { unreadCount: chatUnreadCount } = useChat()
 
-  const hiddenPaths = ['/authen', '/admin', '/profile/']
-
-  if (hiddenPaths.some((p) => normalizedPath.startsWith(p))) {
+  if (shouldHideBottomNav(normalizedPath)) {
     return null
   }
 
   const navItems = [
-    { href: '/', label: 'Home', icon: HomeIcon },
-    { href: '/favorites', label: 'Favorites', icon: HeartIcon },
-    { href: '/chat', label: 'Chat', icon: ChatIcon },
-    { href: '/notifications', label: 'Notifications', icon: BellIcon },
-    { href: '/profile', label: 'Profile', icon: ProfileIcon },
+    {
+      href: '/',
+      label: 'Explore',
+      icon: Compass,
+      isActive:
+        normalizedPath === '/' ||
+        DISCOVERY_PATHS.some((p) => normalizedPath === p),
+      badge: 0,
+    },
+    {
+      href: '/favorites',
+      label: 'Favorites',
+      icon: Heart,
+      isActive:
+        normalizedPath === '/favorites' ||
+        normalizedPath.startsWith('/favorites/'),
+      badge: 0,
+    },
+    {
+      href: '/chat',
+      label: 'Chat',
+      icon: MessageCircle,
+      isActive: normalizedPath === '/chat',
+      badge: chatUnreadCount,
+    },
+    {
+      href: '/notifications',
+      label: 'Inbox',
+      icon: Bell,
+      isActive: normalizedPath === '/notifications',
+      badge: unreadCount,
+    },
+    {
+      href: '/profile',
+      label: 'Profile',
+      icon: User,
+      isActive:
+        normalizedPath === '/profile' ||
+        normalizedPath.startsWith('/profile/'),
+      badge: 0,
+    },
   ]
 
   return (
-    <nav className="lg:hidden fixed bottom-4 left-0 right-0 mx-auto bg-white border border-black/20 shadow-lg rounded-[10px] max-w-[500px] w-[90%]">
-      <div className="flex justify-around items-center">
+    <nav
+      aria-label="Mobile navigation"
+      className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-border pb-[env(safe-area-inset-bottom)]"
+    >
+      <div className="flex items-stretch justify-around">
         {navItems.map((item) => {
-          const isActive = item.href === '/chat'
-            ? normalizedPath === '/chat' || normalizedPath.startsWith('/chat/')
-            : normalizedPath === item.href
-          const badgeCount =
-            item.href === '/notifications' ? unreadCount :
-            item.href === '/chat' ? chatUnreadCount : 0
-          const showBadge = badgeCount > 0
+          const Icon = item.icon
+          const showBadge = item.badge > 0
 
           return (
             <Link
               key={item.label}
               href={item.href}
-              className={`relative flex flex-col items-center justify-center w-full ${isActive ? 'pt-3 pb-2' : 'pt-4 pb-3'}`}
+              aria-current={item.isActive ? 'page' : undefined}
+              className={cn(
+                'flex-1 min-h-[56px] flex flex-col items-center justify-center gap-0.5 py-1.5 transition-colors',
+                item.isActive
+                  ? 'text-accent-orange'
+                  : 'text-neutral-gray hover:text-deep-teal'
+              )}
             >
-              <motion.div
-                className="absolute top-0 w-10 h-[3px] rounded-full bg-accent-orange"
-                initial={false}
-                animate={{ scaleX: isActive ? 1 : 0 }}
-                transition={{ duration: 0.3 }}
-              />
-
-              {/* Icon wrapper — relative so badge can be positioned inside */}
               <div className="relative">
-                <item.icon
-                  className={`w-6 h-6 transition-colors duration-300 ${
-                    isActive ? 'text-accent-orange' : 'text-gray-500'
-                  }`}
+                <Icon
+                  className="w-5 h-5"
+                  strokeWidth={item.isActive ? 2.25 : 1.75}
                 />
-
-                {/* Unread badge */}
                 {showBadge && (
-                  <motion.span
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-0.5 bg-accent-orange rounded-full flex items-center justify-center"
-                  >
-                    <span className="text-white text-[9px] font-bold leading-none">
-                      {badgeCount > 9 ? '9+' : badgeCount}
-                    </span>
-                  </motion.span>
+                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-accent-orange text-white text-[10px] font-bold leading-none flex items-center justify-center tabular-nums">
+                    {item.badge > 99 ? '99+' : item.badge}
+                  </span>
                 )}
               </div>
-
-              <motion.div
-                className="overflow-hidden"
-                initial={false}
-                animate={{ height: isActive ? 'auto' : 0 }}
-                transition={{ duration: 0.3 }}
+              <span
+                className={cn(
+                  'text-[11px] leading-tight',
+                  item.isActive ? 'font-semibold' : 'font-medium'
+                )}
               >
-                <span className="text-xs font-medium text-accent-orange baloo2 pt-1">
-                  {item.label}
-                </span>
-              </motion.div>
+                {item.label}
+              </span>
             </Link>
           )
         })}
