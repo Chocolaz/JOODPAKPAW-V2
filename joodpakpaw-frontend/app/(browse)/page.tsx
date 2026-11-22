@@ -597,7 +597,7 @@ export default function Home() {
                   {resolvedRecentlyViewed.map((property) => (
                     <div
                       key={property.id}
-                      className="w-[260px] sm:w-[280px] lg:w-[295px] shrink-0 snap-start"
+                      className="w-[260px] sm:w-[calc((100%-20px)/2)] lg:w-[calc((100%-60px)/4)] xl:w-[calc((100%-80px)/5)] shrink-0 snap-start"
                     >
                       <PropertyCard
                         property={property}
