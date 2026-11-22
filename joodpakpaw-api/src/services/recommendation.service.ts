@@ -838,14 +838,24 @@ async function buildCatalogSnapshot(): Promise<CatalogSnapshot> {
   };
 }
 
+let catalogSnapshotInFlight: Promise<CatalogSnapshot> | null = null;
+
 async function getFallbackCatalogSnapshot(forceRefresh = false): Promise<CatalogSnapshot> {
   if (!forceRefresh) {
     const cached = await cacheService.get<CatalogSnapshot>(CATALOG_SNAPSHOT_KEY);
     if (cached) return cached;
   }
-  const snap = await buildCatalogSnapshot();
-  await cacheService.set(CATALOG_SNAPSHOT_KEY, snap, CATALOG_SNAPSHOT_TTL_SECONDS);
-  return snap;
+  if (!catalogSnapshotInFlight) {
+    catalogSnapshotInFlight = buildCatalogSnapshot()
+      .then(async (snap) => {
+        await cacheService.set(CATALOG_SNAPSHOT_KEY, snap, CATALOG_SNAPSHOT_TTL_SECONDS);
+        return snap;
+      })
+      .finally(() => {
+        catalogSnapshotInFlight = null;
+      });
+  }
+  return catalogSnapshotInFlight;
 }
 
 async function fetchUserContext(userId: number): Promise<UserContextData> {
