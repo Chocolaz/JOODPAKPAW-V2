@@ -146,6 +146,14 @@ export function PromptPaySlipDropzone({
           }}
           onDrop={handleDrop}
           onClick={handleAttachMockSlip}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              handleAttachMockSlip()
+            }
+          }}
           className={cn(
             'border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-2 bg-white',
             isDragging
@@ -158,7 +166,7 @@ export function PromptPaySlipDropzone({
           </div>
           <div className="space-y-0.5">
             <p className="text-xs font-medium text-foreground">
-              Click to upload or drag & drop slip
+              Click to attach demo slip or drag &amp; drop slip image
             </p>
             <p className="text-[11px] text-neutral-gray">
               Bank transfer confirmation receipt
@@ -166,7 +174,7 @@ export function PromptPaySlipDropzone({
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-border p-3 flex items-center justify-between gap-3 shadow-sm">
+        <div className="bg-white rounded-xl border border-border p-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             {slipPreviewUrl ? (
               <div className="w-12 h-12 rounded-lg overflow-hidden border border-border shrink-0 bg-off-white">
@@ -186,9 +194,12 @@ export function PromptPaySlipDropzone({
               <p className="text-xs font-medium text-foreground truncate">
                 {slipFile.name}
               </p>
-              <p className="text-[11px] text-neutral-gray mt-0.5">
-                {(slipFile.size / 1024).toFixed(1)} KB · Ready to submit
-              </p>
+              <div className="flex items-center gap-2 text-[11px] text-neutral-gray mt-0.5 tabular-nums">
+                <span>{(slipFile.size / 1024).toFixed(1)} KB</span>
+                <span className="text-positive-green font-medium">
+                  Ready to submit
+                </span>
+              </div>
             </div>
           </div>
 
@@ -198,7 +209,7 @@ export function PromptPaySlipDropzone({
               variant="ghost"
               size="sm"
               onClick={handleAttachMockSlip}
-              className="text-xs text-deep-teal h-8 px-2 hover:bg-deep-teal/5"
+              className="text-xs text-deep-teal h-8 px-2 hover:bg-deep-teal/5 cursor-pointer"
             >
               Change
             </Button>
@@ -207,7 +218,8 @@ export function PromptPaySlipDropzone({
               variant="ghost"
               size="sm"
               onClick={handleRemoveFile}
-              className="text-xs text-red-600 h-8 px-2 hover:bg-red-50 hover:text-red-700"
+              aria-label="Remove slip"
+              className="text-xs text-red-600 h-8 px-2 hover:bg-red-50 hover:text-red-700 cursor-pointer"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </Button>

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { ReactNode, useEffect } from 'react'
+import React, { ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { MenuHeader } from '@/app/booking/_components/MenuHeader'
 import { useNormalizedPathname } from '../_hooks/useNormalizedPathname'
@@ -9,24 +9,17 @@ export default function BookingLayout({ children }: { children: ReactNode }) {
   const normalizedPath = useNormalizedPathname()
   const searchParams = useSearchParams()
 
-  // Log searchParams to debug its state
-  useEffect(() => {
-    console.log('BookingLayout searchParams:', searchParams)
-  }, [searchParams])
-
   const getHeaderProps = () => {
-    // Ensure searchParams is not null/undefined before calling .get
     if (normalizedPath === '/booking/confirm' && searchParams) {
       const propertyId = searchParams.get('propertyId')
       if (propertyId) {
         return {
-          title: 'Booking',
-          backPath: `/${propertyId}?drawer=open`,
+          title: 'Confirm and pay',
+          backPath: `/detail/${propertyId}?drawer=open`,
         }
       }
     }
-    // Default or other booking paths
-    return { title: 'Booking', backPath: '/' }
+    return { title: 'Confirm and pay', backPath: '/' }
   }
 
   const headerProps = getHeaderProps()
