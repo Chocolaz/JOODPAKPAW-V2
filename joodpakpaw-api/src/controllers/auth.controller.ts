@@ -48,6 +48,26 @@ function generateRefCode(): string {
   return crypto.randomBytes(3).toString('hex').toUpperCase();
 }
 
+/**
+ * Ensures users.isVerifiedHost stays synced when an approved KYC record exists.
+ */
+async function resolveVerifiedHostFlag(
+  userId: number,
+  currentFlag: boolean
+): Promise<boolean> {
+  if (currentFlag) return true;
+  const approvedKyc = await prisma.userVerification.findFirst({
+    where: { userId, status: 'approved' },
+    select: { id: true },
+  });
+  if (!approvedKyc) return false;
+  await prisma.user.update({
+    where: { id: userId },
+    data: { isVerifiedHost: true },
+  });
+  return true;
+}
+
 function formatUserRoles(
   userRoles: Array<{ role: { id: number; name: string } }>,
   isBecomeToHost: boolean
@@ -597,6 +617,11 @@ export async function signIn(
       data: { updatedAt: new Date() },
     });
 
+    const isVerifiedHost = await resolveVerifiedHostFlag(
+      user.id,
+      user.isVerifiedHost
+    );
+
     const { accessToken, refreshToken, expiresIn, tokenType, roles } =
       issueTokens(user);
 
@@ -607,7 +632,7 @@ export async function signIn(
       lastName: user.lastName || '',
       visibleName: user.visibleName || '',
       avatar: user.avatar || '',
-      isVerifiedHost: user.isVerifiedHost,
+      isVerifiedHost,
       role: roles,
     };
 
@@ -909,7 +934,10 @@ export async function getProfile(
     }
 
     // Cycle-aware unban quota, suspension reason, and last appeal note
-    const appealStats = await getAccountAppealCycleStats(user.id);
+    const [appealStats, isVerifiedHost] = await Promise.all([
+      getAccountAppealCycleStats(user.id),
+      resolveVerifiedHostFlag(user.id, user.isVerifiedHost),
+    ]);
 
     const roles = formatUserRoles(user.userRoles, user.isBecomeToHost);
 
@@ -923,7 +951,7 @@ export async function getProfile(
       phone: user.phone || '',
       isVerified: user.isVerified,
       isBecomeToHost: user.isBecomeToHost,
-      isVerifiedHost: user.isVerifiedHost,
+      isVerifiedHost,
       isBannedReview: user.isBannedReview,
       isBannedAllProperties: user.isBannedAllProperties,
       unbanAllPropertiesRequestCount: appealStats.unbanAllPropertiesRequestCount,
