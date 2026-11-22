@@ -28,8 +28,18 @@ The locked system. Every Hallmark run reads this first and pages share it. Chang
   --radius: 0.625rem;         /* Base 10px; cards 16px (rounded-2xl), search pill 9999px (rounded-full) */
 }
 ```
-- **Heading scale (`h1`):** `22px` base · `24px` (`md`) · `28px` (`lg`) · `32px` (`xl`) — kept proportional and restrained above the fold.
-- **Container & Grid:** `max-w-[1440px] mx-auto` with responsive horizontal padding (`px-4 sm:px-6 lg:px-10`). Listing grids use `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4` (`minmax(0, 1fr)`), paginated at `12` stays per page.
+## Typography
+- **Display & UI Headings / Buttons:** `--font-baloo2`, `--font-prompt`, `sans-serif`
+- **Body & Captions:** `--font-afacad`, `--font-sarabun`, `sans-serif`
+- **Responsive Type Scale (`app/globals.css`):**
+  - `h1` (global): `20px` base · `21px` (`md`) · `22px` (`lg`) · `24px` (`xl`) · weight `600`
+  - Home Hero `h1` (`BrowseHero.tsx`): `18px` (`text-lg`) · `20px` (`sm:text-xl`) · `22px` (`lg:text-[22px]`) · weight `700`
+  - `h2`: `18px` base · `19px` (`md`) · `20px` (`lg`) · `22px` (`xl`) · weight `500`–`700`
+  - `h3`: `16px` base · `17px` (`md`) · `18px` (`lg`) · `19px` (`xl`) · weight `600`
+  - `h4`: `15px` base · `16px` (`md`/`lg`) · `17px` (`xl`) · weight `600`
+  - `h5`: `14px` base · `14px` (`md`) · `15px` (`lg`) · `16px` (`xl`) · weight `500`
+  - `body`: `14px` base · `15px` (`md`) · `16px` (`lg`) · `17px` (`xl`)
+- **Container & Grid:** `max-w-[1440px] mx-auto` with responsive horizontal padding (`px-4 sm:px-6 lg:px-10`). Listing grids use `grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5` (`minmax(0, 1fr)`), paginated at `20` stays per page (`LCM(5, 4, 2) = 20`) so every row is evenly filled across 5-column, 4-column, and 2-column breakpoints.
 
 ## Navigation & Visual Identity
 - **Desktop Navigation (`DesktopNav.tsx`):** Solid `bg-white border-b border-border` (never combined with `shadow-sm`). Three balanced zones:
@@ -38,6 +48,7 @@ The locked system. Every Hallmark run reads this first and pages share it. Chang
   - Right: `Become a host` / `Host mode` quiet action + optional `Admin` link + Airbnb-style Account Pill (`rounded-full border border-border`, avatar/initials + short name or `Sign in`)
 - **Brand & 3D Pastel Clay Assets:**
   - Home hero illustration: `joodpakpaw-frontend/public/graphics/home.svg`
+  - Host onboarding artwork: `joodpakpaw-frontend/public/graphics/hero-clay-home.webp`
   - Species icons (3D Pastel Clay): `public/icons/species/clay-dog-transparent.webp`, `clay-cat-transparent.webp`, `clay-exotic-transparent.webp`
   - Energy icons: `public/icons/pets/energy-1.webp` .. `energy-5.webp`
   - Wordmark: `public/icons/JOODPAK.svg`
@@ -48,8 +59,8 @@ The locked system. Every Hallmark run reads this first and pages share it. Chang
 - **Strict 77-Province Where Picker:** Backed by PostgreSQL `provinces` (`GET /api/v1/locations/provinces`, 77 official Thai provinces EN/TH) with client fallback; users search by Thai or English name and must select a valid province (or `Anywhere in Thailand`) to prevent invalid free-text queries.
 - **Date Range Picker:** Spacious `w-[min(94vw,660px)]` popover — 2 months side-by-side on desktop, 1 month on mobile, `h-10 w-10` day cells, `bg-deep-teal text-white` range caps, `bg-deep-teal/10` range span.
 - **Pricing Display Toggle:** Defaults to Airbnb total-stay mode (`Display total price: ON`), showing `฿X,XXX total` + `N nights` when dates are selected and toggling cleanly to `฿XXX / night` when switched off.
-- **Property Cards & Rails:** Multi-photo cards auto-slide every `3800ms` (with per-card stagger, pause on hover/focus, disabled under `prefers-reduced-motion: reduce`) plus manual chevrons & clickable dots. `Recently viewed` uses a horizontal snap-scroll rail (`overflow-x-auto snap-x`) with a `See all` link.
-- **Map Explorer:** Floating bottom-left `"Show map"` / `"Show list"` pill (`left-4 sm:left-6 lg:left-10`). Map centers on the user's current geolocation when available, defaulting to Bangkok (`13.7563, 100.5018`).
+- **Property Cards & Rails:** Multi-photo cards auto-slide horizontally (`translateX` track) every `2800ms` (with per-card stagger, pause on hover/focus, disabled under `prefers-reduced-motion: reduce`) plus manual chevrons & clickable dots. `Recently viewed` uses a horizontal snap-scroll rail (`overflow-x-auto snap-x`) with a `See all` link.
+- **Map Explorer:** Floating bottom-right `"Show map"` / `"Show list"` pill (`right-4 sm:right-6 lg:right-10`). Map centers on the user's current geolocation when available, defaulting to Bangkok (`13.7563, 100.5018`).
 - **Accessibility & Floor:** `overflow-x: clip` on `html, body`; instant `:focus-visible` ring (`2px solid var(--deep-teal)`, `outline-offset: 2px`); `:active` and `:disabled` states on all controls; zero `transition-all`; zero decorative status dots, middle-dot-joined meta strings, uppercase tracked eyebrows, glass blurs over translucent fills, or invented metrics.
 
 ## Motion
