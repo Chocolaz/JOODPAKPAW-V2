@@ -1006,10 +1006,58 @@
                 {
                   "key": "sortBy",
                   "value": "rating"
+                },
+                {
+                  "key": "checkIn",
+                  "value": "2026-11-25",
+                  "description": "Optional check-in date (YYYY-MM-DD, within today..+180 days). Pairs with checkOut for real calendar availability and stayTotalPrice.",
+                  "disabled": true
+                },
+                {
+                  "key": "checkOut",
+                  "value": "2026-11-27",
+                  "description": "Optional check-out date (YYYY-MM-DD, must be > checkIn, max 90 nights).",
+                  "disabled": true
+                },
+                {
+                  "key": "petSizeCategoryId",
+                  "value": "3",
+                  "description": "Optional positive integer pet size category ID (enforces up-to-max-size room eligibility).",
+                  "disabled": true
+                },
+                {
+                  "key": "petProfileIds",
+                  "value": "1,2",
+                  "description": "Optional comma-separated pet profile IDs belonging to the authenticated user (requires Bearer token; every selected pet must have >= 1 eligible room).",
+                  "disabled": true
+                },
+                {
+                  "key": "facilities",
+                  "value": "Swimming Pool,Outdoor Play Area",
+                  "description": "Optional comma-separated facility names or numeric IDs (matches properties with at least one matching facility).",
+                  "disabled": true
+                },
+                {
+                  "key": "propertyType",
+                  "value": "Pet Resort",
+                  "description": "Optional case-insensitive property type name/label filter (e.g. Pet Resort, Pet Homestay, Pet Hotel, Pet Condo).",
+                  "disabled": true
+                },
+                {
+                  "key": "propertyTypeId",
+                  "value": "1",
+                  "description": "Optional positive integer property type ID filter.",
+                  "disabled": true
+                },
+                {
+                  "key": "minPrice",
+                  "value": "500",
+                  "description": "Optional minimum nightly base price (pairs with maxPrice).",
+                  "disabled": true
                 }
               ]
             },
-            "description": "Public property search supporting `page`, `limit`, `minRating`, `sortBy`, `days`, `search`, `petTypes`, `maxPrice`, `province`."
+            "description": "Public property discovery & search supporting `page`, `limit`, `minRating`, `sortBy`, `days`, `search`, `petTypes`, `minPrice`, `maxPrice`, `province`, `checkIn`, `checkOut` (returns `stayNights` & `stayTotalPrice` from `room_category_calendars`), `petSizeCategoryId`, `petProfileIds` (authenticated multi-pet eligibility), `facilities`, `propertyType`, `propertyTypeId`, and up to 5 photos per property for card carousels."
           },
           "response": []
         },
