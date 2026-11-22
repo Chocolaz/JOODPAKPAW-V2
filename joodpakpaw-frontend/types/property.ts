@@ -91,6 +91,7 @@ export interface PropertyHost {
   id: number
   firstName: string
   lastName: string
+  visibleName?: string | null
   avatar: string
   hostAvgRating?: number
   isVerifiedHost?: boolean

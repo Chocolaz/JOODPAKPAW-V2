@@ -16,7 +16,6 @@ interface ReportPropertyDrawerProps {
   onOpenChange: (open: boolean) => void
 }
 
-// ── Shared inner content ──────────────────────────────────────────────────────
 function ReportContent({
   onClose,
   propertyId,
@@ -27,7 +26,8 @@ function ReportContent({
   const [step, setStep] = useState<1 | 2>(1)
   const [categories, setCategories] = useState<ReportCategory[]>([])
   const [loadingCategories, setLoadingCategories] = useState(false)
-  const [selectedCategory, setSelectedCategory] = useState<ReportCategory | null>(null)
+  const [selectedCategory, setSelectedCategory] =
+    useState<ReportCategory | null>(null)
   const [description, setDescription] = useState('')
   const [images, setImages] = useState<File[]>([])
   const [previews, setPreviews] = useState<string[]>([])
@@ -35,11 +35,21 @@ function ReportContent({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    setLoadingCategories(true)
+    let active = true
+    Promise.resolve().then(() => {
+      if (active) setLoadingCategories(true)
+    })
     getReportCategories('property')
-      .then((res) => setCategories(res.reportCategories))
+      .then((res) => {
+        if (active) setCategories(res.reportCategories)
+      })
       .catch(() => toast.error('Failed to load report categories.'))
-      .finally(() => setLoadingCategories(false))
+      .finally(() => {
+        if (active) setLoadingCategories(false)
+      })
+    return () => {
+      active = false
+    }
   }, [])
 
   const handleImagePick = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,7 +57,10 @@ function ReportContent({
     if (!files.length) return
     const added = files.slice(0, 3 - images.length)
     setImages((prev) => [...prev, ...added])
-    setPreviews((prev) => [...prev, ...added.map((f) => URL.createObjectURL(f))])
+    setPreviews((prev) => [
+      ...prev,
+      ...added.map((f) => URL.createObjectURL(f)),
+    ])
     e.target.value = ''
   }
 
@@ -65,11 +78,18 @@ function ReportContent({
     }
     setSubmitting(true)
     try {
-      await submitPropertyReport(propertyId, selectedCategory.id, description.trim(), images)
+      await submitPropertyReport(
+        propertyId,
+        selectedCategory.id,
+        description.trim(),
+        images
+      )
       toast.success("Report submitted. We'll review it shortly.")
       onClose()
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to submit report.')
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : 'Failed to submit report.'
+      toast.error(msg)
     } finally {
       setSubmitting(false)
     }
@@ -77,25 +97,26 @@ function ReportContent({
 
   return (
     <div className="flex flex-col h-full">
-      {/* ── Step 1: Pick a reason ── */}
       {step === 1 && (
         <>
           <div className="shrink-0 px-5 pt-6 pb-4">
             <div className="flex items-center justify-between mb-1">
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">
+              <p className="text-xs font-medium text-neutral-gray tabular-nums">
                 Step 1 of 2
               </p>
               <button
+                type="button"
                 onClick={onClose}
-                className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition cursor-pointer"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-neutral-100 text-neutral-gray hover:bg-neutral-200 transition-colors cursor-pointer"
+                aria-label="Close report dialog"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <h2 className="text-[20px] font-bold text-gray-900 leading-snug">
+            <h2 className="font-bold text-foreground leading-snug">
               What&apos;s the issue?
             </h2>
-            <p className="text-sm text-gray-400 mt-1">
+            <p className="text-sm text-neutral-gray mt-1">
               Select the reason that best describes your concern.
             </p>
           </div>
@@ -104,7 +125,10 @@ function ReportContent({
             {loadingCategories ? (
               <div className="flex flex-col gap-2 pt-1">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="h-14 bg-gray-100 rounded-2xl animate-pulse" />
+                  <div
+                    key={i}
+                    className="h-14 bg-neutral-100 rounded-2xl animate-pulse motion-reduce:animate-none"
+                  />
                 ))}
               </div>
             ) : (
@@ -112,11 +136,17 @@ function ReportContent({
                 {categories.map((cat) => (
                   <li key={cat.id}>
                     <button
-                      onClick={() => { setSelectedCategory(cat); setStep(2) }}
-                      className="w-full flex items-center justify-between gap-3 px-4 py-4 rounded-2xl border border-gray-100 bg-white hover:border-deep-teal/30 hover:bg-deep-teal/[0.03] active:scale-[0.99] transition-all cursor-pointer text-left"
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory(cat)
+                        setStep(2)
+                      }}
+                      className="w-full flex items-center justify-between gap-3 px-4 py-4 rounded-2xl border border-border bg-white hover:border-deep-teal/40 hover:bg-deep-teal/[0.03] transition-colors cursor-pointer text-left"
                     >
-                      <span className="text-[15px] font-medium text-gray-800">{cat.label}</span>
-                      <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
+                      <span className="text-sm font-medium text-foreground">
+                        {cat.label}
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-neutral-gray shrink-0" />
                     </button>
                   </li>
                 ))}
@@ -126,30 +156,32 @@ function ReportContent({
         </>
       )}
 
-      {/* ── Step 2: Add details ── */}
       {step === 2 && (
         <>
           <div className="shrink-0 px-5 pt-5 pb-4">
             <div className="flex items-center justify-between mb-1">
               <button
+                type="button"
                 onClick={() => setStep(1)}
-                className="flex items-center gap-1 text-[13px] font-medium text-gray-500 hover:text-gray-800 transition cursor-pointer"
+                className="flex items-center gap-1 text-xs font-medium text-neutral-gray hover:text-foreground transition-colors cursor-pointer"
               >
                 <ChevronLeft className="w-4 h-4" />
                 Back
               </button>
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">
+              <p className="text-xs font-medium text-neutral-gray tabular-nums">
                 Step 2 of 2
               </p>
               <button
+                type="button"
                 onClick={onClose}
-                className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition cursor-pointer"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-neutral-100 text-neutral-gray hover:bg-neutral-200 transition-colors cursor-pointer"
+                aria-label="Close report dialog"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <h2 className="text-[20px] font-bold text-gray-900 leading-snug mt-2">
+            <h2 className="font-bold text-foreground leading-snug mt-2">
               Tell us more
             </h2>
             <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-deep-teal/10 rounded-full">
@@ -168,27 +200,34 @@ function ReportContent({
                 rows={5}
                 maxLength={500}
                 autoFocus
-                className="w-full border border-gray-200 rounded-2xl px-4 py-3.5 text-sm text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-deep-teal/20 focus:border-deep-teal/40 transition bg-gray-50 placeholder:text-gray-400"
+                className="w-full border border-border rounded-2xl px-4 py-3.5 text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-deep-teal/20 focus:border-deep-teal/40 transition-colors bg-off-white/40 placeholder:text-neutral-gray"
               />
-              <p className="text-xs text-gray-400 text-right mt-1.5">{description.length} / 500</p>
+              <p className="text-xs text-neutral-gray text-right mt-1.5 tabular-nums">
+                {description.length} / 500
+              </p>
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-semibold text-gray-700">Photos</p>
-                <p className="text-xs text-gray-400">Optional · max 3</p>
+                <p className="text-sm font-semibold text-foreground">Photos</p>
+                <p className="text-xs text-neutral-gray">
+                  Optional, up to 3 photos
+                </p>
               </div>
               <div className="grid grid-cols-3 gap-2.5">
                 {previews.map((src, idx) => (
                   <div key={idx} className="relative aspect-square">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={src}
                       alt={`preview ${idx + 1}`}
-                      className="w-full h-full object-cover rounded-2xl border border-gray-100"
+                      className="w-full h-full object-cover rounded-2xl border border-border"
                     />
                     <button
+                      type="button"
                       onClick={() => removeImage(idx)}
-                      className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-gray-800 text-white rounded-full flex items-center justify-center shadow cursor-pointer"
+                      className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-foreground text-white rounded-full flex items-center justify-center shadow-sm cursor-pointer"
+                      aria-label="Remove photo"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -196,11 +235,12 @@ function ReportContent({
                 ))}
                 {images.length < 3 && (
                   <button
+                    type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="aspect-square flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-gray-200 rounded-2xl text-gray-400 hover:border-deep-teal/40 hover:text-deep-teal transition cursor-pointer"
+                    className="aspect-square flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-border rounded-2xl text-neutral-gray hover:border-deep-teal/40 hover:text-deep-teal transition-colors cursor-pointer"
                   >
                     <ImagePlus className="w-5 h-5" />
-                    <span className="text-[10px] font-medium">Add photo</span>
+                    <span className="text-xs font-medium">Add photo</span>
                   </button>
                 )}
               </div>
@@ -215,16 +255,17 @@ function ReportContent({
             </div>
           </div>
 
-          <div className="shrink-0 px-5 py-4 border-t border-gray-100">
+          <div className="shrink-0 px-5 py-4 border-t border-border">
             <button
+              type="button"
               onClick={handleSubmit}
               disabled={submitting || !description.trim()}
-              className="w-full py-3.5 rounded-2xl bg-accent-orange text-white text-[15px] font-semibold flex items-center justify-center gap-2 hover:bg-accent-orange/90 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full py-3.5 rounded-2xl bg-accent-orange text-white text-sm font-semibold flex items-center justify-center gap-2 hover:bg-accent-orange/90 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
               {submitting ? 'Submitting…' : 'Submit Report'}
             </button>
-            <p className="text-xs text-gray-400 text-center mt-3 leading-relaxed">
+            <p className="text-xs text-neutral-gray text-center mt-3 leading-relaxed">
               Reports are anonymous. We review every report within 24 hours.
             </p>
           </div>
@@ -234,7 +275,6 @@ function ReportContent({
   )
 }
 
-// ── Responsive wrapper ────────────────────────────────────────────────────────
 export function ReportPropertyDrawer({
   propertyId,
   isOpen,
