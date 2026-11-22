@@ -5,13 +5,14 @@
 # ตาราง Sprint 0-4 (PBI-01 ถึง PBI-21) และข้อความ Atomic Git Commit ประจำแต่ละ PBI
 # ==============================================================================
 
-version: "2.2"
+version: "2.6"
 project:
-  name: "JoodPakPaw - Community Pet Boarding Platform (V2 Monorepo)"
+  name: "JoodPakPaw - Community Pet Boarding Platform (V2 Monorepo — v0.6.1)"
   workspace_root: "d:/Project/joodpakpaw"
   frontend_dir: "d:/Project/joodpakpaw/joodpakpaw-frontend"
   backend_dir: "d:/Project/joodpakpaw/joodpakpaw-api"
   ml_dir: "d:/Project/joodpakpaw/joodpakpaw-ml"
+  design_doc: "d:/Project/joodpakpaw/DESIGN.md"
   blueprint_doc: "d:/Project/joodpakpaw/docs/JoodPakPaw_V2_Blueprint.md"
   backlog_doc: "d:/Project/joodpakpaw/docs/BACKLOG_AND_GIT_PLAN.md"
   rules_file: "d:/Project/joodpakpaw/AGENTS.md"
@@ -60,9 +61,10 @@ agents:
 
   builders:
     - id: "db-infra-architect"
-      role: "Database & Infrastructure Architect"
+      role: "Database & Infrastructure Architect (42 Tables across 9 Domains)"
       model: "inherit"
       workspace: "inherit"
+      agent_definition: ".agents/agents/db-infra-architect/agent.md"
       required_skills:
         - ".agents/skills/joodpakpaw-db-schema/SKILL.md"
       owned_paths:
@@ -72,9 +74,10 @@ agents:
         - "infra/**"
 
     - id: "backend-core-engineer"
-      role: "Core Backend & Real-Time Engineer"
+      role: "Core Backend, Discovery & Real-Time Engineer"
       model: "inherit"
       workspace: "inherit"
+      agent_definition: ".agents/agents/backend-core-engineer/agent.md"
       required_skills:
         - ".agents/skills/joodpakpaw-api-contract/SKILL.md"
       owned_paths:
@@ -83,38 +86,44 @@ agents:
         - "joodpakpaw-api/Dockerfile"
 
     - id: "ml-recommendation-engineer"
-      role: "Machine Learning & Recommendation Engineer"
+      role: "Machine Learning & Context-Aware Recommendation Engineer"
       model: "inherit"
       workspace: "inherit"
+      agent_definition: ".agents/agents/ml-recommendation-engineer/agent.md"
       required_skills:
         - ".agents/skills/joodpakpaw-ml-hybrid/SKILL.md"
       owned_paths:
         - "joodpakpaw-ml/**"
 
     - id: "frontend-upgrader"
-      role: "Frontend Product Upgrader"
+      role: "Frontend Product & Hallmark Design Upgrader"
       model: "inherit"
       workspace: "inherit"
+      agent_definition: ".agents/agents/frontend-upgrader/agent.md"
       required_skills:
         - ".agents/skills/joodpakpaw-fe-upgrader/SKILL.md"
+        - "DESIGN.md"
       owned_paths:
         - "joodpakpaw-frontend/**"
+        - "DESIGN.md"
 
   reviewers:
     - id: "qa-auditor"
-      role: "Independent QA Auditor & Security Reviewer"
+      role: "Independent QA Auditor & Security Reviewer (6-Gate Audit)"
       model: "inherit"
       workspace: "inherit"
       write_production_code: false
+      agent_definition: ".agents/agents/qa-auditor/agent.md"
       required_skills:
         - ".agents/skills/joodpakpaw-qa-auditor/SKILL.md"
       audit_domains:
-        - "API Contract & DTO Parity with joodpakpaw-frontend/types/*.ts"
-        - "Custom Error Code Compliance (T-2007, A-3001..A-3012, DB-1002, FF-4101)"
-        - "Race Condition & Concurrency (Room Booking & Real-Time Chat)"
-        - "RBAC, JWT & IDOR Security Verification"
-        - "Admin Ban & Appeal State Machine (TC-151 to TC-155)"
-        - "Git Diff Hygiene & Zero-'catbnb' / Free-Tier Cloud Readiness Check"
+        - "Gate 1: API Contract, Single data Envelope & DTO Parity with joodpakpaw-frontend/types/*.ts"
+        - "Gate 1b: Custom Error Code Compliance (T-2007, A-3001..A-3012, DB-1002, FF-4101, P-5001, B-4001..B-4004)"
+        - "Gate 2: Race Condition, Concurrency & Date-Range Availability/Pricing Integrity"
+        - "Gate 3: RBAC, JWT, IDOR (including petProfileIds search) & S3 WebP Garbage Collection"
+        - "Gate 4: Admin Ban & Appeal State Machine (TC-151 to TC-155, TC-API-168, TC-API-172)"
+        - "Gate 5: Context-Aware Hybrid ML (POST /ml/v1/rank/candidates) & 1.5s Single-Flight Fallback (86/86 API + 21/21 ML tests)"
+        - "Gate 6: Hallmark UI Design Floor (DESIGN.md, Global Typography, 3D Pastel Clay Icons), Browser Console & Git Diff Hygiene"
 
 # ------------------------------------------------------------------------------
 # 3. Sprint & PBI Pipeline (Sprint 0 to Sprint 4 | PBI-01 to PBI-21)
@@ -263,3 +272,36 @@ sprints:
         builder: "frontend-upgrader"
         reviewer: "qa-auditor"
         commit_message: "feat(fe-perf): [PBI-21] optimize home feed requests and add free-tier cloud deployment guide"
+
+  - sprint_id: "sprint_5"
+    phase_id: "phase_5_airbnb_home_and_context_ml"
+    branch: "feat/phase-5-ml-filtered-ranking"
+    depends_on: ["sprint_4"]
+    name: "Phase 5 / Sprint 5: Airbnb-Grade Home Discovery, 77 Thai Provinces DB, Context-Aware ML Filtered Ranking & Hallmark 3D Pastel Clay UI (v0.5.0 - v0.6.1)"
+    merge_commit: "release(v0.6.1): 3D Pastel Clay icons across all CategoryIconRail tabs"
+    pbis:
+      - id: "PBI-22"
+        title: "Airbnb-Grade Home Discovery API (Date-Range Availability, stayTotalPrice, Up-to-Max-Size & IDOR-Safe Pet Filter)"
+        builder: "backend-core-engineer"
+        reviewer: "qa-auditor"
+        commit_message: "feat(api): upgrade GET /api/v1/properties with date availability, stayTotalPrice, Up-to-Max-Size, and IDOR-safe petProfileIds"
+      - id: "PBI-23"
+        title: "77 Official Thai Provinces Table (Domain 9: provinces), Seed Pipeline & Lookup API (/api/v1/locations/provinces)"
+        builder: "db-infra-architect + backend-core-engineer"
+        reviewer: "qa-auditor"
+        commit_message: "feat(db-api): add 77 Thai provinces database table, seed, and /api/v1/locations/provinces endpoint"
+      - id: "PBI-24"
+        title: "Airbnb-Grade Home Redesign, Hallmark DesktopNav, Split Map View, Smooth Multi-Photo Carousel & Single-Flight Lock"
+        builder: "frontend-upgrader + backend-core-engineer"
+        reviewer: "qa-auditor"
+        commit_message: "feat(frontend): Airbnb-grade Home UX refinements, Hallmark DesktopNav, 77 provinces, and smooth card slide"
+      - id: "PBI-25"
+        title: "Context-Aware ML Candidate Re-Ranking (POST /ml/v1/rank/candidates + sortBy=recommended + Explainable Filter Badges)"
+        builder: "ml-recommendation-engineer + backend-core-engineer + frontend-upgrader"
+        reviewer: "qa-auditor"
+        commit_message: "feat(ml-search): integrate context-aware ML ranking into filtered search results"
+      - id: "PBI-26"
+        title: "Global Typography Scale (@layer base h1-h5), 5-Card Recently Viewed Rail & 3D Pastel Clay Icons Across All 9 Category Tabs"
+        builder: "frontend-upgrader"
+        reviewer: "qa-auditor"
+        commit_message: "feat(frontend): replace flat Lucide icons in CategoryIconRail with 3D Pastel Clay icons"

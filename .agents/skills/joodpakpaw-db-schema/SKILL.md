@@ -1,21 +1,21 @@
 ---
 name: joodpakpaw-db-schema
-description: Comprehensive PostgreSQL 16 database schema runbook for JoodPakPaw V2 (41 tables across 8 domains), including exact column definitions, constraints, indexes, and required lookup seed data.
+description: Comprehensive PostgreSQL 16 database schema runbook for JoodPakPaw V2 (42 tables across 9 domains, including 77 official Thai provinces), exact column definitions, constraints, indexes, and deterministic seed pipelines.
 ---
 
 # JoodPakPaw V2 Database Schema & Seed Runbook (`joodpakpaw-db-schema`)
 
-Use this skill whenever designing, migrating, or querying the PostgreSQL 16 database for **JoodPakPaw** (`joodpakpaw-postgres` locally or Supabase / Neon Free Tier in cloud).
+Use this skill whenever designing, migrating, seeding, or querying the PostgreSQL 16 database for **JoodPakPaw** (`joodpakpaw-postgres` locally or Supabase / Neon Free Tier in cloud).
 
 ## 1. Golden Rules for Schema Design
-1. **Complete 41-Table Coverage across 8 Domains**: Implement all 41 tables with exact relational integrity, indexes, and support for all Frontend TypeScript contracts in `joodpakpaw-frontend/types/*.ts`.
-2. **Free-Tier Cloud Compatibility**: Connect via standard `DATABASE_URL` (supporting both Local Docker Postgres 16 and Supabase / Neon Serverless Postgres with SSL).
+1. **Complete 42-Table Coverage across 9 Domains**: Maintain all 41 core marketplace tables plus the 42nd table **`provinces` (Domain 9: Master Locations — 77 Official Thai Provinces EN/TH)** with exact relational integrity, composite performance indexes, and full parity with `joodpakpaw-api/prisma/schema.prisma` and `joodpakpaw-frontend/types/*.ts`.
+2. **Free-Tier Cloud Compatibility**: Connect via standard `DATABASE_URL` (and `DIRECT_URL` for migrations), supporting both Local Docker Postgres 16 and Supabase / Neon Serverless Postgres with SSL (`?sslmode=require`).
 3. **Concurrency & Inventory Safety**:
-   - `room_category_calendars` MUST have a `UNIQUE (room_category_id, date)` constraint and `CHECK (available_rooms >= 0 AND booked_rooms >= 0 AND unavailable_rooms >= 0)` so row-level locking (`SELECT ... FOR UPDATE`) cannot oversell rooms.
+   - `room_category_calendars` MUST enforce `UNIQUE (room_category_id, date)` and `CHECK (available_rooms >= 0 AND booked_rooms >= 0 AND unavailable_rooms >= 0)` so row-level locking (`SELECT ... FOR UPDATE`) cannot oversell rooms.
 
 ---
 
-## 2. The 41 Tables by Domain (8 Domains)
+## 2. The 42 Tables by Domain (9 Domains)
 
 ### Domain 1: Users, RBAC & Host Verification (7 Tables)
 1. **`users`**:
@@ -37,7 +37,8 @@ Use this skill whenever designing, migrating, or querying the PostgreSQL 16 data
 8. **`property_types`**:
    - `id` (PK), `name` (`VARCHAR(100) NOT NULL`), `label` (`VARCHAR(100)`), `created_at`, `updated_at`, `deleted_at`
 9. **`properties`**:
-   - `id` (PK), `title` (`VARCHAR(255) NOT NULL`), `description` (`TEXT`), `address` (`TEXT`), `province` (`VARCHAR(100)`), `district` (`VARCHAR(100)`), `subdistrict` (`VARCHAR(100)`), `country` (`VARCHAR(100) DEFAULT 'Thailand'`), `zipcode` (`VARCHAR(10)`), `latitude` (`DOUBLE PRECISION`), `longitude` (`DOUBLE PRECISION`), `is_active` (`BOOLEAN DEFAULT false`), `is_banned_by_admin` (`BOOLEAN DEFAULT false`), `is_banned_before_account_ban` (`BOOLEAN DEFAULT false`), `report_count` (`INT DEFAULT 0`), `published_at` (`TIMESTAMPTZ`), `host_id` (FK -> `users.id`), `property_type_id` (FK -> `property_types.id`), `created_at`, `updated_at`, `deleted_at`
+   - `id` (PK), `title` (`VARCHAR(255) NOT NULL`), `description` (`TEXT`), `address` (`TEXT`), `province` (`VARCHAR(100)`), `district` (`VARCHAR(100)`), `subdistrict` (`VARCHAR(100)`), `country` (`VARCHAR(100) DEFAULT 'Thailand'`), `zipcode` (`VARCHAR(10)`), `latitude` (`DOUBLE PRECISION`), `longitude` (`DOUBLE PRECISION`), `is_active` (`BOOLEAN DEFAULT false`), `is_banned_by_admin` (`BOOLEAN DEFAULT false`), `is_banned_before_account_ban` (`BOOLEAN DEFAULT false`), `report_count` (`INT DEFAULT 0`), `min_price` (`DECIMAL(10,2) DEFAULT 0`), `avg_rating` (`DOUBLE PRECISION DEFAULT 0`), `review_count` (`INT DEFAULT 0`), `booking_count` (`INT DEFAULT 0`), `published_at` (`TIMESTAMPTZ`), `host_id` (FK -> `users.id`), `property_type_id` (FK -> `property_types.id`), `created_at`, `updated_at`, `deleted_at`
+   - Composite discovery index: `@@index([isActive, isBannedByAdmin, deletedAt])`
 10. **`property_images`**:
     - `id` (PK), `file_name` (`VARCHAR(255)`), `file_path` (`TEXT`), `file_content_type` (`VARCHAR(100)`), `file_extension_name` (`VARCHAR(50)`), `file_size` (`INT`), `property_id` (FK -> `properties.id`), `created_at`, `updated_at`, `deleted_at`
 11. **`room_categories`**:
@@ -61,7 +62,7 @@ Use this skill whenever designing, migrating, or querying the PostgreSQL 16 data
 
 ### Domain 4: Bookings, Orders & Reviews (4 Tables)
 19. **`bookings`**:
-    - `id` (PK), `check_in_date` (`DATE NOT NULL`), `check_out_date` (`DATE NOT NULL`), `number_of_pets` (`INT DEFAULT 0`), `total_price` (`DECIMAL(13,2)`), `booking_status` (`VARCHAR(30) DEFAULT 'pending'`), `guest_note` (`VARCHAR(255)`), `payment_slip_url` (`TEXT`), `rating` (`INT`), `comment` (`VARCHAR(500)`), `successed_at` (`TIMESTAMPTZ`), `confirmed_at` (`TIMESTAMPTZ`), `reviewed_at` (`TIMESTAMPTZ`), `guest_id` (FK -> `users.id`), `property_id` (FK -> `properties.id`), `created_at`, `updated_at`, `deleted_at`
+    - `id` (PK), `check_in_date` (`DATE NOT NULL`), `check_out_date` (`DATE NOT NULL`), `number_of_pets` (`INT DEFAULT 0`), `total_price` (`DECIMAL(13,2)`), `booking_status` (`VARCHAR(30) DEFAULT 'pending'`), `guest_note` (`VARCHAR(255)`), `payment_slip_url` (`TEXT`), `rating` (`INT`), `comment` (`VARCHAR(500)`), `host_reply` (`VARCHAR(500)`), `host_replied_at` (`TIMESTAMPTZ`), `cancelled_by` (`VARCHAR(20)`), `cancellation_reason` (`VARCHAR(255)`), `successed_at` (`TIMESTAMPTZ`), `confirmed_at` (`TIMESTAMPTZ`), `reviewed_at` (`TIMESTAMPTZ`), `guest_id` (FK -> `users.id`), `property_id` (FK -> `properties.id`), `created_at`, `updated_at`, `deleted_at`
 20. **`booking_orders`**:
     - `id` (PK), `check_in_date` (`DATE NOT NULL`), `check_out_date` (`DATE NOT NULL`), `rooms_booked` (`INT NOT NULL`), `price_per_room` (`DECIMAL(13,2) NOT NULL`), `total_price` (`DECIMAL(13,2) NOT NULL`), `room_category_id` (FK -> `room_categories.id`), `property_id` (FK -> `properties.id`), `room_category_calendar_id` (FK -> `room_category_calendars.id` NULL), `booking_id` (FK -> `bookings.id`), `created_at`, `updated_at`, `deleted_at`
 21. **`booking_pet_profiles`**:
@@ -83,7 +84,7 @@ Use this skill whenever designing, migrating, or querying the PostgreSQL 16 data
 
 ### Domain 6: Real-Time Chat (3 Tables)
 28. **`chat_rooms`**:
-    - `id` (PK), `last_message_at` (`TIMESTAMPTZ`), `participant_1_id` (FK -> `users.id`), `participant_2_id` (FK -> `users.id`), `last_message_id` (`INT NULL`), `created_at`, `updated_at`
+    - `id` (PK), `last_message_at` (`TIMESTAMPTZ`), `participant_1_id` (FK -> `users.id`), `participant_2_id` (FK -> `users.id`), `last_message_id` (`INT NULL`), `created_at`, `updated_at`, `UNIQUE (participant_1_id, participant_2_id)`
 29. **`chat_messages`**:
     - `id` (PK), `content` (`TEXT NOT NULL`), `is_deleted` (`BOOLEAN DEFAULT false`), `read_at` (`TIMESTAMPTZ`), `room_id` (FK -> `chat_rooms.id`), `sender_id` (FK -> `users.id`), `created_at`, `updated_at`
 30. **`chat_message_attachments`**:
@@ -114,3 +115,14 @@ Use this skill whenever designing, migrating, or querying the PostgreSQL 16 data
     - `id` (PK), `name` (`VARCHAR(100) UNIQUE NOT NULL`), `created_at`, `updated_at`
 41. **`user_behaviors`**:
     - `id` (PK), `reference_table` (`VARCHAR(100) NOT NULL`), `reference_record` (`VARCHAR(255) NOT NULL`), `user_id` (FK -> `users.id`), `behavior_category_id` (FK -> `user_behavior_categories.id`), `created_at`, `updated_at`
+
+### Domain 9: Master Locations — 77 Official Thai Provinces (1 Table)
+42. **`provinces`**:
+    - `id` (PK), `code` (`INT UNIQUE NOT NULL`), `name_en` (`VARCHAR(100) NOT NULL`), `name_th` (`VARCHAR(100) NOT NULL`), `created_at` (`TIMESTAMPTZ DEFAULT now()`), indexed on `name_en` and `name_th` for bilingual search matching (`Bangkok` <-> `กรุงเทพมหานคร`, `Chiang Mai` <-> `เชียงใหม่`, etc.).
+
+---
+
+## 3. Deterministic Seed Scripts (`joodpakpaw-api/prisma/`)
+- `prisma/seed.ts`: Master lookups (`roles`, `permissions`, `property_types`, `facility_categories`, `facilities`, `pets`, `pet_breeds`, `pet_size_categories`, `pet_profile_energies`, `report_categories`, `notification_actions`, `user_behavior_categories`) and base demo users (`Password123!`).
+- `prisma/seed-provinces.ts`: Seeds all 77 official Thai provinces (`code`, `name_en`, `name_th`) using `upsert` on `code`.
+- `prisma/seed-rich-data.ts`: Seeds realistic Thai pet boarding properties, multi-photo galleries (verified HTTP 200 URLs), room categories, calendars, bookings, and reviews.
