@@ -13,7 +13,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from app.database import CatalogDataSource
 from app.models import PropertyData, RoomCategoryData, UserContextData, UserPetData
-from app.schemas import RecommendationItem, ScoreBreakdown
+from app.schemas import RankFilterContext, RecommendationItem, ScoreBreakdown
 
 ACTION_WEIGHTS: dict[str, float] = {
     "book": 5.0,
@@ -24,6 +24,31 @@ ACTION_WEIGHTS: dict[str, float] = {
 BAYESIAN_M = 3.0
 FALLBACK_GLOBAL_MEAN_RATING = 4.2
 
+_SPECIES_ALIASES: dict[str, str] = {
+    "dog": "dog",
+    "dogs": "dog",
+    "สุนัข": "dog",
+    "หมา": "dog",
+    "cat": "cat",
+    "cats": "cat",
+    "แมว": "cat",
+    "rabbit": "rabbit",
+    "rabbits": "rabbit",
+    "bunny": "rabbit",
+    "bunnies": "rabbit",
+    "กระต่าย": "rabbit",
+    "hamster": "hamster",
+    "hamsters": "hamster",
+    "แฮมสเตอร์": "hamster",
+    "หนูแฮมสเตอร์": "hamster",
+    "bird": "bird",
+    "birds": "bird",
+    "นก": "bird",
+    "reptile": "reptile",
+    "reptiles": "reptile",
+    "สัตว์เลื้อยคลาน": "reptile",
+}
+
 
 def _extract_english_label(raw_name: str) -> str:
     """Extract English name from labels like 'สุนัข (Dog)' -> 'Dog'."""
@@ -33,6 +58,25 @@ def _extract_english_label(raw_name: str) -> str:
         if inner:
             return inner
     return raw_name.strip()
+
+
+def _normalize_species(raw: str) -> str:
+    """Normalize bilingual or plural pet species labels to a canonical lowercase token."""
+    cleaned = raw.strip().lower()
+    if not cleaned:
+        return ""
+    if cleaned in _SPECIES_ALIASES:
+        return _SPECIES_ALIASES[cleaned]
+    extracted = _extract_english_label(raw).strip().lower()
+    if extracted in _SPECIES_ALIASES:
+        return _SPECIES_ALIASES[extracted]
+    before_paren = re.sub(r"\([^)]*\)", "", cleaned).strip()
+    if before_paren in _SPECIES_ALIASES:
+        return _SPECIES_ALIASES[before_paren]
+    candidate = extracted or cleaned
+    if len(candidate) > 3 and candidate.endswith("s") and not candidate.endswith("ss"):
+        return candidate[:-1]
+    return candidate
 
 
 def _clean_token_text(raw: str) -> str:
@@ -252,6 +296,110 @@ def _l2_normalize_vector(vec: np.ndarray) -> np.ndarray | None:
     return vec / norm
 
 
+def _select_active_pets(
+    pets: list[UserPetData],
+    filter_context: RankFilterContext,
+) -> list[UserPetData]:
+    """Select active scoring pets matching filter_context.pet_profile_ids or pet_types."""
+    if not pets:
+        return []
+    if filter_context.pet_profile_ids:
+        allowed_ids = set(filter_context.pet_profile_ids)
+        return [pet for pet in pets if pet.id in allowed_ids]
+    cleaned_types = [t.strip() for t in filter_context.pet_types if t and t.strip()]
+    if cleaned_types:
+        requested_ids: set[int] = set()
+        requested_species: set[str] = set()
+        for token in cleaned_types:
+            if token.isdigit():
+                requested_ids.add(int(token))
+            else:
+                norm = _normalize_species(token)
+                if norm:
+                    requested_species.add(norm)
+        return [
+            pet
+            for pet in pets
+            if pet.pet_type_id in requested_ids
+            or _normalize_species(pet.pet_type_name) in requested_species
+        ]
+    return list(pets)
+
+
+def _evaluate_pets_compatibility(
+    pets: list[UserPetData],
+    prop: PropertyData,
+) -> tuple[list[UserPetData], float, list[tuple[float, str, str]]]:
+    """Evaluate Stage 1 pet safety fit and Stage 2 energy/size compatibility."""
+    total_pets = len(pets)
+    matched_pets = [pet for pet in pets if pet_matches_property(pet, prop)]
+    matched_count = len(matched_pets)
+    if matched_count == 0 or total_pets == 0:
+        return [], 0.0, []
+
+    energy_scores: list[float] = []
+    energy_labels: list[tuple[float, str, str]] = []
+    size_fit_scores: list[float] = []
+    for pet in matched_pets:
+        ef_score, labels = compute_pet_energy_facility_score(pet, prop)
+        energy_scores.append(ef_score)
+        energy_labels.extend(labels)
+        size_fit_scores.append(compute_pet_size_fit(pet, prop))
+
+    avg_energy_score = sum(energy_scores) / matched_count
+    coverage = matched_count / total_pets
+    avg_size_fit = sum(size_fit_scores) / matched_count
+    s_compat = 0.55 * avg_energy_score + 0.30 * coverage + 0.15 * avg_size_fit
+    return matched_pets, s_compat, energy_labels
+
+
+def _append_filter_context_reasons(
+    candidates: list[tuple[float, str]],
+    prop: PropertyData,
+    filter_context: RankFilterContext | None,
+    facility_weight: float,
+    price_weight: float,
+    covered_labels: set[str] | None = None,
+) -> None:
+    if filter_context is None:
+        return
+    if filter_context.facilities and prop.facilities:
+        prop_fac_by_lower = {f.strip().lower(): f for f in prop.facilities if f and f.strip()}
+        for req_fac in filter_context.facilities:
+            key = req_fac.strip().lower()
+            matched = prop_fac_by_lower.get(key)
+            if matched and (covered_labels is None or key not in covered_labels):
+                candidates.append((facility_weight, f"Includes {matched}"))
+                break
+    if (
+        filter_context.max_price is not None
+        and filter_context.max_price > 0
+        and 0.0 < prop.min_price <= filter_context.max_price
+    ):
+        candidates.append((price_weight, f"Great value under ฿{int(filter_context.max_price)}"))
+
+
+def _build_score_breakdown(
+    debug: bool,
+    s_content: float,
+    s_compat: float,
+    s_quality: float,
+    s_popularity: float,
+    s_geo: float | None = None,
+    distance_km: float | None = None,
+) -> ScoreBreakdown | None:
+    if not debug:
+        return None
+    return ScoreBreakdown(
+        s_content=round(s_content, 4),
+        s_compat=round(s_compat, 4),
+        s_quality=round(s_quality, 4),
+        s_popularity=round(s_popularity, 4),
+        s_geo=round(s_geo, 4) if s_geo is not None else None,
+        distance_km=round(distance_km, 1) if distance_km is not None else None,
+    )
+
+
 @dataclass
 class CatalogSnapshot:
     properties: list[PropertyData]
@@ -467,6 +615,8 @@ class HybridRecommender:
         interacted_types: set[str],
         s_geo: float | None = None,
         distance_km: float | None = None,
+        filter_context: RankFilterContext | None = None,
+        fallback_reason: str | None = None,
     ) -> list[str]:
         candidates: list[tuple[float, str]] = []
 
@@ -475,7 +625,7 @@ class HybridRecommender:
             candidates.append((0.35 + 0.15 * (s_geo or 0.0), _format_near_you_reason(distance_km)))
 
         # 1. Pet safety & species/breed fit
-        if total_pets > 0:
+        if total_pets > 0 and matched_pets:
             if match_tier == "all_pets":
                 if total_pets == 1:
                     pet = matched_pets[0]
@@ -497,9 +647,11 @@ class HybridRecommender:
             candidates.append((0.30 * s_compat + 0.20, pet_reason))
 
         # 2. Energy-facility affinity (bucket comes from the pet that actually matched the facility)
+        covered_labels: set[str] = set()
         if energy_matched_labels and matched_pets:
-            energy_matched_labels.sort(key=lambda item: item[0], reverse=True)
-            top_weight, top_bucket, top_label = energy_matched_labels[0]
+            sorted_labels = sorted(energy_matched_labels, key=lambda item: item[0], reverse=True)
+            top_weight, top_bucket, top_label = sorted_labels[0]
+            covered_labels.add(top_label.strip().lower())
             if top_bucket == "high":
                 if top_label == "Spacious Room":
                     energy_reason = (
@@ -531,6 +683,16 @@ class HybridRecommender:
         if prop.booking_count >= 2 or prop.favorite_count >= 1:
             candidates.append((0.10 * s_popularity, "Popular pet stay"))
 
+        # 6. Active filter context hints (requested facility / budget match)
+        _append_filter_context_reasons(
+            candidates,
+            prop,
+            filter_context,
+            facility_weight=0.14,
+            price_weight=0.15,
+            covered_labels=covered_labels,
+        )
+
         candidates.sort(key=lambda item: item[0], reverse=True)
         reasons: list[str] = []
         for _, text in candidates:
@@ -540,7 +702,10 @@ class HybridRecommender:
                 break
 
         if not reasons:
-            reasons.append(f"Pet-friendly stay in {prop.province}" if prop.province else "Pet-friendly stay")
+            reasons.append(
+                fallback_reason
+                or (f"Pet-friendly stay in {prop.province}" if prop.province else "Pet-friendly stay")
+            )
         return reasons
 
     def _build_cold_start_reasons(
@@ -550,6 +715,8 @@ class HybridRecommender:
         s_popularity: float,
         s_geo: float | None = None,
         distance_km: float | None = None,
+        filter_context: RankFilterContext | None = None,
+        fallback_reason: str | None = None,
     ) -> list[str]:
         candidates: list[tuple[float, str]] = []
         if distance_km is not None and distance_km <= 35.0:
@@ -570,6 +737,14 @@ class HybridRecommender:
         elif prop.favorite_count > 0:
             candidates.append((0.35 * s_popularity, "Saved by pet owners"))
 
+        _append_filter_context_reasons(
+            candidates,
+            prop,
+            filter_context,
+            facility_weight=0.22,
+            price_weight=0.20,
+        )
+
         if prop.province:
             candidates.append((0.10, f"Popular in {prop.province}"))
         if prop.facilities:
@@ -583,8 +758,50 @@ class HybridRecommender:
             if len(reasons) == 3:
                 break
         if not reasons:
-            reasons.append("Verified pet boarding stay")
+            reasons.append(fallback_reason or "Verified pet boarding stay")
         return reasons
+
+    def _build_non_pet_reasons(
+        self,
+        prop: PropertyData,
+        has_behavior_content: bool,
+        s_content: float,
+        s_quality: float,
+        s_popularity: float,
+        interacted_provinces: set[str] | None = None,
+        interacted_types: set[str] | None = None,
+        s_geo: float | None = None,
+        distance_km: float | None = None,
+        filter_context: RankFilterContext | None = None,
+        fallback_reason: str | None = None,
+    ) -> list[str]:
+        if has_behavior_content and s_content >= 0.12:
+            return self._build_personalized_reasons(
+                prop=prop,
+                matched_pets=[],
+                total_pets=0,
+                match_tier="cold_start",
+                energy_matched_labels=[],
+                s_content=s_content,
+                s_compat=0.0,
+                s_quality=s_quality,
+                s_popularity=s_popularity,
+                interacted_provinces=interacted_provinces or set(),
+                interacted_types=interacted_types or set(),
+                s_geo=s_geo,
+                distance_km=distance_km,
+                filter_context=filter_context,
+                fallback_reason=fallback_reason,
+            )
+        return self._build_cold_start_reasons(
+            prop,
+            s_quality,
+            s_popularity,
+            s_geo=s_geo,
+            distance_km=distance_km,
+            filter_context=filter_context,
+            fallback_reason=fallback_reason,
+        )
 
     def _cold_start_rank(
         self,
@@ -642,26 +859,17 @@ class HybridRecommender:
 
         items: list[RecommendationItem] = []
         for prop, score, s_c, s_q, s_p, s_geo, distance_km in selected:
-            if content_scores is not None and s_c >= 0.12:
-                reasons = self._build_personalized_reasons(
-                    prop=prop,
-                    matched_pets=[],
-                    total_pets=0,
-                    match_tier="cold_start",
-                    energy_matched_labels=[],
-                    s_content=s_c,
-                    s_compat=0.0,
-                    s_quality=s_q,
-                    s_popularity=s_p,
-                    interacted_provinces=interacted_provinces or set(),
-                    interacted_types=interacted_types or set(),
-                    s_geo=s_geo,
-                    distance_km=distance_km,
-                )
-            else:
-                reasons = self._build_cold_start_reasons(
-                    prop, s_q, s_p, s_geo=s_geo, distance_km=distance_km
-                )
+            reasons = self._build_non_pet_reasons(
+                prop=prop,
+                has_behavior_content=content_scores is not None,
+                s_content=s_c,
+                s_quality=s_q,
+                s_popularity=s_p,
+                interacted_provinces=interacted_provinces,
+                interacted_types=interacted_types,
+                s_geo=s_geo,
+                distance_km=distance_km,
+            )
 
             items.append(
                 RecommendationItem(
@@ -669,17 +877,14 @@ class HybridRecommender:
                     score=score,
                     match_tier="cold_start",
                     match_reasons=reasons,
-                    score_breakdown=(
-                        ScoreBreakdown(
-                            s_content=round(s_c, 4),
-                            s_compat=0.0,
-                            s_quality=round(s_q, 4),
-                            s_popularity=round(s_p, 4),
-                            s_geo=round(s_geo, 4) if s_geo is not None else None,
-                            distance_km=round(distance_km, 1) if distance_km is not None else None,
-                        )
-                        if debug
-                        else None
+                    score_breakdown=_build_score_breakdown(
+                        debug=debug,
+                        s_content=s_c,
+                        s_compat=0.0,
+                        s_quality=s_q,
+                        s_popularity=s_p,
+                        s_geo=s_geo,
+                        distance_km=distance_km,
                     ),
                 )
             )
@@ -763,26 +968,14 @@ class HybridRecommender:
         tier_b: list[tuple[int, float, int, RecommendationItem]] = []
 
         for prop in candidates:
-            matched_pets = [pet for pet in user_context.pets if pet_matches_property(pet, prop)]
+            matched_pets, s_compat, energy_labels = _evaluate_pets_compatibility(
+                user_context.pets, prop
+            )
             matched_count = len(matched_pets)
             if matched_count == 0:
                 continue
 
             match_tier = "all_pets" if matched_count == total_pets else "partial_pets"
-
-            energy_scores: list[float] = []
-            energy_labels: list[tuple[float, str, str]] = []
-            size_fit_scores: list[float] = []
-            for pet in matched_pets:
-                ef_score, labels = compute_pet_energy_facility_score(pet, prop)
-                energy_scores.append(ef_score)
-                energy_labels.extend(labels)
-                size_fit_scores.append(compute_pet_size_fit(pet, prop))
-
-            avg_energy_score = sum(energy_scores) / matched_count
-            coverage = matched_count / total_pets
-            avg_size_fit = sum(size_fit_scores) / matched_count
-            s_compat = 0.55 * avg_energy_score + 0.30 * coverage + 0.15 * avg_size_fit
 
             idx = snapshot.prop_idx_by_id[prop.id]
             s_content = float(content_scores[idx])
@@ -823,17 +1016,14 @@ class HybridRecommender:
                 score=rounded_score,
                 match_tier=match_tier,
                 match_reasons=reasons,
-                score_breakdown=(
-                    ScoreBreakdown(
-                        s_content=round(s_content, 4),
-                        s_compat=round(s_compat, 4),
-                        s_quality=round(s_quality, 4),
-                        s_popularity=round(s_popularity, 4),
-                        s_geo=round(s_geo, 4) if s_geo is not None else None,
-                        distance_km=round(distance_km, 1) if distance_km is not None else None,
-                    )
-                    if debug
-                    else None
+                score_breakdown=_build_score_breakdown(
+                    debug=debug,
+                    s_content=s_content,
+                    s_compat=s_compat,
+                    s_quality=s_quality,
+                    s_popularity=s_popularity,
+                    s_geo=s_geo,
+                    distance_km=distance_km,
                 ),
             )
 
@@ -855,6 +1045,234 @@ class HybridRecommender:
             snapshot_age_seconds=age,
             total_candidates=total_eligible,
             recommendations=ordered[:limit],
+        )
+
+    def rank_candidates(
+        self,
+        user_id: int | None,
+        candidate_property_ids: list[int],
+        filter_context: RankFilterContext | None = None,
+        user_lat: float | None = None,
+        user_lng: float | None = None,
+        debug: bool = False,
+        user_context: UserContextData | None = None,
+    ) -> RecommendationResult:
+        """Context-aware ML ranking over pre-filtered candidates; preserves 100% of unique IDs."""
+        snapshot = self.get_snapshot()
+        age = round(max(0.0, time.monotonic() - snapshot.built_at), 2)
+        ctx = filter_context or RankFilterContext()
+
+        seen_ids: set[int] = set()
+        deduped_ids: list[int] = []
+        for pid in candidate_property_ids:
+            if pid not in seen_ids:
+                seen_ids.add(pid)
+                deduped_ids.append(pid)
+
+        known_props: list[PropertyData] = []
+        unknown_ids: list[int] = []
+        for pid in deduped_ids:
+            prop = snapshot.prop_by_id.get(pid)
+            if prop is not None:
+                known_props.append(prop)
+            else:
+                unknown_ids.append(pid)
+
+        resolved_user_ctx: UserContextData | None = user_context
+        if resolved_user_ctx is None and user_id is not None:
+            if self._data_source is None:
+                resolved_user_ctx = UserContextData(user_id=user_id)
+            else:
+                resolved_user_ctx = self._data_source.fetch_user_context(user_id)
+
+        active_pets = (
+            _select_active_pets(resolved_user_ctx.pets, ctx)
+            if resolved_user_ctx is not None
+            else []
+        )
+
+        ordered_items: list[RecommendationItem] = []
+
+        if user_id is not None and resolved_user_ctx is not None and len(active_pets) > 0:
+            strategy = "hybrid_filtered_personalized"
+            effective_ctx = UserContextData(
+                user_id=resolved_user_ctx.user_id,
+                pets=active_pets,
+                behaviors=resolved_user_ctx.behaviors,
+            )
+            content_scores, interacted_provinces, interacted_types = self._compute_content_scores(
+                snapshot, effective_ctx
+            )
+            total_active_pets = len(active_pets)
+            tier_priority = {
+                "all_pets": 0,
+                "partial_pets": 1,
+                "context_fallback": 2,
+            }
+            scored_a: list[tuple[int, float, int, RecommendationItem]] = []
+
+            for prop in known_props:
+                matched_pets, s_compat, energy_labels = _evaluate_pets_compatibility(
+                    active_pets, prop
+                )
+                matched_count = len(matched_pets)
+                if matched_count == total_active_pets:
+                    match_tier = "all_pets"
+                elif matched_count > 0:
+                    match_tier = "partial_pets"
+                else:
+                    match_tier = "context_fallback"
+
+                idx = snapshot.prop_idx_by_id[prop.id]
+                s_content = float(content_scores[idx])
+                s_quality = snapshot.quality_scores[prop.id]
+                s_popularity = snapshot.popularity_scores[prop.id]
+
+                s_base = (
+                    0.35 * s_content
+                    + 0.35 * s_compat
+                    + 0.20 * s_quality
+                    + 0.10 * s_popularity
+                )
+                s_geo, distance_km = _compute_geo_signal(prop, user_lat, user_lng)
+                final_score = 0.88 * s_base + 0.12 * s_geo if s_geo is not None else s_base
+                rounded_score = round(final_score, 4)
+
+                reasons = self._build_personalized_reasons(
+                    prop=prop,
+                    matched_pets=matched_pets,
+                    total_pets=total_active_pets,
+                    match_tier=match_tier,
+                    energy_matched_labels=energy_labels,
+                    s_content=s_content,
+                    s_compat=s_compat,
+                    s_quality=s_quality,
+                    s_popularity=s_popularity,
+                    interacted_provinces=interacted_provinces,
+                    interacted_types=interacted_types,
+                    s_geo=s_geo,
+                    distance_km=distance_km,
+                    filter_context=ctx,
+                    fallback_reason="Matches your filter",
+                )
+
+                item = RecommendationItem(
+                    property_id=prop.id,
+                    score=rounded_score,
+                    match_tier=match_tier,
+                    match_reasons=reasons,
+                    score_breakdown=_build_score_breakdown(
+                        debug=debug,
+                        s_content=s_content,
+                        s_compat=s_compat,
+                        s_quality=s_quality,
+                        s_popularity=s_popularity,
+                        s_geo=s_geo,
+                        distance_km=distance_km,
+                    ),
+                )
+                scored_a.append((tier_priority[match_tier], -rounded_score, prop.id, item))
+
+            scored_a.sort(key=lambda row: (row[0], row[1], row[2]))
+            ordered_items.extend(row[3] for row in scored_a)
+        else:
+            content_scores_b: np.ndarray | None = None
+            interacted_provinces_b: set[str] = set()
+            interacted_types_b: set[str] = set()
+            has_usable_behavior = False
+
+            if resolved_user_ctx is not None and resolved_user_ctx.behaviors:
+                behavior_only_ctx = UserContextData(
+                    user_id=resolved_user_ctx.user_id,
+                    pets=[],
+                    behaviors=resolved_user_ctx.behaviors,
+                )
+                c_scores, interacted_provinces_b, interacted_types_b = (
+                    self._compute_content_scores(snapshot, behavior_only_ctx)
+                )
+                if bool(np.any(c_scores > 0)):
+                    content_scores_b = c_scores
+                    has_usable_behavior = True
+
+            strategy = (
+                "hybrid_filtered_behavioral"
+                if has_usable_behavior
+                else "hybrid_filtered_cold_start"
+            )
+            scored_b: list[tuple[float, int, RecommendationItem]] = []
+
+            for prop in known_props:
+                s_q = snapshot.quality_scores[prop.id]
+                s_p = snapshot.popularity_scores[prop.id]
+                s_geo, distance_km = _compute_geo_signal(prop, user_lat, user_lng)
+
+                if has_usable_behavior and content_scores_b is not None:
+                    idx = snapshot.prop_idx_by_id[prop.id]
+                    s_c = float(content_scores_b[idx])
+                    s_base = 0.35 * s_c + 0.40 * s_q + 0.25 * s_p
+                else:
+                    s_c = 0.0
+                    s_base = 0.60 * s_q + 0.40 * s_p
+
+                final_score = 0.85 * s_base + 0.15 * s_geo if s_geo is not None else s_base
+                rounded_score = round(final_score, 4)
+
+                reasons = self._build_non_pet_reasons(
+                    prop=prop,
+                    has_behavior_content=has_usable_behavior,
+                    s_content=s_c,
+                    s_quality=s_q,
+                    s_popularity=s_p,
+                    interacted_provinces=interacted_provinces_b,
+                    interacted_types=interacted_types_b,
+                    s_geo=s_geo,
+                    distance_km=distance_km,
+                    filter_context=ctx,
+                    fallback_reason="Matches your filter",
+                )
+
+                item = RecommendationItem(
+                    property_id=prop.id,
+                    score=rounded_score,
+                    match_tier="cold_start",
+                    match_reasons=reasons,
+                    score_breakdown=_build_score_breakdown(
+                        debug=debug,
+                        s_content=s_c,
+                        s_compat=0.0,
+                        s_quality=s_q,
+                        s_popularity=s_p,
+                        s_geo=s_geo,
+                        distance_km=distance_km,
+                    ),
+                )
+                scored_b.append((-rounded_score, prop.id, item))
+
+            scored_b.sort(key=lambda row: (row[0], row[1]))
+            ordered_items.extend(row[2] for row in scored_b)
+
+        for unk_id in unknown_ids:
+            ordered_items.append(
+                RecommendationItem(
+                    property_id=unk_id,
+                    score=0.0,
+                    match_tier="cold_start",
+                    match_reasons=["Matches your filter"],
+                    score_breakdown=_build_score_breakdown(
+                        debug=debug,
+                        s_content=0.0,
+                        s_compat=0.0,
+                        s_quality=0.0,
+                        s_popularity=0.0,
+                    ),
+                )
+            )
+
+        return RecommendationResult(
+            strategy=strategy,
+            snapshot_age_seconds=age,
+            total_candidates=len(deduped_ids),
+            recommendations=ordered_items,
         )
 
     def recommend_similar(
