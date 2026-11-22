@@ -745,13 +745,13 @@ export default function Home() {
                 </div>
 
                 <div className="shrink-0 w-full md:w-[290px] lg:w-[340px]">
-                  <div className="relative w-full aspect-[16/10] rounded-2xl overflow-hidden bg-off-white p-3">
+                  <div className="relative w-full aspect-[16/10]">
                     <Image
                       src={assetPath('/graphics/steps/tell-us.svg')}
                       alt="Host onboarding illustration showing how to list your pet stay"
                       fill
                       sizes="(max-width: 768px) 100vw, 340px"
-                      className="object-contain object-center p-2"
+                      className="object-contain object-center drop-shadow-[0_12px_24px_rgba(0,0,0,0.28)]"
                     />
                   </div>
                 </div>
