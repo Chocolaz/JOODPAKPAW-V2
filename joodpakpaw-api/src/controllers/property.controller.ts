@@ -280,6 +280,7 @@ export function formatPropertyDto(
  */
 export async function invalidatePropertyCaches(): Promise<number> {
   const deleted = await cacheService.delByPrefix('properties:');
+  await cacheService.del('locations:provinces');
   await invalidateAllRecommendationCaches();
   triggerMlRefresh();
   return deleted;
@@ -787,9 +788,29 @@ export async function getProperties(
     }
 
     if (province) {
-      andConditions.push({
-        province: { contains: province, mode: 'insensitive' },
+      const normalizedProvQuery = province.replace(/^(จังหวัด|จ\.)\s*/i, '').trim();
+      const matchedProvince = await prisma.province.findFirst({
+        where: {
+          OR: [
+            { nameEn: { equals: normalizedProvQuery, mode: 'insensitive' } },
+            { nameTh: { equals: normalizedProvQuery, mode: 'insensitive' } },
+          ],
+        },
+        select: { nameEn: true, nameTh: true },
       });
+
+      if (matchedProvince) {
+        andConditions.push({
+          OR: [
+            { province: { contains: matchedProvince.nameEn, mode: 'insensitive' } },
+            { province: { contains: matchedProvince.nameTh, mode: 'insensitive' } },
+          ],
+        });
+      } else {
+        andConditions.push({
+          province: { contains: province, mode: 'insensitive' },
+        });
+      }
     }
 
     if (!isNaN(days) && days > 0) {

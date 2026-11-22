@@ -5,6 +5,7 @@ import {
   getPetBreedsByTypeId,
   getAllPetSizeCategories,
   getReportCategories,
+  getAllProvinces,
 } from '../controllers/lookup.controller';
 import { optionalAuthenticateToken } from '../middlewares/auth.middleware';
 
@@ -26,4 +27,9 @@ lookupRouter.get(
   '/report-categories',
   optionalAuthenticateToken,
   getReportCategories
+);
+lookupRouter.get(
+  '/locations/provinces',
+  optionalAuthenticateToken,
+  getAllProvinces
 );

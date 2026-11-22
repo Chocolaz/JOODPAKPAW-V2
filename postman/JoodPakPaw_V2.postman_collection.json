@@ -951,6 +951,55 @@
             "description": "List report categories filtered by `type=property|review|unban`."
           },
           "response": []
+        },
+        {
+          "name": "Get All Thai Provinces (77 Provinces)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Returns clean standard envelope with 77 provinces\", function () {",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data).to.be.an(\"object\");",
+                  "    pm.expect(json.data.provinces).to.be.an(\"array\");",
+                  "    pm.expect(json.data.provinces.length).to.eql(77);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/locations/provinces",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "locations",
+                "provinces"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Optional case-insensitive substring filter against nameEn and nameTh"
+                }
+              ]
+            },
+            "description": "Returns all 77 official Thai provinces from PostgreSQL with active property counts, ordered by propertyCount DESC, nameEn ASC. Supports optional ?q= bilingual substring search."
+          },
+          "response": []
         }
       ]
     },

@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { seedProvinces } from './seed-provinces';
 
 const prisma = new PrismaClient();
 
@@ -1484,6 +1485,13 @@ async function main() {
       },
     });
   }
+
+  // ==============================================================================
+  // 18. Master Locations (77 Official Thai Provinces)
+  // ==============================================================================
+  console.log('➡️ Seeding 77 Thai Provinces...');
+  const provinceCount = await seedProvinces(prisma);
+  console.log(`✅ Provinces seeded (${provinceCount} provinces).`);
 
   console.log('🎉 [JoodPakPaw] Database seeding completed successfully!');
 }

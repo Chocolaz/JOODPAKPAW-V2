@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../database/prisma';
 import { toSafeIsoString } from './property.controller';
 import { AppError } from '../middlewares/errorHandler';
+import { cacheService } from '../services/cache.service';
 
 /**
  * Normalizes pet species names so frontend icon/policy checks ('Dog', 'Cat', etc.) work seamlessly
@@ -223,6 +224,134 @@ export async function getReportCategories(
       message: 'Success',
       data: {
         reportCategories,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export interface ProvinceDto {
+  id: number;
+  code: number;
+  nameEn: string;
+  nameTh: string;
+  propertyCount: number;
+}
+
+const PROVINCES_CACHE_KEY = 'locations:provinces';
+const PROVINCES_CACHE_TTL_SECONDS = 120;
+
+/**
+ * GET /api/v1/locations/provinces
+ * Returns all 77 official Thai provinces with active property counts.
+ * Supports optional `?q=` substring filter (case-insensitive against nameEn & nameTh).
+ */
+export async function getAllProvinces(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim().toLowerCase() : '';
+
+    let provinces = await cacheService.get<ProvinceDto[]>(PROVINCES_CACHE_KEY);
+
+    if (!provinces) {
+      const [dbProvinces, groupedCounts] = await Promise.all([
+        prisma.province.findMany({
+          orderBy: { nameEn: 'asc' },
+          select: {
+            id: true,
+            code: true,
+            nameEn: true,
+            nameTh: true,
+          },
+        }),
+        prisma.property.groupBy({
+          by: ['province'],
+          where: {
+            isActive: true,
+            deletedAt: null,
+            isBannedByAdmin: false,
+            province: { not: null },
+            host: {
+              deletedAt: null,
+              bannedAt: null,
+              isBannedAllProperties: false,
+            },
+          },
+          _count: {
+            _all: true,
+          },
+        }),
+      ]);
+
+      // Pre-compute normalized property counts per province
+      const countByProvinceId = new Map<number, number>();
+      const normalizedRows = dbProvinces.map((p) => ({
+        id: p.id,
+        enLower: p.nameEn.trim().toLowerCase(),
+        thLower: p.nameTh.trim().toLowerCase(),
+      }));
+
+      for (const group of groupedCounts) {
+        const rawProv = (group.province || '').trim();
+        if (!rawProv) continue;
+        const normalized = rawProv
+          .replace(/^(จังหวัด|จ\.)\s*/i, '')
+          .trim()
+          .toLowerCase();
+
+        // Exact match first, then substring fallback (ensuring each group is counted once)
+        let matched = normalizedRows.find(
+          (r) => r.enLower === normalized || r.thLower === normalized
+        );
+        if (!matched) {
+          matched = normalizedRows.find(
+            (r) => normalized.includes(r.enLower) || normalized.includes(r.thLower)
+          );
+        }
+
+        if (matched) {
+          countByProvinceId.set(
+            matched.id,
+            (countByProvinceId.get(matched.id) || 0) + group._count._all
+          );
+        }
+      }
+
+      provinces = dbProvinces
+        .map((p) => ({
+          id: p.id,
+          code: p.code,
+          nameEn: p.nameEn,
+          nameTh: p.nameTh,
+          propertyCount: countByProvinceId.get(p.id) || 0,
+        }))
+        .sort((a, b) => {
+          if (b.propertyCount !== a.propertyCount) {
+            return b.propertyCount - a.propertyCount;
+          }
+          return a.nameEn.localeCompare(b.nameEn);
+        });
+
+      await cacheService.set(PROVINCES_CACHE_KEY, provinces, PROVINCES_CACHE_TTL_SECONDS);
+    }
+
+    const filtered = q
+      ? provinces.filter(
+          (p) =>
+            p.nameEn.toLowerCase().includes(q) ||
+            p.nameTh.toLowerCase().includes(q)
+        )
+      : provinces;
+
+    res.status(200).json({
+      code: 'S-0000',
+      message: 'Success',
+      data: {
+        provinces: filtered,
       },
     });
   } catch (error) {
