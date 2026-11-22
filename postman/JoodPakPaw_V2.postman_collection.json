@@ -629,6 +629,7 @@
                   "pm.test(\"Returns updated UserProfile\", function () {",
                   "    pm.expect(json.data).to.be.an(\"object\");",
                   "    pm.expect(json.data.firstName).to.be.a(\"string\");",
+                  "    pm.expect(json.data).to.have.property(\"visibleName\");",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -660,6 +661,12 @@
                   "key": "lastName",
                   "value": "ใจดีมาก",
                   "type": "text"
+                },
+                {
+                  "key": "visibleName",
+                  "value": "Somchai PetLover",
+                  "type": "text",
+                  "description": "Optional display name; falls back to firstName + lastName when empty or omitted"
                 },
                 {
                   "key": "phone",
