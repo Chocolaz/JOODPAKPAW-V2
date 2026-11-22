@@ -1054,7 +1054,20 @@
                 },
                 {
                   "key": "sortBy",
-                  "value": "rating"
+                  "value": "rating",
+                  "description": "Sort order: newest (default), recommended (Filter-First Context-Aware ML Ranking returning matchReasons, recommendationScore, matchTier & meta), price_asc, price_desc, rating, trending."
+                },
+                {
+                  "key": "lat",
+                  "value": "13.7563",
+                  "description": "Optional user latitude (-90..90) for soft geo proximity boost when sortBy=recommended (must be paired with lng; otherwise returns 400 T-2007).",
+                  "disabled": true
+                },
+                {
+                  "key": "lng",
+                  "value": "100.5018",
+                  "description": "Optional user longitude (-180..180) for soft geo proximity boost when sortBy=recommended (must be paired with lat; otherwise returns 400 T-2007).",
+                  "disabled": true
                 },
                 {
                   "key": "checkIn",
@@ -1106,7 +1119,7 @@
                 }
               ]
             },
-            "description": "Public property discovery & search supporting `page`, `limit`, `minRating`, `sortBy`, `days`, `search`, `petTypes`, `minPrice`, `maxPrice`, `province`, `checkIn`, `checkOut` (returns `stayNights` & `stayTotalPrice` from `room_category_calendars`), `petSizeCategoryId`, `petProfileIds` (authenticated multi-pet eligibility), `facilities`, `propertyType`, `propertyTypeId`, and up to 5 photos per property for card carousels."
+            "description": "Public property discovery & search supporting `page`, `limit`, `minRating`, `sortBy` (`newest`, `recommended` for Filter-First Context-Aware ML Ranking, `price_asc`, `price_desc`, `rating`, `trending`), `lat`, `lng` (optional geo proximity coordinates for `sortBy=recommended`), `days`, `search`, `petTypes`, `minPrice`, `maxPrice`, `province`, `checkIn`, `checkOut` (returns `stayNights` & `stayTotalPrice` from `room_category_calendars`), `petSizeCategoryId`, `petProfileIds` (authenticated multi-pet eligibility), `facilities`, `propertyType`, `propertyTypeId`, and up to 5 photos per property for card carousels. When `sortBy=recommended`, each property DTO includes `matchReasons`, `recommendationScore`, `matchTier`, and top-level `meta`."
           },
           "response": []
         },

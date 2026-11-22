@@ -212,7 +212,9 @@ export default function Home() {
       minRating: minRating || undefined,
       minPrice: minPrice || undefined,
       maxPrice: maxPrice || undefined,
-      sortBy: sortBy || undefined,
+      sortBy: sortBy || 'recommended',
+      lat: userLocation?.lat,
+      lng: userLocation?.lon,
     })
       .then((res) => {
         if (key !== filterKeyRef.current) return
@@ -240,6 +242,8 @@ export default function Home() {
     minPrice,
     maxPrice,
     sortBy,
+    userLocation?.lat,
+    userLocation?.lon,
   ])
 
   // Exclude the current user's own properties from public browse
@@ -383,6 +387,18 @@ export default function Home() {
     : visibleProperties
 
   const showHero = !hasActiveSearchOrFilters && viewMode === 'list'
+  const isRecommendedSort = !sortBy || sortBy === 'recommended'
+  const filteredSortSubtitle = isRecommendedSort
+    ? isAuthenticated
+      ? 'Ranked by ML match for your pets and filters.'
+      : 'Ranked by recommended quality and relevance.'
+    : sortBy === 'price_asc'
+    ? 'Sorted by lowest price.'
+    : sortBy === 'rating'
+    ? 'Sorted by highest guest rating.'
+    : sortBy === 'trending'
+    ? 'Sorted by most booked stays.'
+    : null
 
   return (
     <div className="min-h-screen bg-white">
@@ -494,8 +510,13 @@ export default function Home() {
                     ? `Results for "${searchQuery}"`
                     : 'Filtered stays'}
                 </h2>
+                {filteredSortSubtitle && (
+                  <p className="text-sm text-neutral-gray mt-0.5">
+                    {filteredSortSubtitle}
+                  </p>
+                )}
                 {!isFilterLoading && (
-                  <p className="text-sm text-neutral-gray mt-0.5 tabular-nums">
+                  <p className="text-xs text-neutral-gray mt-1 tabular-nums">
                     {filterTotal}{' '}
                     {filterTotal === 1 ? 'stay available' : 'stays available'}
                   </p>
@@ -536,6 +557,7 @@ export default function Home() {
                   className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-5"
                   showPetPolicyChip={true}
                   showHeartIcon={isAuthenticated}
+                  showMatchReason={isRecommendedSort}
                   showTotalPrice={showTotalPrice}
                   checkIn={checkIn || undefined}
                   checkOut={checkOut || undefined}

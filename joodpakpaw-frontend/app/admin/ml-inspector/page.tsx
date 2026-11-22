@@ -125,6 +125,10 @@ const TIER_STYLES: Record<MatchTier, { label: string; className: string }> = {
     label: 'Similar stay',
     className: 'border-gray-200 bg-gray-50 text-gray-600',
   },
+  context_fallback: {
+    label: 'Context fallback',
+    className: 'border-amber-200 bg-amber-50 text-amber-800',
+  },
 }
 
 function getSampleUserHandle(user: MlSampleUser): string {
