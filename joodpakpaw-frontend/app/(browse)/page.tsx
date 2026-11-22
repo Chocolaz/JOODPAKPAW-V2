@@ -745,13 +745,13 @@ export default function Home() {
                 </div>
 
                 <div className="shrink-0 w-full md:w-[290px] lg:w-[340px]">
-                  <div className="relative w-full aspect-[16/10] rounded-2xl overflow-hidden bg-off-white">
+                  <div className="relative w-full aspect-[16/10] rounded-2xl overflow-hidden bg-off-white p-3">
                     <Image
-                      src={assetPath('/graphics/hero-clay-home.webp')}
-                      alt="Miniature 3D clay pet homestay waiting for travelling pets"
+                      src={assetPath('/graphics/steps/tell-us.svg')}
+                      alt="Host onboarding illustration showing how to list your pet stay"
                       fill
                       sizes="(max-width: 768px) 100vw, 340px"
-                      className="object-cover object-center"
+                      className="object-contain object-center p-2"
                     />
                   </div>
                 </div>

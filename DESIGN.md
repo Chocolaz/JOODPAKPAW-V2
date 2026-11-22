@@ -48,7 +48,7 @@ The locked system. Every Hallmark run reads this first and pages share it. Chang
   - Right: `Become a host` / `Host mode` quiet action + optional `Admin` link + Airbnb-style Account Pill (`rounded-full border border-border`, avatar/initials + short name or `Sign in`)
 - **Brand & 3D Pastel Clay Assets:**
   - Home hero illustration: `joodpakpaw-frontend/public/graphics/home.svg`
-  - Host onboarding artwork: `joodpakpaw-frontend/public/graphics/hero-clay-home.webp`
+  - Host onboarding artwork: `joodpakpaw-frontend/public/graphics/steps/tell-us.svg`
   - Species icons (3D Pastel Clay): `public/icons/species/clay-dog-transparent.webp`, `clay-cat-transparent.webp`, `clay-exotic-transparent.webp`
   - Energy icons: `public/icons/pets/energy-1.webp` .. `energy-5.webp`
   - Wordmark: `public/icons/JOODPAK.svg`
