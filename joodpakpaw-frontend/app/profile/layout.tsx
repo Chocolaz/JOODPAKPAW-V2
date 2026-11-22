@@ -4,12 +4,12 @@ import React, { ReactNode, useEffect } from 'react'
 import { useNormalizedPathname } from '@/app/_hooks/useNormalizedPathname'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ProfileHeader } from './_components/ProfileHeader'
+import { ProfileShell } from './_components/ProfileShell'
 import { HostBanner } from './_components/HostBanner'
 import { DesktopStepper } from './host/add-property/_components/DesktopStepper'
 import { DesktopPetStepper } from './pets/add/_components/DesktopPetStepper'
-import { PetsBanner } from './pets/_components/PetsBanner'
 import { AddPetBanner } from './pets/add/_components/AddPetBanner'
-import { addPetStepsComponents } from './pets/add/steps' // Import the steps array
+import { addPetStepsComponents } from './pets/add/steps'
 import { ProfileProvider, useProfileContext } from './ProfileContext'
 import { useAuth } from '@/app/_components/AuthContext'
 import { Spinner } from '@/components/ui/spinner'
@@ -20,7 +20,7 @@ function LayoutContent({ children }: { children: ReactNode }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const fromNotifications = searchParams.get('from') === 'notifications'
-  const { menu, hostProperties, petProfiles } = useProfileContext()
+  const { menu } = useProfileContext()
   const { isAuthenticated, loading: authLoading } = useAuth()
 
   useEffect(() => {
@@ -41,7 +41,12 @@ function LayoutContent({ children }: { children: ReactNode }) {
     )
   }
 
-  // Determine header properties based on the current path
+  // Full-width flows (Host center, Property creation wizard, Add-Pet wizard) render outside the account sidebar
+  const isFullWidthFlow =
+    normalizedPath.startsWith('/profile/host') ||
+    normalizedPath.startsWith('/profile/pets/add')
+
+  // Determine mobile header properties based on the current path
   const getHeaderProps = () => {
     if (normalizedPath.startsWith('/profile/host/add-property')) {
       return { title: 'Host', backPath: '/profile/host?tab=properties' }
@@ -57,8 +62,7 @@ function LayoutContent({ children }: { children: ReactNode }) {
       normalizedPath.startsWith('/profile/host/') &&
       normalizedPath.split('/').length === 4
     ) {
-      // /profile/host/[propertyId]
-      return null // Do not show header for this specific page
+      return null
     }
     if (normalizedPath === '/profile/host') {
       return { title: 'Host', backPath: fromNotifications ? '/notifications' : '/profile' }
@@ -70,7 +74,7 @@ function LayoutContent({ children }: { children: ReactNode }) {
       return { title: 'Add Pet', backPath: '/profile/pets' }
     }
     if (normalizedPath.match(/^\/profile\/pets\/\d+$/)) {
-      return null // Pet detail page has its own header
+      return null
     }
     if (normalizedPath === '/profile/bookings') {
       return { title: 'Bookings', backPath: '/profile' }
@@ -94,10 +98,8 @@ function LayoutContent({ children }: { children: ReactNode }) {
       return { title: 'Verification', backPath: fromNotifications ? '/notifications' : '/profile' }
     }
     if (normalizedPath.startsWith('/profile/') && normalizedPath !== '/profile') {
-      // This covers /profile/[firstName] and other potential sub-pages
-      return { title: 'Profile', backPath: '/profile' }
+      return { title: 'Personal info', backPath: '/profile' }
     }
-    // Base /profile page
     return { title: 'Profile' }
   }
 
@@ -123,16 +125,6 @@ function LayoutContent({ children }: { children: ReactNode }) {
       }
       return null
     }
-    if (normalizedPath === '/profile/host') {
-      return null // Banner is rendered inside the host page
-    }
-    if (normalizedPath === '/profile/pets') {
-      const { pets, error } = petProfiles
-      if (error) {
-        return null
-      }
-      return <PetsBanner summary={{ total: pets.length }} />
-    }
     return null
   }
 
@@ -141,34 +133,55 @@ function LayoutContent({ children }: { children: ReactNode }) {
   return (
     <main className="flex justify-center">
       <div className="w-full">
-        {headerProps && <div className="lg:hidden"><ProfileHeader {...headerProps} menu={menu} /></div>}
-        <div className={cn(
-          headerProps ? 'pt-14 lg:pt-0' : '',
-          isAddPetFlow && 'flex flex-col h-[calc(100dvh-56px)] lg:block lg:h-auto overflow-hidden lg:overflow-visible'
-        )}>
-          {/* Banner — shrink-0 so it never scrolls away on mobile add-pet */}
-          <div className={cn('lg:hidden', isAddPetFlow && 'shrink-0')}>{renderBanner()}</div>
+        {headerProps && (
+          <div className="lg:hidden">
+            <ProfileHeader {...headerProps} menu={menu} />
+          </div>
+        )}
+        <div
+          className={cn(
+            headerProps ? 'pt-14 lg:pt-0' : '',
+            isAddPetFlow &&
+              'flex flex-col h-[calc(100dvh-56px)] lg:block lg:h-auto overflow-hidden lg:overflow-visible'
+          )}
+        >
+          {/* Wizard mobile banners */}
+          <div className={cn('lg:hidden', isAddPetFlow && 'shrink-0')}>
+            {renderBanner()}
+          </div>
 
           {/* Desktop steppers */}
           {(() => {
             if (normalizedPath.startsWith('/profile/host/add-property')) {
               const stepId = parseInt(normalizedPath.split('/').pop() || '', 10)
               if (!isNaN(stepId) && stepId >= 1 && stepId <= 7) {
-                return <div className="hidden lg:block"><DesktopStepper stepId={stepId} /></div>
+                return (
+                  <div className="hidden lg:block">
+                    <DesktopStepper stepId={stepId} />
+                  </div>
+                )
               }
             }
             if (isAddPetFlow) {
               const stepId = parseInt(normalizedPath.split('/').pop() || '', 10)
               if (!isNaN(stepId) && stepId >= 1 && stepId <= 9) {
-                return <div className="hidden lg:block"><DesktopPetStepper stepId={stepId} /></div>
+                return (
+                  <div className="hidden lg:block">
+                    <DesktopPetStepper stepId={stepId} />
+                  </div>
+                )
               }
             }
             return null
           })()}
 
-          {/* Scrollable content on mobile add-pet, normal on everything else */}
-          <div className={cn(isAddPetFlow && 'flex-1 overflow-y-auto lg:overflow-visible lg:flex-none')}>
-            {children}
+          {/* Content: core account routes wrapped in ProfileShell; wizards remain full-width */}
+          <div
+            className={cn(
+              isAddPetFlow && 'flex-1 overflow-y-auto lg:overflow-visible lg:flex-none'
+            )}
+          >
+            {isFullWidthFlow ? children : <ProfileShell>{children}</ProfileShell>}
           </div>
         </div>
       </div>

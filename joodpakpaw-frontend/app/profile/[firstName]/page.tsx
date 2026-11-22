@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { motion, AnimatePresence } from 'framer-motion'
-import { assetPath } from '@/lib/utils'
+import { assetPath, cn } from '@/lib/utils'
 import { CropModal } from '@/app/_components/CropModal'
 import { useUserProfile } from '@/app/profile/_hooks/useUserProfile'
 import { useProfileContext } from '@/app/profile/ProfileContext'
@@ -23,14 +22,12 @@ import {
 } from '@/components/ui/dialog'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
-import { ProfileCard } from '@/app/profile/_components/ProfileCard'
 import { EditProfileForm } from '@/app/profile/_components/EditProfileForm'
 import { ChangePasswordForm } from '@/app/profile/_components/ChangePasswordForm'
 import { updateUserProfile } from '@/lib/api'
 import { useAuth } from '@/app/_components/AuthContext'
 import { toast } from 'sonner'
 import {
-  ArrowLeft,
   ChevronLeft,
   PencilLine,
   Mail,
@@ -44,19 +41,17 @@ import {
   BadgeCheck,
   Loader2,
 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 
 export default function UserProfilePage() {
   const { profile, loading, error, refreshProfile } = useUserProfile()
   const { setMenu } = useProfileContext()
   const { refreshAuth } = useAuth()
-  const router = useRouter()
 
   // Mobile drawer state
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false)
   const [isPasswordDrawerOpen, setIsPasswordDrawerOpen] = useState(false)
 
-  // Desktop state
+  // Desktop inline edit state
   const [isEditing, setIsEditing] = useState(false)
   const [isPasswordOpen, setIsPasswordOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -64,36 +59,27 @@ export default function UserProfilePage() {
   // Crop state
   const [cropSrc, setCropSrc] = useState<string | null>(null)
 
-  // Edit form state
+  // Edit form state (seeded on edit start — avoids synchronous setState in useEffect)
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
-
-  // Sync edit state when profile loads
-  useEffect(() => {
-    if (profile) {
-      setFirstName(profile.firstName)
-      setLastName(profile.lastName)
-      setAvatarPreview(profile.avatar || null)
-    }
-  }, [profile])
-
   // Mobile header edit button
   useEffect(() => {
     const editButton = (
       <button
+        type="button"
         onClick={() => setIsEditDrawerOpen(true)}
-        className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+        aria-label="Edit profile"
+        className="p-2 rounded-full hover:bg-off-white transition-colors"
       >
         <Image
           src={assetPath('/icons/edit.svg')}
           alt="Edit"
-          width={24}
-          height={24}
+          width={22}
+          height={22}
         />
       </button>
     )
@@ -104,27 +90,23 @@ export default function UserProfilePage() {
   }, [setMenu])
 
   const isDirty =
-    firstName !== profile?.firstName ||
-    lastName !== profile?.lastName ||
-    avatarFile !== null
+    Boolean(profile) &&
+    (firstName !== profile!.firstName ||
+      lastName !== profile!.lastName ||
+      avatarFile !== null)
 
   const handleStartEdit = () => {
-    if (profile) {
-      setFirstName(profile.firstName)
-      setLastName(profile.lastName)
-      setAvatarPreview(profile.avatar || null)
-      setAvatarFile(null)
-    }
+    if (!profile) return
+    setFirstName(profile.firstName)
+    setLastName(profile.lastName)
+    setAvatarPreview(profile.avatar || null)
+    setAvatarFile(null)
     setIsEditing(true)
   }
 
   const handleCancel = () => {
-    if (profile) {
-      setFirstName(profile.firstName)
-      setLastName(profile.lastName)
-      setAvatarPreview(profile.avatar || null)
-      setAvatarFile(null)
-    }
+    setAvatarFile(null)
+    setAvatarPreview(null)
     setIsEditing(false)
   }
 
@@ -159,6 +141,7 @@ export default function UserProfilePage() {
       refreshProfile()
       refreshAuth()
       setAvatarFile(null)
+      setAvatarPreview(null)
       setIsEditing(false)
       toast.success('Profile updated!')
     } catch {
@@ -170,330 +153,298 @@ export default function UserProfilePage() {
 
   if (error) return <ErrorState message={error} />
 
-  const displayAvatar = avatarPreview || undefined
+  if (loading || !profile) {
+    return (
+      <div className="max-w-2xl space-y-6">
+        <div className="h-12 w-48 rounded-md bg-gray-200 animate-pulse motion-reduce:animate-none" />
+        <div className="h-24 rounded-2xl border border-border bg-white animate-pulse motion-reduce:animate-none" />
+        <div className="h-64 rounded-2xl border border-border bg-white animate-pulse motion-reduce:animate-none" />
+      </div>
+    )
+  }
+
+  const displayAvatar = (isEditing ? avatarPreview : profile.avatar) || undefined
   const roleLabel =
-    profile?.role?.map((r) => r.name).join(', ') ||
-    (profile?.isBecomeToHost ? 'Host' : 'Guest')
+    profile.role?.map((r) => r.name).join(', ') ||
+    (profile.isBecomeToHost ? 'host' : 'guest')
 
   return (
-    <AnimatePresence mode="wait">
-    {!profile ? null : (
-    <motion.div
-      key="profile"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
-    >
+    <div className="max-w-2xl space-y-8">
+      {/* Page Header */}
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-border">
+        <div>
+          <h1 className="font-bold text-deep-teal">Personal info</h1>
+          <p className="text-sm text-neutral-gray mt-1">
+            Manage your name, photo, contact details, and password
+          </p>
+        </div>
 
-      {/* ── Mobile ── */}
-      <div className="lg:hidden">
-        <Drawer open={isEditDrawerOpen} onOpenChange={setIsEditDrawerOpen}>
-          <div className="px-5">
-            <ProfileCard
-              profile={profile}
-              onPasswordChangeClick={() => setIsPasswordDrawerOpen(true)}
-            />
-          </div>
-          <DrawerContent aria-describedby={undefined} className="max-h-[90vh] overflow-y-auto">
-            <DrawerHeader>
-              <div className="flex items-center">
-                <DrawerClose asChild>
-                  <button className="p-2 rounded-full hover:bg-gray-100 transition-colors">
-                    <ChevronLeft className="w-6 h-6 text-neutral-gray" />
-                  </button>
-                </DrawerClose>
-                <DrawerTitle>Edit Profile</DrawerTitle>
-                <div className="w-10" />
-              </div>
-            </DrawerHeader>
-            <EditProfileForm
-              profile={profile}
-              onRefreshProfile={refreshProfile}
-              onCloseDrawer={() => setIsEditDrawerOpen(false)}
-            />
-          </DrawerContent>
-        </Drawer>
-
-        <Drawer
-          open={isPasswordDrawerOpen}
-          onOpenChange={setIsPasswordDrawerOpen}
-        >
-          <DrawerContent aria-describedby={undefined} className="max-h-[90vh] overflow-y-auto">
-            <DrawerHeader>
-              <div className="flex items-center">
-                <DrawerClose asChild>
-                  <button className="p-2 rounded-full hover:bg-gray-100 transition-colors">
-                    <ChevronLeft className="w-6 h-6 text-neutral-gray" />
-                  </button>
-                </DrawerClose>
-                <DrawerTitle>Change Password</DrawerTitle>
-                <div className="w-10" />
-              </div>
-            </DrawerHeader>
-            <ChangePasswordForm
-              onCloseDrawer={() => setIsPasswordDrawerOpen(false)}
-            />
-          </DrawerContent>
-        </Drawer>
-      </div>
-
-      {/* ── Desktop ── */}
-      <div className="hidden lg:block px-12 py-8 max-w-3xl mx-auto w-full">
-        {/* Main card */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          {/* Banner */}
-          <div className="h-36 relative bg-gradient-to-br from-deep-teal via-deep-teal/80 to-positive-green/60">
-            <div className="absolute top-2 right-6 w-24 h-24 rounded-full bg-white/10" />
-            <div className="absolute -bottom-2 left-8 w-16 h-16 rounded-full bg-white/5" />
-            <div className="absolute top-4 left-1/2 w-12 h-12 rounded-full bg-white/5" />
-
-            {/* Back — top left of banner */}
-            <button
-              onClick={() => router.back()}
-              className="absolute top-4 left-4 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/20 text-white/80 text-sm hover:bg-white/10 transition-colors"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              Back
-            </button>
-
-            {/* Edit / Save / Cancel — top right of banner */}
-            <div className="absolute top-4 right-4 flex items-center gap-2">
-              <AnimatePresence mode="wait">
-                {isEditing ? (
-                  <motion.div
-                    key="editing-btns"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="flex items-center gap-2"
-                  >
-                    <button
-                      onClick={handleCancel}
-                      disabled={saving}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/20 text-white/80 text-sm hover:bg-white/10 transition-colors disabled:opacity-40"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleSave}
-                      disabled={!isDirty || saving}
-                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-white text-deep-teal text-sm font-semibold hover:bg-white/90 transition-colors disabled:opacity-40"
-                    >
-                      {saving ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          Save
-                        </>
-                      )}
-                    </button>
-                  </motion.div>
+        {/* Desktop inline actions */}
+        <div className="hidden lg:flex items-center gap-2 shrink-0">
+          {isEditing ? (
+            <>
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={saving}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-border text-sm font-medium text-neutral-gray hover:text-deep-teal hover:bg-off-white transition-colors disabled:opacity-40 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={!isDirty || saving}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent-orange text-white text-sm font-semibold hover:opacity-95 transition-opacity disabled:opacity-40 cursor-pointer"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Saving...
+                  </>
                 ) : (
-                  <motion.button
-                    key="edit-btn"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    onClick={handleStartEdit}
-                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg border border-white/20 text-white/80 text-sm hover:bg-white/10 transition-colors"
-                  >
-                    <PencilLine className="w-3.5 h-3.5" />
-                    Edit Profile
-                  </motion.button>
+                  <>
+                    <Check className="w-4 h-4" />
+                    Save changes
+                  </>
                 )}
-              </AnimatePresence>
-            </div>
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={handleStartEdit}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-deep-teal text-white text-sm font-medium hover:opacity-95 transition-opacity cursor-pointer"
+            >
+              <PencilLine className="w-4 h-4" />
+              Edit profile
+            </button>
+          )}
+        </div>
+
+        {/* Mobile edit drawer trigger */}
+        <div className="lg:hidden">
+          <button
+            type="button"
+            onClick={() => setIsEditDrawerOpen(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-deep-teal text-white text-sm font-medium cursor-pointer"
+          >
+            <PencilLine className="w-4 h-4" />
+            Edit profile
+          </button>
+        </div>
+      </header>
+
+      {/* Avatar & Identity Card */}
+      <section className="rounded-2xl border border-border bg-off-white/60 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="relative shrink-0">
+            <Avatar className="w-18 h-18 ring-2 ring-white border border-border overflow-hidden">
+              <AvatarImage
+                src={displayAvatar}
+                alt={`${profile.firstName} ${profile.lastName}`}
+              />
+              <AvatarFallback className="text-xl bg-white text-deep-teal font-semibold">
+                {profile.firstName?.charAt(0)}
+                {profile.lastName?.charAt(0)}
+              </AvatarFallback>
+            </Avatar>
+            {saving && (
+              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50">
+                <Loader2 className="w-5 h-5 animate-spin text-white" />
+              </div>
+            )}
           </div>
 
-          {/* Avatar + name — avatar overlaps banner */}
-          <div className="px-8 pb-6">
-            <div className="flex items-end justify-between -mt-12">
-              {/* Avatar */}
-              <div className="relative shrink-0">
-                <Avatar className="w-24 h-24 ring-4 ring-white shadow-lg overflow-hidden">
-                  <AvatarImage
-                    src={displayAvatar}
-                    alt={`${profile.firstName} ${profile.lastName}`}
-                  />
-                  <AvatarFallback className="text-2xl bg-gray-100 text-deep-teal font-semibold">
-                    {profile.firstName?.charAt(0)}
-                    {profile.lastName?.charAt(0)}
-                  </AvatarFallback>
-                </Avatar>
-                {saving && (
-                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 backdrop-blur-[2px] z-10">
-                    <Loader2 className="w-6 h-6 animate-spin text-white" />
-                  </div>
-                )}
-                <AnimatePresence>
-                  {isEditing && !saving && (
-                    <motion.button
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.8 }}
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-sm"
-                    >
-                      <Camera className="w-5 h-5 text-white" />
-                    </motion.button>
-                  )}
-                </AnimatePresence>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleAvatarChange}
+          <div className="min-w-0 space-y-1">
+            {isEditing ? (
+              <div className="flex flex-wrap gap-2.5">
+                <Input
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  maxLength={60}
+                  placeholder="First name"
+                  className="max-w-[170px] bg-white"
+                  disabled={saving}
+                />
+                <Input
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  maxLength={60}
+                  placeholder="Last name"
+                  className="max-w-[170px] bg-white"
                   disabled={saving}
                 />
               </div>
-            </div>
-
-            {/* Name + role */}
-            <div className="mt-3">
-              <AnimatePresence mode="wait">
-                {isEditing ? (
-                  <motion.div
-                    key="edit-name"
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    className="flex gap-3"
-                  >
-                    <Input
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      maxLength={60}
-                      placeholder="First name"
-                      className="max-w-[180px]"
-                      disabled={saving}
-                    />
-                    <Input
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      maxLength={60}
-                      placeholder="Last name"
-                      className="max-w-[180px]"
-                      disabled={saving}
-                    />
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="view-name"
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-xl font-semibold text-deep-teal">
-                        {profile.firstName} {profile.lastName}
-                      </h2>
-                      {profile.isVerifiedHost && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-500">
-                          <BadgeCheck className="w-3 h-3" />
-                          Verified Host
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-1.5 flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5">
-                        <User className="w-3.5 h-3.5 text-neutral-gray/70 shrink-0" />
-                        <span className="text-sm text-neutral-gray">
-                          {(profile.role?.some(r => r.name === 'host') || profile.isBecomeToHost) ? 'Host' : 'Guest'}
-                        </span>
-                      </div>
-                    </div>
-                  </motion.div>
+            ) : (
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="font-semibold text-deep-teal">
+                  {profile.firstName} {profile.lastName}
+                </h2>
+                {profile.isVerifiedHost && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <BadgeCheck className="w-3.5 h-3.5" />
+                    Verified host
+                  </span>
                 )}
-              </AnimatePresence>
-            </div>
-          </div>
-
-          {/* Body */}
-          <div className="px-8 py-6 space-y-8">
-            {/* Personal Information */}
-            <section>
-              <h3 className="text-xs font-semibold text-neutral-gray uppercase tracking-widest mb-4">
-                Personal Information
-              </h3>
-              <div className="divide-y divide-gray-50">
-                <InfoRow
-                  icon={<User className="w-4 h-4" />}
-                  label="First Name"
-                  value={profile.firstName}
-                  editable={isEditing}
-                  editNode={
-                    <span className="text-sm text-gray-700">{firstName}</span>
-                  }
-                />
-                <InfoRow
-                  icon={<User className="w-4 h-4" />}
-                  label="Last Name"
-                  value={profile.lastName}
-                  editable={isEditing}
-                  editNode={
-                    <span className="text-sm text-gray-700">{lastName}</span>
-                  }
-                />
-                <InfoRow
-                  icon={<Mail className="w-4 h-4" />}
-                  label="Email"
-                  value={profile.email}
-                  locked
-                />
-                <InfoRow
-                  icon={<Phone className="w-4 h-4" />}
-                  label="Phone"
-                  value={profile.phone || '—'}
-                  locked
-                />
               </div>
-            </section>
-
-            {/* Security */}
-            <section>
-              <h3 className="text-xs font-semibold text-neutral-gray uppercase tracking-widest mb-4">
-                Account & Security
-              </h3>
-              <div className="divide-y divide-gray-50">
-                <InfoRow
-                  icon={<BadgeCheck className="w-4 h-4" />}
-                  label="Role"
-                  value={roleLabel}
-                  locked
-                />
-                <InfoRow
-                  icon={<ShieldCheck className="w-4 h-4" />}
-                  label="Identity Verification"
-                  value={profile.isVerifiedHost ? 'Verified' : 'Not verified'}
-                  locked
-                  verified={profile.isVerifiedHost}
-                />
-                <div className="flex items-center justify-between py-3.5">
-                  <div className="flex items-center gap-3">
-                    <span className="text-neutral-gray">
-                      <ShieldCheck className="w-4 h-4" />
-                    </span>
-                    <span className="text-sm text-neutral-gray">Password</span>
-                  </div>
-                  <button
-                    onClick={() => setIsPasswordOpen(true)}
-                    className="flex items-center gap-1.5 text-sm text-deep-teal font-medium hover:underline transition-all"
-                  >
-                    Change Password
-                  </button>
-                </div>
-              </div>
-            </section>
+            )}
+            <p className="text-sm text-neutral-gray truncate">{profile.email}</p>
           </div>
         </div>
-      </div>
+
+        {isEditing && (
+          <div className="shrink-0">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-border bg-white text-sm font-medium text-deep-teal hover:bg-off-white transition-colors cursor-pointer"
+            >
+              <Camera className="w-4 h-4" />
+              Change photo
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleAvatarChange}
+              disabled={saving}
+            />
+          </div>
+        )}
+      </section>
+
+      {/* Personal Information Table */}
+      <section className="space-y-3">
+        <h2 className="font-semibold text-deep-teal">Contact &amp; identity</h2>
+        <div className="divide-y divide-border rounded-2xl border border-border bg-white px-5">
+          <InfoRow
+            icon={<User className="w-4 h-4" />}
+            label="First name"
+            value={isEditing ? firstName : profile.firstName}
+          />
+          <InfoRow
+            icon={<User className="w-4 h-4" />}
+            label="Last name"
+            value={isEditing ? lastName : profile.lastName}
+          />
+          <InfoRow
+            icon={<Mail className="w-4 h-4" />}
+            label="Email address"
+            value={profile.email}
+            locked
+          />
+          <InfoRow
+            icon={<Phone className="w-4 h-4" />}
+            label="Phone number"
+            value={profile.phone || '—'}
+            locked
+            tabular
+          />
+        </div>
+      </section>
+
+      {/* Account & Security Table */}
+      <section className="space-y-3">
+        <h2 className="font-semibold text-deep-teal">Account &amp; security</h2>
+        <div className="divide-y divide-border rounded-2xl border border-border bg-white px-5">
+          <InfoRow
+            icon={<BadgeCheck className="w-4 h-4" />}
+            label="Account role"
+            value={roleLabel}
+            locked
+          />
+          <InfoRow
+            icon={<ShieldCheck className="w-4 h-4" />}
+            label="Identity verification"
+            value={profile.isVerifiedHost ? 'Verified' : 'Not verified'}
+            locked
+            verified={profile.isVerifiedHost}
+          />
+          <div className="flex items-center justify-between gap-4 py-4">
+            <div className="flex items-center gap-3">
+              <span className="text-neutral-gray">
+                <Lock className="w-4 h-4" />
+              </span>
+              <div>
+                <p className="text-sm font-medium text-deep-teal">Password</p>
+                <p className="text-xs text-neutral-gray">
+                  Update your password regularly to keep your account secure
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                  setIsPasswordDrawerOpen(true)
+                } else {
+                  setIsPasswordOpen(true)
+                }
+              }}
+              className="px-3.5 py-2 rounded-xl border border-border text-sm font-medium text-deep-teal hover:bg-off-white transition-colors shrink-0 cursor-pointer"
+            >
+              Change password
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Mobile Edit Profile Drawer */}
+      <Drawer open={isEditDrawerOpen} onOpenChange={setIsEditDrawerOpen}>
+        <DrawerContent aria-describedby={undefined} className="max-h-[90vh] overflow-y-auto">
+          <DrawerHeader>
+            <div className="flex items-center justify-between">
+              <DrawerClose asChild>
+                <button
+                  type="button"
+                  aria-label="Close"
+                  className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  <ChevronLeft className="w-6 h-6 text-neutral-gray" />
+                </button>
+              </DrawerClose>
+              <DrawerTitle>Edit profile</DrawerTitle>
+              <div className="w-10" />
+            </div>
+          </DrawerHeader>
+          <EditProfileForm
+            profile={profile}
+            onRefreshProfile={refreshProfile}
+            onCloseDrawer={() => setIsEditDrawerOpen(false)}
+          />
+        </DrawerContent>
+      </Drawer>
+
+      {/* Mobile Change Password Drawer */}
+      <Drawer
+        open={isPasswordDrawerOpen}
+        onOpenChange={setIsPasswordDrawerOpen}
+      >
+        <DrawerContent aria-describedby={undefined} className="max-h-[90vh] overflow-y-auto">
+          <DrawerHeader>
+            <div className="flex items-center justify-between">
+              <DrawerClose asChild>
+                <button
+                  type="button"
+                  aria-label="Close"
+                  className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  <ChevronLeft className="w-6 h-6 text-neutral-gray" />
+                </button>
+              </DrawerClose>
+              <DrawerTitle>Change password</DrawerTitle>
+              <div className="w-10" />
+            </div>
+          </DrawerHeader>
+          <ChangePasswordForm
+            onCloseDrawer={() => setIsPasswordDrawerOpen(false)}
+          />
+        </DrawerContent>
+      </Drawer>
 
       {/* Avatar crop modal */}
       <CropModal
@@ -508,14 +459,12 @@ export default function UserProfilePage() {
       <Dialog open={isPasswordOpen} onOpenChange={setIsPasswordOpen}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
           <DialogHeader>
-            <DialogTitle>Change Password</DialogTitle>
+            <DialogTitle>Change password</DialogTitle>
           </DialogHeader>
           <ChangePasswordForm onCloseDrawer={() => setIsPasswordOpen(false)} />
         </DialogContent>
       </Dialog>
-    </motion.div>
-    )}
-    </AnimatePresence>
+    </div>
   )
 }
 
@@ -524,33 +473,37 @@ function InfoRow({
   label,
   value,
   locked,
-  editable,
-  editNode,
   verified,
+  tabular,
 }: {
   icon: React.ReactNode
   label: string
   value: string
   locked?: boolean
-  editable?: boolean
-  editNode?: React.ReactNode
   verified?: boolean
+  tabular?: boolean
 }) {
   return (
-    <div className="flex items-center justify-between py-3.5">
-      <div className="flex items-center gap-3">
-        <span className="text-neutral-gray">{icon}</span>
+    <div className="flex items-center justify-between gap-4 py-4">
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="text-neutral-gray shrink-0">{icon}</span>
         <span className="text-sm text-neutral-gray">{label}</span>
       </div>
-      <div className="flex items-center gap-2">
-        {editable && editNode ? (
-          editNode
-        ) : (
-          <span className={`text-sm font-medium ${verified === true ? 'text-blue-500' : verified === false ? 'text-neutral-gray' : 'text-gray-800'}`}>
-            {value}
-          </span>
-        )}
-        {locked && <Lock className="w-3 h-3 text-gray-300" />}
+      <div className="flex items-center gap-2 min-w-0">
+        <span
+          className={cn(
+            'text-sm font-medium truncate',
+            tabular && 'tabular-nums',
+            verified === true
+              ? 'text-emerald-700'
+              : verified === false
+                ? 'text-neutral-gray'
+                : 'text-foreground'
+          )}
+        >
+          {value}
+        </span>
+        {locked && <Lock className="w-3.5 h-3.5 text-neutral-gray/50 shrink-0" />}
       </div>
     </div>
   )

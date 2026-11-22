@@ -186,14 +186,14 @@ export function BookingList() {
   }
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-8 space-y-5">
+    <div className="w-full space-y-5">
       {/* Header + Segmented Tab Switcher */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-border">
         <div>
-          <h1 className="text-xl lg:text-2xl font-semibold text-deep-teal leading-tight">
+          <h1 className="font-bold text-deep-teal leading-tight">
             My bookings
           </h1>
-          <p className="text-xs sm:text-sm text-neutral-gray mt-1">
+          <p className="text-sm text-neutral-gray mt-1">
             Pet stays, PromptPay payments, and reviews
           </p>
         </div>

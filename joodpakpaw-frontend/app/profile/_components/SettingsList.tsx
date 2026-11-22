@@ -31,25 +31,26 @@ export function SettingsList() {
 
   return (
     <>
-      <Card className="w-full shadow-sm">
+      <Card className="w-full border border-border shadow-none">
         <CardContent className="p-0">
           <button
-            className="w-full flex items-center justify-between p-4 hover:bg-gray-100 transition-colors duration-200 ease-in-out"
+            type="button"
+            className="w-full flex items-center justify-between p-4 hover:bg-off-white/60 transition-colors cursor-pointer"
             onClick={isAuthenticated ? handleSignOutClick : handleLogin}
           >
             <div className="flex items-center gap-3">
               <div className="relative w-6 h-6">
                 {isAuthenticated ? (
-                  <LogoutIcon className="w-6 h-6 text-red-500 transition-transform duration-200 ease-in-out transform hover:scale-110" />
+                  <LogoutIcon className="w-6 h-6 text-red-500 transition-transform hover:scale-110" />
                 ) : (
-                  <LoginIcon className="w-6 h-6 text-green-500 transition-colors duration-200 ease-in-out" />
+                  <LoginIcon className="w-6 h-6 text-green-500 transition-colors" />
                 )}
               </div>
-              <span className="font-medium text-neutral-gray transition-colors duration-200 ease-in-out">
+              <span className="font-medium text-neutral-gray">
                 {isAuthenticated ? 'Sign out' : 'Sign in'}
               </span>
             </div>
-            <ChevronRight className="w-4 h-4 text-neutral-gray transition-colors duration-200 ease-in-out" />
+            <ChevronRight className="w-4 h-4 text-neutral-gray" />
           </button>
         </CardContent>
       </Card>
