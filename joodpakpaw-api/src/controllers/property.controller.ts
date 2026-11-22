@@ -6,7 +6,11 @@ import { normalizePetName } from './lookup.controller';
 import { cacheService } from '../services/cache.service';
 import {
   invalidateAllRecommendationCaches,
+  rankCandidateProperties,
+  RecommendationItem,
+  RecommendationMeta,
   triggerMlRefresh,
+  UserLocation,
 } from '../services/recommendation.service';
 import {
   syncPropertyBookingCount as syncPropertyBookingCountCanonical,
@@ -524,6 +528,12 @@ export async function getProperties(
           ? req.query.facilities.join(',')
           : String(req.query.facilities).trim()
         : '';
+    const parsedFacilities = facilitiesRaw
+      ? facilitiesRaw
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : [];
 
     const minPriceRaw =
       req.query.minPrice !== undefined ? String(req.query.minPrice).trim() : '';
@@ -539,10 +549,72 @@ export async function getProperties(
       }
     }
 
-    // Scope cache key by user when petProfileIds is provided (prevents cross-user pet filter leak)
+    const latRaw = req.query.lat;
+    const lngRaw = req.query.lng;
+    const latStr = Array.isArray(latRaw)
+      ? ''
+      : latRaw !== undefined
+      ? String(latRaw).trim()
+      : '';
+    const lngStr = Array.isArray(lngRaw)
+      ? ''
+      : lngRaw !== undefined
+      ? String(lngRaw).trim()
+      : '';
+    const hasLatParam = latRaw !== undefined && (Array.isArray(latRaw) || latStr !== '');
+    const hasLngParam = lngRaw !== undefined && (Array.isArray(lngRaw) || lngStr !== '');
+    let userLocation: UserLocation | null = null;
+    if (hasLatParam || hasLngParam) {
+      if (!hasLatParam || !hasLngParam) {
+        throw new AppError(
+          'Both lat and lng are required when filtering or ranking by location.',
+          400,
+          'T-2007'
+        );
+      }
+      const lat = Number(latStr);
+      const lng = Number(lngStr);
+      if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lng) ||
+        lat < -90 ||
+        lat > 90 ||
+        lng < -180 ||
+        lng > 180
+      ) {
+        throw new AppError(
+          'lat must be between -90 and 90, and lng must be between -180 and 180.',
+          400,
+          'T-2007'
+        );
+      }
+      userLocation = { lat, lng };
+    }
+
+    const sortBy =
+      typeof req.query.sortBy === 'string'
+        ? req.query.sortBy.trim().toLowerCase()
+        : '';
+    const isMlRecommendedSort = sortBy === 'recommended' && req.query.ids === undefined;
+
+    // Scope cache key by user & rounded geo when sortBy=recommended (prevents cross-user ranking leak)
+    const queryForCache: Record<string, unknown> = { ...req.query };
+    if (isMlRecommendedSort && userLocation) {
+      queryForCache.lat = userLocation.lat.toFixed(2);
+      queryForCache.lng = userLocation.lng.toFixed(2);
+    }
+    const cacheScopeParts: string[] = [];
+    if (isMlRecommendedSort) {
+      cacheScopeParts.push(`user:${req.user?.id ?? 'guest'}`);
+      if (userLocation) {
+        cacheScopeParts.push(`loc:${userLocation.lat.toFixed(2)},${userLocation.lng.toFixed(2)}`);
+      }
+    } else if (parsedPetProfileIds.length > 0) {
+      cacheScopeParts.push(`u:${req.user?.id ?? 'anon'}`);
+    }
     const cacheScope =
-      parsedPetProfileIds.length > 0 ? `u:${req.user?.id ?? 'anon'}:` : '';
-    const cacheKey = `properties:list:${cacheScope}${JSON.stringify(req.query)}`;
+      cacheScopeParts.length > 0 ? `${cacheScopeParts.join(':')}:` : '';
+    const cacheKey = `properties:list:${cacheScope}${JSON.stringify(queryForCache)}`;
     const cached = await cacheService.get<any>(cacheKey);
 
     if (cached) {
@@ -690,10 +762,6 @@ export async function getProperties(
       req.query.minRating !== undefined
         ? parseFloat(String(req.query.minRating))
         : 0;
-    const sortBy =
-      typeof req.query.sortBy === 'string'
-        ? req.query.sortBy.trim().toLowerCase()
-        : '';
     const days =
       req.query.days !== undefined ? parseInt(String(req.query.days), 10) : NaN;
     const search =
@@ -746,6 +814,17 @@ export async function getProperties(
             totalRows: 0,
             totalPages: 0,
           },
+          ...(isMlRecommendedSort
+            ? {
+                meta: {
+                  source: 'in_process_fallback',
+                  strategy: 'hybrid_filtered_cold_start',
+                  snapshotAgeSeconds: 0,
+                  latencyMs: 0,
+                  totalCandidates: 0,
+                },
+              }
+            : {}),
         });
         return;
       }
@@ -856,36 +935,30 @@ export async function getProperties(
     }
 
     // Lifestyle / Intent filters: facilities, propertyType, propertyTypeId, minPrice
-    if (facilitiesRaw) {
-      const facilityTokens = facilitiesRaw
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean);
-      if (facilityTokens.length > 0) {
-        const facilityOrFilters: Prisma.PropertyFacilityWhereInput[] = [];
-        for (const token of facilityTokens) {
-          if (/^\d+$/.test(token)) {
-            const numId = parseInt(token, 10);
-            if (Number.isSafeInteger(numId) && numId > 0) {
-              facilityOrFilters.push({ facilityId: numId });
-              continue;
-            }
+    if (parsedFacilities.length > 0) {
+      const facilityOrFilters: Prisma.PropertyFacilityWhereInput[] = [];
+      for (const token of parsedFacilities) {
+        if (/^\d+$/.test(token)) {
+          const numId = parseInt(token, 10);
+          if (Number.isSafeInteger(numId) && numId > 0) {
+            facilityOrFilters.push({ facilityId: numId });
+            continue;
           }
-          facilityOrFilters.push({
-            facility: {
-              name: { contains: token, mode: 'insensitive' },
-            },
-          });
         }
-        if (facilityOrFilters.length > 0) {
-          andConditions.push({
-            facilities: {
-              some: {
-                OR: facilityOrFilters,
-              },
+        facilityOrFilters.push({
+          facility: {
+            name: { contains: token, mode: 'insensitive' },
+          },
+        });
+      }
+      if (facilityOrFilters.length > 0) {
+        andConditions.push({
+          facilities: {
+            some: {
+              OR: facilityOrFilters,
             },
-          });
-        }
+          },
+        });
       }
     }
 
@@ -942,63 +1015,84 @@ export async function getProperties(
     const needsRoomLevelEval =
       hasDateFilter || petSizeCategoryId !== null || userPets.length > 0;
 
+    type CandidatePropertyEntry = {
+      prop: any;
+      stayNights?: number;
+      stayTotalPrice?: number;
+    };
+
     let paginatedData: any[] = [];
     let totalRows = 0;
     let totalPages = 0;
+    let mlRankCandidates: CandidatePropertyEntry[] | null = null;
+    let rankMeta: RecommendationMeta | undefined;
 
     if (!needsRoomLevelEval) {
-      // Fast SQL-paginated path (100% backward compatible)
-      totalRows = await prisma.property.count({
-        where: { AND: andConditions },
-      });
-      totalPages = totalRows > 0 ? Math.ceil(totalRows / limit) : 0;
-
-      const dbProperties =
-        totalRows > 0
-          ? await prisma.property.findMany({
-              where: { AND: andConditions },
-              include: {
-                images: {
-                  where: { deletedAt: null },
-                  orderBy: { id: 'asc' },
-                  take: 5,
-                },
-                propertyType: true,
-                roomCategories: {
-                  where: { deletedAt: null },
-                  select: {
-                    id: true,
-                    basePrice: true,
-                    pets: {
-                      select: {
-                        pet: true,
-                      },
-                    },
-                  },
-                  orderBy: { basePrice: 'asc' },
-                },
-                host: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    avatar: true,
-                    isVerifiedHost: true,
-                  },
-                },
+      const baseInclude = {
+        images: {
+          where: { deletedAt: null },
+          orderBy: { id: 'asc' as const },
+          take: 5,
+        },
+        propertyType: true,
+        roomCategories: {
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            basePrice: true,
+            pets: {
+              select: {
+                pet: true,
               },
-              orderBy,
-              skip: (page - 1) * limit,
-              take: limit,
-            })
-          : [];
+            },
+          },
+          orderBy: { basePrice: 'asc' as const },
+        },
+        host: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+            isVerifiedHost: true,
+          },
+        },
+      };
 
-      const anonymousFavMap = new Map<number, number>();
-      paginatedData = dbProperties.map((p) => {
-        const dto = formatPropertyDto(p, anonymousFavMap);
-        const { _bookingCount, ...rest } = dto;
-        return rest;
-      });
+      if (isMlRecommendedSort) {
+        // Collect all Stage A matching candidate properties (up to 500) for ML context-aware re-ranking
+        const dbProperties = await prisma.property.findMany({
+          where: { AND: andConditions },
+          include: baseInclude,
+          orderBy: { createdAt: 'desc' },
+          take: 500,
+        });
+        mlRankCandidates = dbProperties.map((prop) => ({ prop }));
+      } else {
+        // Fast SQL-paginated path (100% backward compatible)
+        totalRows = await prisma.property.count({
+          where: { AND: andConditions },
+        });
+        totalPages = totalRows > 0 ? Math.ceil(totalRows / limit) : 0;
+
+        const dbProperties =
+          totalRows > 0
+            ? await prisma.property.findMany({
+                where: { AND: andConditions },
+                include: baseInclude,
+                orderBy,
+                skip: (page - 1) * limit,
+                take: limit,
+              })
+            : [];
+
+        const anonymousFavMap = new Map<number, number>();
+        paginatedData = dbProperties.map((p) => {
+          const dto = formatPropertyDto(p, anonymousFavMap);
+          const { _bookingCount, ...rest } = dto;
+          return rest;
+        });
+      }
     } else {
       // Room-level availability & pet-safe eligibility path
       const candidateProperties = await prisma.property.findMany({
@@ -1226,42 +1320,109 @@ export async function getProperties(
         }
       }
 
-      // Sort by stayTotalPrice when date-filtered and price sorting is requested
-      if (hasDateFilter) {
-        if (
-          sortBy === 'price' ||
-          sortBy === 'price_asc' ||
-          sortBy === 'best_value'
-        ) {
-          evaluatedProperties.sort(
-            (a, b) => (a.stayTotalPrice ?? 0) - (b.stayTotalPrice ?? 0)
-          );
-        } else if (sortBy === 'price_desc') {
-          evaluatedProperties.sort(
-            (a, b) => (b.stayTotalPrice ?? 0) - (a.stayTotalPrice ?? 0)
-          );
+      if (isMlRecommendedSort) {
+        mlRankCandidates = evaluatedProperties.slice(0, 500);
+      } else {
+        // Sort by stayTotalPrice when date-filtered and price sorting is requested
+        if (hasDateFilter) {
+          if (
+            sortBy === 'price' ||
+            sortBy === 'price_asc' ||
+            sortBy === 'best_value'
+          ) {
+            evaluatedProperties.sort(
+              (a, b) => (a.stayTotalPrice ?? 0) - (b.stayTotalPrice ?? 0)
+            );
+          } else if (sortBy === 'price_desc') {
+            evaluatedProperties.sort(
+              (a, b) => (b.stayTotalPrice ?? 0) - (a.stayTotalPrice ?? 0)
+            );
+          }
+        }
+
+        totalRows = evaluatedProperties.length;
+        totalPages = totalRows > 0 ? Math.ceil(totalRows / limit) : 0;
+        const pageSlice = evaluatedProperties.slice(
+          (page - 1) * limit,
+          page * limit
+        );
+
+        const anonymousFavMap = new Map<number, number>();
+        paginatedData = pageSlice.map(({ prop, stayNights, stayTotalPrice }) => {
+          const dto = formatPropertyDto(prop, anonymousFavMap);
+          const { _bookingCount, ...rest } = dto;
+          return hasDateFilter
+            ? {
+                ...rest,
+                stayNights,
+                stayTotalPrice,
+              }
+            : rest;
+        });
+      }
+    }
+
+    if (isMlRecommendedSort && mlRankCandidates !== null) {
+      const candidatePropertyIds = mlRankCandidates.map((c) => c.prop.id);
+      const rankResult = await rankCandidateProperties({
+        userId: req.user?.id ?? null,
+        candidatePropertyIds,
+        filterContext: {
+          petTypes: petTypeTokens,
+          petProfileIds: parsedPetProfileIds,
+          facilities: parsedFacilities,
+          maxPrice: !isNaN(maxPrice) ? maxPrice : undefined,
+          province: province || undefined,
+        },
+        userLocation,
+      });
+
+      const candidateById = new Map(mlRankCandidates.map((c) => [c.prop.id, c]));
+      const orderedRanked: Array<{
+        candidate: CandidatePropertyEntry;
+        rec: RecommendationItem;
+      }> = [];
+      const seenRankedIds = new Set<number>();
+
+      for (const rec of rankResult.recommendations) {
+        const cand = candidateById.get(rec.propertyId);
+        if (cand && !seenRankedIds.has(rec.propertyId)) {
+          seenRankedIds.add(rec.propertyId);
+          orderedRanked.push({ candidate: cand, rec });
+        }
+      }
+      for (const cand of mlRankCandidates) {
+        if (!seenRankedIds.has(cand.prop.id)) {
+          seenRankedIds.add(cand.prop.id);
+          orderedRanked.push({
+            candidate: cand,
+            rec: {
+              propertyId: cand.prop.id,
+              score: 0,
+              matchTier: 'context_fallback',
+              matchReasons: ['Matches your filter'],
+            },
+          });
         }
       }
 
-      totalRows = evaluatedProperties.length;
+      totalRows = orderedRanked.length;
       totalPages = totalRows > 0 ? Math.ceil(totalRows / limit) : 0;
-      const pageSlice = evaluatedProperties.slice(
-        (page - 1) * limit,
-        page * limit
-      );
+      const pageSlice = orderedRanked.slice((page - 1) * limit, page * limit);
 
       const anonymousFavMap = new Map<number, number>();
-      paginatedData = pageSlice.map(({ prop, stayNights, stayTotalPrice }) => {
+      paginatedData = pageSlice.map(({ candidate: { prop, stayNights, stayTotalPrice }, rec }) => {
         const dto = formatPropertyDto(prop, anonymousFavMap);
         const { _bookingCount, ...rest } = dto;
-        return hasDateFilter
-          ? {
-              ...rest,
-              stayNights,
-              stayTotalPrice,
-            }
-          : rest;
+        return {
+          ...rest,
+          ...(hasDateFilter ? { stayNights, stayTotalPrice } : {}),
+          matchReasons: rec.matchReasons,
+          recommendationScore: rec.score,
+          matchTier: rec.matchTier,
+        };
       });
+      rankMeta = rankResult.meta;
     }
 
     const baseResponse = {
@@ -1274,13 +1435,14 @@ export async function getProperties(
         totalRows,
         totalPages,
       },
+      ...(rankMeta ? { meta: rankMeta } : {}),
     };
 
-    // Cache the result (shorter TTL when date-filtered or pet-scoped)
+    // Cache the result (shorter TTL when date-filtered, pet-scoped, or ML-ranked)
     await cacheService.set(
       cacheKey,
       baseResponse,
-      hasDateFilter || parsedPetProfileIds.length > 0 ? 30 : 60
+      hasDateFilter || parsedPetProfileIds.length > 0 || isMlRecommendedSort ? 30 : 60
     );
 
     if (req.user?.id) {

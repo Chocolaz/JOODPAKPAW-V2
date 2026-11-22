@@ -7532,6 +7532,179 @@ async function main() {
         )
       }
     })
+
+    // Test 83: Filter-First ML Ranking — maxPrice=800&sortBy=recommended & lat/lng validation
+    await runTest('Filter-First ML Ranking: GET /api/v1/properties?maxPrice=800&sortBy=recommended returns stays <= 800 with matchReasons, meta & geo validation', async () => {
+      await invalidateAllRecommendationCaches()
+
+      const res = await makeRequest(
+        pipePath,
+        '/api/v1/properties?maxPrice=800&sortBy=recommended&limit=20'
+      )
+      if (res.statusCode !== 200 || res.body?.code !== 'S-0000') {
+        throw new Error(
+          `Expected 200 S-0000 for maxPrice=800&sortBy=recommended, got ${res.statusCode} ${JSON.stringify(res.body)}`
+        )
+      }
+      const items: any[] = res.body?.data || []
+      if (!Array.isArray(items) || items.length === 0) {
+        throw new Error('Expected non-empty properties for maxPrice=800&sortBy=recommended')
+      }
+      for (const item of items) {
+        if (typeof item.lowestPrice !== 'number' || item.lowestPrice <= 0 || item.lowestPrice > 800) {
+          throw new Error(`Expected lowestPrice in (0, 800], got ${item.lowestPrice} on property ${item.id}`)
+        }
+        if (!Array.isArray(item.matchReasons) || item.matchReasons.length < 1 || item.matchReasons.length > 3) {
+          throw new Error(`Expected 1..3 matchReasons on property ${item.id}, got ${JSON.stringify(item.matchReasons)}`)
+        }
+        if (typeof item.recommendationScore !== 'number') {
+          throw new Error(`Expected numeric recommendationScore on property ${item.id}, got ${item.recommendationScore}`)
+        }
+        if (!['all_pets', 'partial_pets', 'cold_start', 'context_fallback'].includes(item.matchTier)) {
+          throw new Error(`Unexpected matchTier ${item.matchTier} on property ${item.id}`)
+        }
+      }
+      if (!res.body?.meta || typeof res.body.meta.strategy !== 'string' || typeof res.body.meta.totalCandidates !== 'number') {
+        throw new Error(`Expected meta object in response, got ${JSON.stringify(res.body?.meta)}`)
+      }
+
+      // Valid lat & lng succeed
+      const geoRes = await makeRequest(
+        pipePath,
+        '/api/v1/properties?maxPrice=800&sortBy=recommended&lat=13.7563&lng=100.5018&limit=10'
+      )
+      if (geoRes.statusCode !== 200 || !geoRes.body?.meta) {
+        throw new Error(`Expected 200 with meta for geo-enabled sortBy=recommended, got ${geoRes.statusCode}`)
+      }
+
+      // Half-provided or malformed lat/lng must fail with 400 T-2007
+      const badGeoChecks = [
+        '/api/v1/properties?sortBy=recommended&lat=13.7563',
+        '/api/v1/properties?sortBy=recommended&lng=100.5018',
+        '/api/v1/properties?sortBy=recommended&lat=abc&lng=100.5018',
+        '/api/v1/properties?sortBy=recommended&lat=95&lng=100.5018',
+      ]
+      for (const pathCheck of badGeoChecks) {
+        const badRes = await makeRequest(pipePath, pathCheck)
+        if (badRes.statusCode !== 400 || badRes.body?.code !== 'T-2007') {
+          throw new Error(
+            `Expected 400 T-2007 for ${pathCheck}, got ${badRes.statusCode} ${JSON.stringify(badRes.body)}`
+          )
+        }
+      }
+    })
+
+    // Test 84: Filter-First ML Ranking — petTypes=cat as dog owner (user2) & user cache isolation
+    await runTest('Filter-First ML Ranking: GET /api/v1/properties?petTypes=cat&sortBy=recommended as dog owner (user2) returns non-empty cat stays & isolates user cache', async () => {
+      await invalidateAllRecommendationCaches()
+
+      const resUser2 = await makeRequest(
+        pipePath,
+        '/api/v1/properties?petTypes=cat&sortBy=recommended&limit=20',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${user2Live.token}` }
+      )
+      if (resUser2.statusCode !== 200 || resUser2.body?.code !== 'S-0000') {
+        throw new Error(
+          `Expected 200 S-0000 for user2 cat search, got ${resUser2.statusCode} ${JSON.stringify(resUser2.body)}`
+        )
+      }
+      const items2: any[] = resUser2.body?.data || []
+      if (!Array.isArray(items2) || items2.length === 0) {
+        throw new Error('Expected non-empty cat stays for dog owner user2 when filtering petTypes=cat')
+      }
+      for (const item of items2) {
+        const acceptsCat =
+          Array.isArray(item.pets) &&
+          item.pets.some((p: any) => String(p.name || '').toLowerCase().includes('cat'))
+        if (!acceptsCat) {
+          throw new Error(`Property ${item.id} returned for petTypes=cat does not accept cats: ${JSON.stringify(item.pets)}`)
+        }
+        if (!Array.isArray(item.matchReasons) || item.matchReasons.length === 0) {
+          throw new Error(`Expected non-empty matchReasons on property ${item.id}`)
+        }
+        if (typeof item.recommendationScore !== 'number' || !item.matchTier) {
+          throw new Error(`Missing recommendationScore or matchTier on property ${item.id}`)
+        }
+      }
+      if (!resUser2.body?.meta || !['hybrid_filtered_behavioral', 'hybrid_filtered_cold_start'].includes(resUser2.body.meta.strategy)) {
+        throw new Error(`Expected behavioral/cold_start strategy for dog-only owner searching cat, got ${JSON.stringify(resUser2.body?.meta)}`)
+      }
+
+      // Calling identical URL as user1 (who owns both Dog and Cat) must NOT get user2's cached response
+      const resUser1 = await makeRequest(
+        pipePath,
+        '/api/v1/properties?petTypes=cat&sortBy=recommended&limit=20',
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${user1Live.token}` }
+      )
+      if (resUser1.statusCode !== 200 || resUser1.body?.meta?.strategy !== 'hybrid_filtered_personalized') {
+        throw new Error(
+          `Expected hybrid_filtered_personalized for cat owner user1 (cache isolation), got ${JSON.stringify(resUser1.body?.meta)}`
+        )
+      }
+    })
+
+    // Test 85: Sort Preservation — price_asc & default createdAt desc without ML override
+    await runTest('Sort Preservation: sortBy=price_asc returns strictly ascending prices and default query preserves createdAt desc without ML override', async () => {
+      await invalidateAllRecommendationCaches()
+
+      const priceRes = await makeRequest(
+        pipePath,
+        '/api/v1/properties?sortBy=price_asc&limit=20'
+      )
+      if (priceRes.statusCode !== 200 || priceRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 for sortBy=price_asc, got ${priceRes.statusCode}`)
+      }
+      const priceItems: any[] = priceRes.body?.data || []
+      if (priceItems.length < 2) {
+        throw new Error(`Expected at least 2 properties for price_asc check, got ${priceItems.length}`)
+      }
+      if (priceRes.body?.meta !== undefined) {
+        throw new Error(`Expected no meta on sortBy=price_asc, got ${JSON.stringify(priceRes.body.meta)}`)
+      }
+      for (let i = 0; i < priceItems.length; i++) {
+        if (priceItems[i].matchReasons !== undefined || priceItems[i].recommendationScore !== undefined) {
+          throw new Error(`Unexpected ML fields on sortBy=price_asc item ${priceItems[i].id}`)
+        }
+        if (i > 0 && priceItems[i].lowestPrice < priceItems[i - 1].lowestPrice) {
+          throw new Error(
+            `Expected ascending lowestPrice order, got ${priceItems[i - 1].lowestPrice} before ${priceItems[i].lowestPrice}`
+          )
+        }
+      }
+
+      const defaultRes = await makeRequest(
+        pipePath,
+        '/api/v1/properties?page=1&limit=20'
+      )
+      if (defaultRes.statusCode !== 200 || defaultRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 for default query, got ${defaultRes.statusCode}`)
+      }
+      const defaultItems: any[] = defaultRes.body?.data || []
+      if (defaultItems.length < 2) {
+        throw new Error(`Expected at least 2 properties for default createdAt desc check, got ${defaultItems.length}`)
+      }
+      if (defaultRes.body?.meta !== undefined) {
+        throw new Error(`Expected no meta on default query, got ${JSON.stringify(defaultRes.body.meta)}`)
+      }
+      for (let i = 0; i < defaultItems.length; i++) {
+        if (defaultItems[i].matchReasons !== undefined || defaultItems[i].recommendationScore !== undefined) {
+          throw new Error(`Unexpected ML fields on default query item ${defaultItems[i].id}`)
+        }
+        if (i > 0) {
+          const prevTs = new Date(defaultItems[i - 1].createdAt).getTime()
+          const currTs = new Date(defaultItems[i].createdAt).getTime()
+          if (currTs > prevTs) {
+            throw new Error(
+              `Expected createdAt desc order on default query, got ${defaultItems[i - 1].createdAt} before ${defaultItems[i].createdAt}`
+            )
+          }
+        }
+      }
+    })
   } finally {
     config.mlServiceUrl = originalMlUrl
     config.mlTimeoutMs = originalMlTimeoutMs
