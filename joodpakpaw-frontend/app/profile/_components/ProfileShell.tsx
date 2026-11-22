@@ -33,7 +33,7 @@ interface NavItem {
 
 export function ProfileShell({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, logout } = useAuth()
-  const { petProfiles } = useProfileContext()
+  const { petProfiles, bookingsSummary } = useProfileContext()
   const normalizedPath = useNormalizedPathname()
   const router = useRouter()
   const [isSignOutOpen, setIsSignOutOpen] = useState(false)
@@ -88,6 +88,10 @@ export function ProfileShell({ children }: { children: React.ReactNode }) {
       label: 'Bookings',
       href: '/profile/bookings',
       icon: CalendarClock,
+      badge:
+        !bookingsSummary.loading && bookingsSummary.upcomingCount > 0
+          ? bookingsSummary.upcomingCount
+          : undefined,
       match: (path) => path.startsWith('/profile/bookings'),
     },
     {
@@ -116,7 +120,7 @@ export function ProfileShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       {/* Mobile / Tablet sticky horizontal pill rail (< lg) */}
-      <div className="lg:hidden sticky top-14 z-20 bg-white border-b border-border px-4 py-2.5 overflow-x-auto no-scrollbar">
+      <div className="lg:hidden sticky top-14 z-20 bg-white border-b border-border px-4 py-2.5 overflow-x-auto hide-scrollbar">
         <nav aria-label="Profile navigation" className="flex items-center gap-2 w-max">
           {accountItems.map((item) => {
             const active = item.match(normalizedPath)
@@ -161,7 +165,7 @@ export function ProfileShell({ children }: { children: React.ReactNode }) {
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 py-6 lg:py-0 lg:h-[calc(100dvh-64px)] xl:h-[calc(100dvh-72px)] lg:overflow-hidden">
         <div className="flex items-start lg:items-stretch lg:h-full gap-8 xl:gap-10">
           {/* Desktop independent-scroll left sidebar (lg+) */}
-          <aside className="hidden lg:block w-[260px] shrink-0 h-full overflow-y-auto overscroll-contain py-8 pr-6 border-r border-border space-y-6">
+          <aside className="hidden lg:block w-[260px] shrink-0 h-full overflow-y-auto overscroll-contain modern-scrollbar py-8 pr-6 border-r border-border space-y-6">
             <div>
               <p className="text-sm font-semibold text-deep-teal px-3 mb-2">
                 Account
@@ -242,7 +246,7 @@ export function ProfileShell({ children }: { children: React.ReactNode }) {
           </aside>
 
           {/* Right independent-scroll workspace pane */}
-          <div className="min-w-0 flex-1 pb-20 lg:pb-10 lg:h-full lg:overflow-y-auto overscroll-contain lg:py-8 lg:pr-2">
+          <div className="min-w-0 flex-1 pb-20 lg:pb-10 lg:h-full lg:overflow-y-auto overscroll-contain modern-scrollbar lg:py-8 lg:pr-2">
             {children}
           </div>
         </div>

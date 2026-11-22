@@ -1,24 +1,18 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useAuth } from '@/app/_components/AuthContext'
 import { useProfileContext } from './ProfileContext'
 import { SettingsList } from './_components/SettingsList'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
-import { getBookings } from '@/lib/api'
-import { Booking } from '@/types/booking'
 import { assetPath, cn } from '@/lib/utils'
 import {
   BadgeCheck,
   CalendarClock,
   ChevronRight,
-  House,
   Plus,
   ShieldAlert,
-  ShieldCheck,
-  Sparkles,
 } from 'lucide-react'
 
 function getSpeciesClayIcon(petTypeName?: string): string {
@@ -54,38 +48,74 @@ function formatDateRange(checkIn: string, checkOut: string): string {
 
 function OverviewSkeleton() {
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" aria-busy="true" aria-label="Loading profile overview">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-border">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-gray-200 animate-pulse motion-reduce:animate-none shrink-0" />
+          <div className="w-16 h-16 rounded-full bg-neutral-100 animate-pulse motion-reduce:animate-none shrink-0" />
           <div className="space-y-2">
-            <div className="h-6 w-44 rounded-md bg-gray-200 animate-pulse motion-reduce:animate-none" />
-            <div className="h-4 w-52 rounded-md bg-gray-100 animate-pulse motion-reduce:animate-none" />
+            <div className="h-6 w-44 rounded-md bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+            <div className="h-4 w-52 rounded-md bg-neutral-100 animate-pulse motion-reduce:animate-none" />
           </div>
         </div>
-        <div className="h-10 w-36 rounded-xl bg-gray-100 animate-pulse motion-reduce:animate-none" />
+        <div className="h-10 w-36 rounded-xl border border-border bg-white animate-pulse motion-reduce:animate-none" />
       </div>
 
       <div className="space-y-3">
-        <div className="h-5 w-32 rounded-md bg-gray-200 animate-pulse motion-reduce:animate-none" />
-        <div className="h-24 rounded-2xl border border-border bg-white animate-pulse motion-reduce:animate-none" />
+        <div className="flex items-center justify-between">
+          <div className="h-5 w-32 rounded-md bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+          <div className="h-4 w-28 rounded-md bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+        </div>
+        <div className="rounded-2xl border border-border bg-white p-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4 flex-1">
+            <div className="w-14 h-14 rounded-xl bg-neutral-100 animate-pulse motion-reduce:animate-none shrink-0" />
+            <div className="space-y-2 flex-1 max-w-sm">
+              <div className="h-4 w-36 rounded bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+              <div className="h-5 w-52 rounded bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+              <div className="h-3.5 w-40 rounded bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+            </div>
+          </div>
+          <div className="h-10 w-24 rounded-xl bg-neutral-100 animate-pulse motion-reduce:animate-none shrink-0" />
+        </div>
       </div>
 
       <div className="space-y-3">
-        <div className="h-5 w-28 rounded-md bg-gray-200 animate-pulse motion-reduce:animate-none" />
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="flex items-center justify-between">
+          <div className="h-5 w-28 rounded-md bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+          <div className="h-4 w-24 rounded-md bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="h-20 rounded-2xl border border-border bg-white animate-pulse motion-reduce:animate-none"
-            />
+              className="h-20 rounded-2xl border border-border bg-white p-4 flex items-center gap-3.5"
+            >
+              <div className="w-12 h-12 rounded-xl bg-neutral-100 animate-pulse motion-reduce:animate-none shrink-0" />
+              <div className="space-y-2 flex-1">
+                <div className="h-4 w-24 rounded bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+                <div className="h-3 w-32 rounded bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+              </div>
+            </div>
           ))}
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="h-36 rounded-2xl bg-off-white border border-border animate-pulse motion-reduce:animate-none" />
-        <div className="h-36 rounded-2xl bg-white border border-border animate-pulse motion-reduce:animate-none" />
+        {[0, 1].map((i) => (
+          <div
+            key={i}
+            className="h-40 rounded-2xl border border-border bg-white p-6 flex flex-col justify-between"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-2 flex-1">
+                <div className="h-5 w-36 rounded bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+                <div className="h-4 w-full rounded bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+                <div className="h-4 w-4/5 rounded bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+              </div>
+              <div className="w-14 h-14 rounded-xl bg-neutral-100 animate-pulse motion-reduce:animate-none shrink-0" />
+            </div>
+            <div className="h-9 w-32 rounded-xl bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -93,42 +123,7 @@ function OverviewSkeleton() {
 
 export default function ProfilePage() {
   const { user, isAuthenticated, loading: authLoading, requireAuth } = useAuth()
-  const { petProfiles, hostProperties } = useProfileContext()
-
-  const [upcomingStay, setUpcomingStay] = useState<Booking | null>(null)
-  const [bookingsLoading, setBookingsLoading] = useState(false)
-
-  useEffect(() => {
-    if (!isAuthenticated) return
-    let cancelled = false
-
-    const loadUpcoming = async () => {
-      setBookingsLoading(true)
-      try {
-        const res = await getBookings(1, 10)
-        if (cancelled) return
-        const upcoming = res.data
-          .filter((b) => {
-            const status = b.bookingStatus.toUpperCase()
-            return status === 'CONFIRMED' || status === 'PENDING'
-          })
-          .sort(
-            (a, b) =>
-              new Date(a.checkInDate).getTime() - new Date(b.checkInDate).getTime()
-          )
-        setUpcomingStay(upcoming[0] ?? null)
-      } catch {
-        if (!cancelled) setUpcomingStay(null)
-      } finally {
-        if (!cancelled) setBookingsLoading(false)
-      }
-    }
-
-    void loadUpcoming()
-    return () => {
-      cancelled = true
-    }
-  }, [isAuthenticated])
+  const { petProfiles, hostProperties, bookingsSummary } = useProfileContext()
 
   if (authLoading) {
     return <OverviewSkeleton />
@@ -138,13 +133,14 @@ export default function ProfilePage() {
   if (!isAuthenticated || !user) {
     return (
       <div className="max-w-xl mx-auto py-8 lg:py-14">
-        <div className="rounded-2xl bg-off-white border border-border p-8 text-center space-y-5">
-          <div className="w-20 h-20 rounded-2xl bg-white border border-border mx-auto flex items-center justify-center p-2">
+        <div className="rounded-2xl bg-white border border-border p-8 text-center space-y-5">
+          <div className="w-20 h-20 rounded-2xl bg-neutral-50 border border-border mx-auto flex items-center justify-center p-2">
             <Image
               src={assetPath('/icons/species/clay-dog-transparent.webp')}
               alt="JoodPakPaw pet hospitality"
               width={64}
               height={64}
+              priority
               className="object-contain"
             />
           </div>
@@ -172,6 +168,7 @@ export default function ProfilePage() {
   const isAdmin = user.role?.some((r) => r.name === 'admin')
   const personalInfoHref = `/profile/${user.firstName.toLowerCase()}`
   const visiblePets = petProfiles.pets.slice(0, 3)
+  const { upcomingStay, loading: bookingsLoading } = bookingsSummary
 
   return (
     <div className="space-y-8">
@@ -183,7 +180,7 @@ export default function ProfilePage() {
               src={user.avatar || undefined}
               alt={`${user.firstName} ${user.lastName}`}
             />
-            <AvatarFallback className="bg-off-white text-deep-teal font-semibold text-xl">
+            <AvatarFallback className="bg-neutral-50 text-deep-teal font-semibold text-xl">
               {user.firstName?.charAt(0)}
               {user.lastName?.charAt(0)}
             </AvatarFallback>
@@ -209,7 +206,7 @@ export default function ProfilePage() {
 
         <Link
           href={personalInfoHref}
-          className="self-start sm:self-auto px-4 py-2 rounded-xl border border-border text-sm font-medium text-deep-teal hover:bg-off-white transition-colors shrink-0"
+          className="self-start sm:self-auto px-4 py-2 rounded-xl border border-border bg-white text-sm font-medium text-deep-teal hover:bg-neutral-50 transition-colors shrink-0"
         >
           Edit personal info
         </Link>
@@ -228,11 +225,24 @@ export default function ProfilePage() {
         </div>
 
         {bookingsLoading ? (
-          <div className="h-24 rounded-2xl border border-border bg-white animate-pulse motion-reduce:animate-none" />
+          <div
+            className="rounded-2xl border border-border bg-white p-5 flex items-center justify-between gap-4"
+            aria-busy="true"
+          >
+            <div className="flex items-center gap-4 flex-1">
+              <div className="w-14 h-14 rounded-xl bg-neutral-100 animate-pulse motion-reduce:animate-none shrink-0" />
+              <div className="space-y-2 flex-1 max-w-sm">
+                <div className="h-4 w-32 rounded bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+                <div className="h-5 w-48 rounded bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+                <div className="h-3.5 w-36 rounded bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+              </div>
+            </div>
+            <div className="h-10 w-24 rounded-xl bg-neutral-100 animate-pulse motion-reduce:animate-none shrink-0" />
+          </div>
         ) : upcomingStay ? (
           <div className="rounded-2xl border border-border bg-white p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4 min-w-0">
-              <div className="w-14 h-14 rounded-xl bg-off-white border border-border flex items-center justify-center shrink-0 text-deep-teal">
+              <div className="w-14 h-14 rounded-xl bg-neutral-50 border border-border flex items-center justify-center shrink-0 text-deep-teal">
                 <CalendarClock className="w-6 h-6" />
               </div>
               <div className="min-w-0 space-y-1">
@@ -275,7 +285,7 @@ export default function ProfilePage() {
             </Link>
           </div>
         ) : (
-          <div className="rounded-2xl border border-border bg-off-white p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="rounded-2xl border border-border bg-white p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
               <h3 className="font-semibold text-deep-teal">No upcoming stays yet</h3>
               <p className="text-sm text-neutral-gray">
@@ -307,12 +317,18 @@ export default function ProfilePage() {
         </div>
 
         {petProfiles.loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4" aria-busy="true">
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
-                className="h-20 rounded-2xl border border-border bg-white animate-pulse motion-reduce:animate-none"
-              />
+                className="h-20 rounded-2xl border border-border bg-white p-4 flex items-center gap-3.5"
+              >
+                <div className="w-12 h-12 rounded-xl bg-neutral-100 animate-pulse motion-reduce:animate-none shrink-0" />
+                <div className="space-y-2 flex-1">
+                  <div className="h-4 w-24 rounded bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+                  <div className="h-3 w-32 rounded bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+                </div>
+              </div>
             ))}
           </div>
         ) : (
@@ -323,7 +339,7 @@ export default function ProfilePage() {
                 href={`/profile/pets/${pet.id}`}
                 className="rounded-2xl border border-border bg-white p-4 flex items-center gap-3.5 hover:border-deep-teal transition-colors"
               >
-                <div className="w-12 h-12 rounded-xl bg-off-white border border-border overflow-hidden flex items-center justify-center shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-neutral-50 border border-border overflow-hidden flex items-center justify-center shrink-0">
                   {pet.image ? (
                     <Image
                       src={pet.image}
@@ -357,7 +373,7 @@ export default function ProfilePage() {
 
             <Link
               href="/profile/pets/add/1"
-              className="rounded-2xl border border-dashed border-border bg-off-white/60 p-4 flex items-center justify-center gap-2 text-sm font-medium text-deep-teal hover:border-deep-teal transition-colors min-h-[80px]"
+              className="rounded-2xl border border-dashed border-border bg-white p-4 flex items-center justify-center gap-2 text-sm font-medium text-deep-teal hover:border-deep-teal hover:bg-neutral-50 transition-colors min-h-[80px]"
             >
               <Plus className="w-4 h-4" />
               <span>{petProfiles.pets.length === 0 ? 'Add your first pet' : 'Add another pet'}</span>
@@ -366,35 +382,37 @@ export default function ProfilePage() {
         )}
       </section>
 
-      {/* 4. Host & Trust Editorial Band */}
+      {/* 4. Host & Trust Band */}
       <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded-2xl bg-off-white border border-border p-6 flex flex-col justify-between gap-5">
+        <div className="rounded-2xl bg-white border border-border p-6 flex flex-col justify-between gap-5">
           <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 flex-1">
               <h3 className="font-semibold text-deep-teal">
                 {isHost ? 'Host dashboard' : 'Become a host'}
               </h3>
-              <p className="text-sm text-neutral-gray">
-                {isHost
-                  ? `Manage ${hostProperties.properties.length} listed pet ${
-                      hostProperties.properties.length === 1 ? 'stay' : 'stays'
-                    }, room availability calendars, and guest bookings.`
-                  : 'Open your home to traveling pets and earn income with verified bookings.'}
-              </p>
+              {isHost && hostProperties.loading ? (
+                <div className="space-y-1.5 pt-1">
+                  <div className="h-4 w-full rounded bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+                  <div className="h-4 w-3/4 rounded bg-neutral-100 animate-pulse motion-reduce:animate-none" />
+                </div>
+              ) : (
+                <p className="text-sm text-neutral-gray">
+                  {isHost
+                    ? `Manage ${hostProperties.properties.length} listed pet ${
+                        hostProperties.properties.length === 1 ? 'stay' : 'stays'
+                      }, room availability calendars, and guest bookings.`
+                    : 'Open your home to traveling pets and earn income with verified bookings.'}
+                </p>
+              )}
             </div>
-            {!isHost ? (
-              <Image
-                src={assetPath('/graphics/steps/tell-us.svg')}
-                alt="Become a host"
-                width={56}
-                height={56}
-                className="shrink-0 object-contain drop-shadow-sm"
-              />
-            ) : (
-              <div className="w-11 h-11 rounded-xl bg-white border border-border flex items-center justify-center shrink-0 text-deep-teal">
-                <House className="w-5 h-5" />
-              </div>
-            )}
+            <Image
+              src={assetPath('/graphics/steps/house.svg')}
+              alt="Host dashboard"
+              width={60}
+              height={60}
+              priority
+              className="shrink-0 object-contain"
+            />
           </div>
           <div>
             <Link
@@ -409,7 +427,7 @@ export default function ProfilePage() {
 
         <div className="rounded-2xl bg-white border border-border p-6 flex flex-col justify-between gap-5">
           <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 flex-1">
               <h3 className="font-semibold text-deep-teal">Identity verification</h3>
               <p className="text-sm text-neutral-gray">
                 {user.isVerifiedHost
@@ -417,16 +435,14 @@ export default function ProfilePage() {
                   : 'Verify your government ID to build trust with guests and unlock hosting.'}
               </p>
             </div>
-            <div
-              className={cn(
-                'w-11 h-11 rounded-xl border flex items-center justify-center shrink-0',
-                user.isVerifiedHost
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                  : 'bg-off-white border-border text-deep-teal'
-              )}
-            >
-              <ShieldCheck className="w-5 h-5" />
-            </div>
+            <Image
+              src={assetPath('/icons/clay-shield-verify.webp')}
+              alt="Identity verification"
+              width={60}
+              height={60}
+              priority
+              className="shrink-0 object-contain"
+            />
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
