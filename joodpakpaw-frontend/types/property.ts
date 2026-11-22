@@ -209,6 +209,8 @@ export interface Property {
   recommendationScore?: number
   matchTier?: MatchTier
   scoreBreakdown?: ScoreBreakdown
+  stayNights?: number
+  stayTotalPrice?: number
 }
 
 export interface PaginationInfo {

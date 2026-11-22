@@ -272,8 +272,17 @@ export const getProperties = async (
     sortBy?: string
     days?: number
     search?: string
+    province?: string
     petTypes?: string
+    minPrice?: string | number
     maxPrice?: string | number
+    checkIn?: string
+    checkOut?: string
+    petSizeCategoryId?: string | number
+    petProfileIds?: string
+    facilities?: string
+    propertyType?: string
+    propertyTypeId?: string | number
   }
 ): Promise<PropertiesResponse> => {
   const params = new URLSearchParams({
@@ -285,8 +294,21 @@ export const getProperties = async (
   if (options?.sortBy) params.append('sortBy', options.sortBy)
   if (options?.days != null) params.append('days', String(options.days))
   if (options?.search) params.append('search', options.search)
+  if (options?.province) params.append('province', options.province)
   if (options?.petTypes) params.append('petTypes', options.petTypes)
+  if (options?.minPrice != null && options.minPrice !== '') params.append('minPrice', String(options.minPrice))
   if (options?.maxPrice != null && options.maxPrice !== '') params.append('maxPrice', String(options.maxPrice))
+  if (options?.checkIn) params.append('checkIn', options.checkIn)
+  if (options?.checkOut) params.append('checkOut', options.checkOut)
+  if (options?.petSizeCategoryId != null && options.petSizeCategoryId !== '') {
+    params.append('petSizeCategoryId', String(options.petSizeCategoryId))
+  }
+  if (options?.petProfileIds) params.append('petProfileIds', options.petProfileIds)
+  if (options?.facilities) params.append('facilities', options.facilities)
+  if (options?.propertyType) params.append('propertyType', options.propertyType)
+  if (options?.propertyTypeId != null && options.propertyTypeId !== '') {
+    params.append('propertyTypeId', String(options.propertyTypeId))
+  }
 
   const res = await request<any>({
     endpoint: `api/v1/properties?${params.toString()}`,
