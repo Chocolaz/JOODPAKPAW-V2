@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ShieldCheck, ArrowLeft } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 import { useAuth } from '@/app/_components/AuthContext'
 import { getVerificationStatus } from '@/lib/api'
 import type { VerificationData } from '@/types/verification'
@@ -16,7 +15,6 @@ import { RejectedView } from './_components/RejectedView'
 type Step = 'intro' | 'form'
 
 export default function VerificationPage() {
-  const router = useRouter()
   const { refreshAuth } = useAuth()
   const [verification, setVerification] = useState<VerificationData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -65,37 +63,43 @@ export default function VerificationPage() {
   const showBack = step === 'form' && currentStatus !== 'pending' && currentStatus !== 'approved'
 
   return (
-    <div className="h-[calc(100dvh-56px)] overflow-y-auto lg:h-auto lg:overflow-visible">
-    <div className="p-5 lg:px-12 max-w-2xl mx-auto w-full pb-28 lg:pb-0">
+    <div className="max-w-2xl w-full space-y-6">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-1">
-          <button
-            onClick={() => (showBack ? setStep('intro') : router.back())}
-            className="hidden lg:flex items-center justify-center w-8 h-8 rounded-full hover:bg-gray-100 transition-colors shrink-0"
-          >
-            <ArrowLeft className="w-4 h-4 text-neutral-gray" />
-          </button>
-          <ShieldCheck className="w-5 h-5 text-deep-teal shrink-0" />
-          <h1 className="text-xl font-bold text-deep-teal font-baloo2">
-            Identity Verification
-          </h1>
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-border">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5">
+            {showBack && (
+              <button
+                type="button"
+                onClick={() => setStep('intro')}
+                aria-label="Back to overview"
+                className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-off-white transition-colors shrink-0 cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4 text-deep-teal" />
+              </button>
+            )}
+            <h1 className="font-bold text-deep-teal">
+              Identity verification
+            </h1>
+          </div>
+          <p className="text-sm text-neutral-gray">
+            Verify your government ID to unlock hosting and earn a verified badge.
+          </p>
         </div>
-        <p className="text-sm text-neutral-gray lg:pl-11">
-          Verify your identity to get a verified badge on your profile.
-        </p>
-      </div>
+        <div className="w-10 h-10 rounded-xl bg-off-white border border-border hidden sm:flex items-center justify-center shrink-0">
+          <ShieldCheck className="w-5 h-5 text-deep-teal" />
+        </div>
+      </header>
 
       {/* Content */}
       <motion.div
         animate={{ opacity: loading ? 0 : 1 }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
+        transition={{ duration: 0.25, ease: 'easeOut' }}
       >
         <AnimatePresence mode="wait">
           {!loading && renderContent()}
         </AnimatePresence>
       </motion.div>
-    </div>
     </div>
   )
 }

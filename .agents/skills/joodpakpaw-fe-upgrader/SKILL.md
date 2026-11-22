@@ -1,75 +1,66 @@
 ---
 name: joodpakpaw-fe-upgrader
-description: Frontend upgrade runbook for the JoodPakPaw Next.js 16 application (Host Room Availability Calendar UI, Client-Side WebP Compression, Socket.IO WebSocket upgrade, Notification read persistence, and Home feed caching).
+description: Frontend upgrade and Hallmark design runbook for the JoodPakPaw Next.js 16 application (Airbnb-Grade Home Discovery, 3D Pastel Clay Icons, Global Typography Scale, Context-Aware ML Filtered Search, Split Map View, Host Room Calendar UI, Client-Side WebP Compression, and Real-Time WebSockets).
 ---
 
 # JoodPakPaw V2 Frontend Upgrader Runbook (`joodpakpaw-fe-upgrader`)
 
-Use this skill whenever modifying or upgrading the existing Next.js 16 Frontend in `d:\Project\joodpakpaw\joodpakpaw-frontend`.
+Use this skill whenever modifying, designing, or upgrading the Next.js 16 Frontend in `d:\Project\joodpakpaw\joodpakpaw-frontend`.
 
-## 1. Golden Rules for Frontend Upgrades
-1. **Clean Root Path (`/`) & Free-Tier Deployment (Vercel Ready)**:
-   - Default `NEXT_PUBLIC_BASE_PATH` in `next.config.ts` and `lib/socket.ts` must be `""` (root path `/`), removing the hardcoded `/capstone25/cp25nk2` and `bscit.sit.kmutt.ac.th` defaults while still allowing `.env` override.
-   - Configure `images.remotePatterns` in `next.config.ts` to allow Local `localhost`, Cloudflare R2 (`*.r2.dev`), and Supabase Storage (`*.supabase.co`).
-2. **Preserve Existing Route Structure & Design System**:
-   - Do not break existing routes (`app/(browse)`, `app/detail/[propertyId]`, `app/[propertyId]`, `app/booking`, `app/profile/*`, `app/admin/*`, `app/authen/*`).
-   - Follow the established Tailwind CSS v4 + Radix UI (`shadcn/ui`) + Lucide Icons aesthetic.
-3. **Strict TypeScript Hygiene & Proactive Legacy Refactoring**:
-   - You are explicitly authorized and encouraged to refactor legacy flaws in `joodpakpaw-frontend` (`lib/api.ts`, `lib/authApi.ts`, `lib/authenUtils.ts`, `types/*.ts`, and UI components) to align with Enterprise V2 Best Practices:
-     - Unify all API responses to read from the standard `res.data` (and `res.pagination`) envelope.
-     - Standardize DTO field names to strict `camelCase` (`firstName`, `lastName`, `petProfileIds`, `petSizeCategoryId`).
-     - Use context-aware endpoints (`/api/v1/users/me/change-password`, `/api/v1/auth/sign-out`) and full refresh token rotation.
-   - All changes in `joodpakpaw-frontend/` must pass `tsc --noEmit` without introducing implicit `any`.
-4. **Mobile-First Responsive Design (320px to 4K)**:
-   - **Mandatory Mobile-First Principle**: Every screen, modal, drawer, form, card, and layout must render cleanly without clipping, horizontal scrolling (`overflow-x-hidden`), or unclickable buttons on viewports from 320px up to 4K displays.
-   - **Dialogs & Modals (`AuthModal`, `DialogContent`, `DrawerContent`)**:
-     - Must include scrollable constraints: `max-h-[calc(100dvh-2rem)]` or `max-h-[90vh]` with `overflow-y-auto overscroll-contain` so users on small screens or with virtual keyboards can scroll to submit buttons.
-     - Sticky or fixed-height headers/footers with scrollable body content.
-   - **Responsive Forms & Typography**:
-     - Form layouts must use responsive padding (`px-4 sm:px-6 md:px-8`) instead of rigid fixed desktop padding (e.g. avoid `px-14` on mobile).
-     - Split fields (such as First Name / Last Name) must adapt from single-column on compact mobile (`grid-cols-1 sm:grid-cols-2`).
-     - Touch targets must be at least 44px (`min-h-[44px]`), and button typography should scale smoothly (`text-base sm:text-lg`).
-     - Avoid `w-screen` that introduces horizontal overflow scrollbars; prefer `w-full`.
-   - **Responsive Grids (`PropertyList`, Card Feeds)**:
-     - Adapt gracefully from compact devices while preserving home feed card sizing consistency (`grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4`).
-5. **shadcn-First Component Strategy**:
-   - Whenever building, refactoring, or creating any new UI component (inputs, buttons, dialogs, drawers, selects, tabs, popovers, tooltips, accordions, calendars, dropdowns, forms, etc.), **ALWAYS check and use official `shadcn/ui` components from `@/components/ui/` first**.
-   - If a required component is not yet in the project, install it via the official shadcn registry:
-     ```bash
-     npx shadcn@latest add <component-name>
-     ```
-   - Never build custom ad-hoc primitive components when a clean, accessible, theme-consistent `shadcn/ui` (Radix UI + Tailwind) component exists. Preserve full design system consistency across the monorepo.
-6. **Canonical Frontend Design Specification (`joodpakpaw-frontend/DESIGN.md`)**:
-   - The official design specification for the Frontend Agent (`frontend-upgrader`) is designated at **`d:\Project\joodpakpaw\joodpakpaw-frontend\DESIGN.md`** (replacing the removed `docs/frontend-component-design.md`).
-   - Always consult `joodpakpaw-frontend/DESIGN.md` for typography scales, card grid columns, image skeleton/shimmer placeholders, page transitions, and UI consistency rules.
+## 1. Golden Rules for Frontend Architecture & Hallmark Design (`DESIGN.md`)
+1. **Canonical Design Specification (`d:\Project\joodpakpaw\DESIGN.md`)**:
+   - Always consult **`d:\Project\joodpakpaw\DESIGN.md`** at the monorepo root as the Single Source of Truth for color tokens, typography scale, 3D Pastel Clay assets, grid proportions, and Hallmark `sloplint` rules (`0 FAIL, 0 REFLEX, 0 WARN`).
+2. **Global Typography Scale (`app/globals.css` — No Hardcoded Heading Sizes)**:
+   - Heading sizes (`h1`, `h2`, `h3`, `h4`, `h5`) and `body` are centrally configured in `@layer base` inside `d:\Project\joodpakpaw\joodpakpaw-frontend\app\globals.css` using fluid `clamp(...)` tokens and `font-display` (`Baloo 2` + `Noto Sans Thai`) / `font-sans` (`Afacad` + `Noto Sans Thai`).
+   - **Never** hardcode arbitrary `text-[...]` font-size classes directly on standard `h1`–`h5` tags; let semantic heading tags inherit their consistent scale from `globals.css`.
+   - Always apply `tabular-nums` to prices, ratings, dates, distances, and counters.
+3. **3D Pastel Clay Visual Language**:
+   - All 9 tabs in `app/(browse)/_components/CategoryIconRail.tsx` MUST use transparent 3D Pastel Clay `.webp` assets in `/public/images/icons/`:
+     - `clay-all.webp`, `clay-dog-transparent.webp`, `clay-cat-transparent.webp`, `clay-exotic-transparent.webp`, `clay-pool.webp`, `clay-vet.webp`, `clay-resort.webp`, `clay-homestay.webp`, `clay-budget.webp`
+   - Never mix flat Lucide vector icons into the 3D Clay category tab rail.
+   - Primary Home illustrations: `/images/home/home.svg` (`BrowseHero.tsx`) and `/images/home/tell-us.svg` (Become a Host CTA band with warm drop-shadow).
+4. **Desktop 5-Column Grid & `PAGE_SIZE = 20`**:
+   - Home discovery property grids use **5 columns on desktop** (`grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-5 gap-y-8`) with `PAGE_SIZE = 20` (`LCM(5, 4, 2)`) so rows are always completely filled.
+   - The `Recently viewed` horizontal rail fits **5 cards per row** on `xl` viewports (`xl:w-[calc((100%-4*1.25rem)/5)]`).
+5. **Solid Editorial Navigation (`DesktopNav.tsx`)**:
+   - `DesktopNav` uses a solid `bg-white border-b border-border` 3-zone editorial layout (`JOODPAK.svg` brand left, active nav links with `border-b-2 border-deep-teal` center, `Become a host` + Account Pill right). Do not use frosted glass (`backdrop-blur`) on the top navigation bar.
+6. **React 19 & Next.js 16 State Hygiene**:
+   - Do **not** call `setState` synchronously inside `useEffect` (e.g., for `prefers-reduced-motion`, `localStorage`, or prop mirroring).
+   - Use `useSyncExternalStore` for browser media queries / storage, and derive optimistic state directly from props + transient override state.
+   - All changes in `joodpakpaw-frontend/` must pass `npm run typecheck` (`tsc --noEmit`) and `npm run build` with `0` errors and `0` browser console/image/network errors.
+7. **Clean Root Path (`/`) & Free-Tier Deployment (Vercel Ready)**:
+   - Default `NEXT_PUBLIC_BASE_PATH` in `next.config.ts` and `lib/socket.ts` is `""` (root path `/`).
+   - `images.remotePatterns` in `next.config.ts` supports Local `localhost`, Unsplash, Cloudflare R2 (`*.r2.dev`), and Supabase Storage (`*.supabase.co`).
+8. **shadcn-First Component Strategy**:
+   - Always use accessible `shadcn/ui` (Radix UI + Tailwind) primitives from `@/components/ui/` for dialogs, drawers, popovers, calendars, dropdowns, and tooltips.
 
 ---
 
-## 2. Core V2 Frontend Upgrades
+## 2. Core V2 Frontend Systems
 
-### Upgrade 1: Host Room Availability & Dynamic Pricing Calendar UI (Fixes Release 3 Retrospective Gap)
-- **Problem**: The database has `room_category_calendars` (`unavailable_rooms`, `price_adjustment`, `booked_rooms`), and the Capstone Retrospective noted that Hosts had no UI to block room maintenance dates or adjust daily prices.
-- **Where to Integrate**:
-  - `joodpakpaw/app/profile/host/[propertyId]/page.tsx` and `joodpakpaw/app/profile/host/_components/ManageRooms.tsx`.
-- **Features to Provide**:
-  - A "จัดการปฏิทินห้องพัก (Manage Availability & Pricing)" modal or drawer per Room Category.
-  - Interactive monthly calendar showing per-day:
-    - `total_rooms`, `booked_rooms` (read-only from customer bookings), `unavailable_rooms` (editable by Host), and `available_rooms`.
-    - `price_adjustment` (custom daily price override in THB).
-  - Connects to `GET /api/v1/hosts/properties/:propertyId/room-categories/:roomId/calendars` and `PATCH /api/v1/hosts/properties/:propertyId/room-categories/:roomId/calendars`.
+### System 1: Airbnb-Grade Home Discovery, 77-Province Picker & Split Map View
+- **`AirbnbSearchBar.tsx`**:
+  - Unified 3-part search pill:
+    1. **Where**: Strict 77-province searchable bilingual picker backed by `GET /api/v1/locations/provinces` (with `lib/thaiProvinces.ts` fallback) + `"Near me"` geolocation option.
+    2. **Dates**: Spacious 2-month desktop / 1-month mobile range calendar (`react-day-picker`).
+    3. **Who's staying**: Authenticated user's saved `PetProfile`s (`petProfileIds`) or guest 3D clay species (`petTypes`) + size (`petSizeCategoryId`).
+- **`CategoryIconRail.tsx`**:
+  - Sticky 9-tab 3D Pastel Clay category filter bar with **Display total price** toggle (default `ON`) and **Sort by** dropdown (`Recommended (ML)` default).
+- **`PropertyCard.tsx` & `PropertyList.tsx`**:
+  - Smooth `translateX` multi-photo auto-sliding carousel (`2800ms` interval, staggered start, paused on hover/focus/`prefers-reduced-motion`), `sizes` + `priorityCount={5}` LCP loading, `showTotalPrice` (`stayTotalPrice` for `stayNights` when dates are selected), and explainable ML `matchReasons` badge.
+- **`HomeMapView.tsx`**:
+  - Interactive Split Map View (`@vis.gl/react-google-maps` + interactive fallback canvas) centered on `userLocation` or Bangkok (`13.7563, 100.5018`), toggled via the floating bottom-right `"Show map" / "Show list"` pill in `app/(browse)/page.tsx`.
 
-### Upgrade 2: Client-Side Image Compression to WebP Before Upload
-- **Problem**: Users upload multi-megabyte photos for KYC ID cards, property galleries (up to 10+ photos), pet profiles, payment slips, and reviews, causing slow uploads or reverse-proxy `413 Payload Too Large` errors.
-- **Solution**:
-  - Create a lightweight client-side utility `joodpakpaw/lib/imageCompression.ts` (using HTML5 `<canvas>` to resize max dimension to `1920px` and encode as `image/webp` at `0.82` quality) and apply it transparently before appending image files to `FormData` in property, pet, KYC, slip, and review upload flows.
+### System 2: Context-Aware ML Filtered Search Integration (`app/(browse)/page.tsx` & `lib/api.ts`)
+- Whenever any filter is active (`hasActiveSearchFilters`), `page.tsx` passes `sortBy: sortBy || 'recommended'` along with `lat` and `lng` (if available) to `getProperties()`.
+- Displays a `"Ranked by AI for your filters"` indicator when in `recommended` mode and renders explainable Thai `matchReasons` badges on matching property cards.
 
-### Upgrade 3: Socket.IO Real-Time Transport & Env Configuration (`joodpakpaw/lib/socket.ts`)
-- **Problem**: `joodpakpaw/lib/socket.ts` currently hardcodes `transports: ['polling']` and `upgrade: false` with a fixed URL fallback.
-- **Solution**:
-  - Configure `transports: ['polling', 'websocket']` and `upgrade: true` so connections start safely with HTTP polling (compatible with proxies) and seamlessly upgrade to low-latency WebSockets.
-  - Add `markNotificationAsRead` / `markAllNotificationsAsRead` calls in `NotificationContext.tsx` so read status persists in PostgreSQL (`notifications.is_read`) instead of only local state.
+### System 3: Host Room Availability & Dynamic Pricing Calendar UI
+- Integrated in `app/profile/host/[propertyId]/page.tsx` and `app/profile/host/_components/ManageRooms.tsx`.
+- Connects to `GET` & `PATCH /api/v1/hosts/properties/:propertyId/room-categories/:roomId/calendars` allowing Hosts to manage daily `unavailableRooms` and `priceAdjustment` while respecting existing `bookedRooms`.
 
-### Upgrade 4: Home Feed Deduplication & Request Optimization (`joodpakpaw/app/(browse)/page.tsx`)
-- **Problem**: The Home page triggers 7 concurrent `getProperties` API calls on mount plus N sequential `getPropertyById` calls for recently viewed properties.
-- **Solution**:
-  - Deduplicate/batch home feed requests or cache responses cleanly so navigating back and forth to the Home page is instant and does not hammer the Backend API.
+### System 4: Client-Side Image Compression to WebP (`lib/imageCompression.ts`)
+- Resizes uploaded images to max `1920px` and encodes as `image/webp` (`0.82` quality) via HTML5 `<canvas>` before appending to `FormData` across property, room, pet, KYC, payment slip, chat, and review uploads.
+
+### System 5: Real-Time Socket.IO WebSocket Transport & Notification Persistence (`lib/socket.ts`)
+- Configures `transports: ['polling', 'websocket']` and `upgrade: true`, and syncs notification read state (`PATCH /api/v1/notifications/:id/read` and `/read-all`) in `NotificationContext.tsx`.

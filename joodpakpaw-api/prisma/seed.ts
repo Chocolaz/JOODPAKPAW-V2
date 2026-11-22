@@ -680,7 +680,6 @@ async function main() {
       phone: '0810000004',
       password: defaultPasswordHash,
       isVerified: true,
-      isVerifiedHost: false,
     },
     create: {
       email: 'user1@joodpakpaw.com',
@@ -717,7 +716,6 @@ async function main() {
       phone: '0810000005',
       password: defaultPasswordHash,
       isVerified: true,
-      isVerifiedHost: false,
     },
     create: {
       email: 'user2@joodpakpaw.com',
@@ -1492,6 +1490,18 @@ async function main() {
   console.log('➡️ Seeding 77 Thai Provinces...');
   const provinceCount = await seedProvinces(prisma);
   console.log(`✅ Provinces seeded (${provinceCount} provinces).`);
+
+  // Ensure any existing users with approved KYC verifications stay synced
+  const syncedKyc = await prisma.user.updateMany({
+    where: {
+      isVerifiedHost: false,
+      verifications: { some: { status: 'approved' } },
+    },
+    data: { isVerifiedHost: true, isBecomeToHost: true },
+  });
+  if (syncedKyc.count > 0) {
+    console.log(`✅ Reconciled ${syncedKyc.count} verified host flag(s) from approved KYC.`);
+  }
 
   console.log('🎉 [JoodPakPaw] Database seeding completed successfully!');
 }

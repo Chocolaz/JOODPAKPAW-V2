@@ -13,6 +13,7 @@ import { useAuth } from '@/app/_components/AuthContext'
 import { getAllPetProfiles } from '@/lib/api'
 import { PetProfile } from '@/types'
 import { AirbnbSearchBar } from './AirbnbSearchBar'
+import { MobileHomeHeader } from '@/app/_components/MobileHomeHeader'
 
 interface BrowsePetsContextValue {
   userPets: PetProfile[]
@@ -83,6 +84,7 @@ export function BrowseLayoutClient({ children }: BrowseLayoutClientProps) {
 
   return (
     <BrowsePetsContext.Provider value={{ userPets, isPetsLoading }}>
+      <MobileHomeHeader />
       {/* Unified 3-Part Airbnb Search Pill Header */}
       <div className="bg-white border-b border-gray-100">
         <div className="max-w-[1440px] mx-auto px-5 lg:px-12 py-3 lg:py-3.5">

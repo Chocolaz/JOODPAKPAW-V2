@@ -52,11 +52,18 @@ export default function MyReportsPage() {
   useEffect(() => { fetchData() }, [fetchData])
 
   return (
-    <div className="px-5 lg:px-12 py-5 lg:py-8 max-w-2xl mx-auto w-full">
+    <div className="max-w-2xl w-full space-y-6">
+      <header className="pb-5 border-b border-border">
+        <h1 className="font-bold text-deep-teal">My reports</h1>
+        <p className="text-sm text-neutral-gray mt-1">
+          Track submitted property reports, review flags, and unban appeals
+        </p>
+      </header>
+
       {loading ? (
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="animate-pulse bg-white rounded-2xl border border-gray-100 p-4 flex gap-3">
+            <div key={i} className="animate-pulse motion-reduce:animate-none bg-white rounded-2xl border border-border p-4 flex gap-3">
               <div className="w-9 h-9 rounded-full bg-gray-200 shrink-0" />
               <div className="flex-1 space-y-2">
                 <div className="h-3.5 bg-gray-200 rounded w-3/4" />
@@ -66,12 +73,12 @@ export default function MyReportsPage() {
           ))}
         </div>
       ) : data.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 gap-3">
-          <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
-            <Flag className="w-7 h-7 text-gray-300" />
+        <div className="rounded-2xl border border-dashed border-border bg-off-white flex flex-col items-center justify-center py-16 px-6 text-center gap-3">
+          <div className="w-14 h-14 rounded-2xl bg-white border border-border flex items-center justify-center">
+            <Flag className="w-6 h-6 text-deep-teal/50" />
           </div>
-          <p className="text-sm font-semibold text-gray-600">No reports submitted yet</p>
-          <p className="text-xs text-neutral-gray">Your submitted reports will appear here.</p>
+          <p className="text-sm font-semibold text-deep-teal">No reports submitted yet</p>
+          <p className="text-xs text-neutral-gray">Your submitted safety reports and appeals will appear here.</p>
         </div>
       ) : (
         <>
@@ -90,8 +97,9 @@ export default function MyReportsPage() {
               return (
                 <button
                   key={report.id}
+                  type="button"
                   onClick={() => router.push(`/profile/reports/${report.id}`)}
-                  className="w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 hover:border-gray-200 hover:shadow-md transition-all duration-200 active:scale-[0.99]"
+                  className="w-full text-left bg-white rounded-2xl border border-border p-4 flex items-center gap-3 hover:border-deep-teal transition-colors cursor-pointer"
                 >
                   <div className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center shrink-0">
                     <Flag className="w-4 h-4 text-red-400" />
@@ -99,21 +107,21 @@ export default function MyReportsPage() {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full', type.className)}>
+                      <span className={cn('text-xs font-medium px-2.5 py-0.5 rounded-full', type.className)}>
                         {type.label}
                       </span>
-                      <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full', status.className)}>
+                      <span className={cn('text-xs font-medium px-2.5 py-0.5 rounded-full', status.className)}>
                         {status.label}
                       </span>
                     </div>
-                    <p className="text-sm font-medium text-gray-800 truncate">{getSubject(report)}</p>
+                    <p className="text-sm font-medium text-deep-teal truncate">{getSubject(report)}</p>
                     <p className="text-xs text-neutral-gray mt-0.5">{report.reportCategoryLabel}</p>
-                    <p className="text-[11px] text-neutral-gray/60 mt-1">
+                    <p className="text-xs text-neutral-gray/70 mt-1 tabular-nums">
                       {formatDistanceToNow(new Date(report.createdAt), { addSuffix: true })}
                     </p>
                   </div>
 
-                  <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
+                  <ChevronRight className="w-4 h-4 text-neutral-gray/50 shrink-0" />
                 </button>
               )
             })}
@@ -122,17 +130,19 @@ export default function MyReportsPage() {
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-3 mt-6">
               <button
+                type="button"
                 disabled={page === 1}
                 onClick={() => setPage((p) => p - 1)}
-                className="text-sm font-medium text-deep-teal disabled:text-gray-300 disabled:cursor-not-allowed"
+                className="text-sm font-medium text-deep-teal disabled:text-gray-300 disabled:cursor-not-allowed cursor-pointer"
               >
                 Previous
               </button>
-              <span className="text-sm text-neutral-gray">{page} / {totalPages}</span>
+              <span className="text-sm text-neutral-gray tabular-nums">{page} / {totalPages}</span>
               <button
+                type="button"
                 disabled={page === totalPages}
                 onClick={() => setPage((p) => p + 1)}
-                className="text-sm font-medium text-deep-teal disabled:text-gray-300 disabled:cursor-not-allowed"
+                className="text-sm font-medium text-deep-teal disabled:text-gray-300 disabled:cursor-not-allowed cursor-pointer"
               >
                 Next
               </button>

@@ -59,7 +59,8 @@ export function DesktopNav() {
       user.email?.[0]?.toUpperCase() ||
       'U'
     : ''
-  const shortName = user?.firstName?.trim() || 'Account'
+  const shortName =
+    user?.visibleName?.trim() || user?.firstName?.trim() || 'Account'
 
   const isProfileActive =
     normalizedPath === '/profile' ||

@@ -8,63 +8,50 @@ import { useProfileContext } from '../ProfileContext'
 import { PetCard } from './_components/PetCard'
 import { useRouter } from 'next/navigation'
 import { Plus } from 'lucide-react'
-import { useAuth } from '@/app/_components/AuthContext'
 import { Button } from '@/components/ui/button'
 
 export default function PetsPage() {
   const {
     petProfiles: { pets, loading, error },
   } = useProfileContext()
-  const { user } = useAuth()
   const router = useRouter()
 
   return (
-    <div className="flex flex-col px-5 lg:px-12 max-w-[500px] lg:max-w-[1440px] mx-auto">
-      {/* Desktop header */}
-      <div className="hidden lg:flex items-center justify-between py-8 border-b border-gray-100 mb-6">
+    <div className="w-full space-y-6">
+      {/* Unified Header */}
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-border">
         <div>
-          <p className="text-accent-orange font-semibold text-sm uppercase tracking-widest mb-1">
-            Hello, {user?.firstName}
+          <h1 className="font-bold text-deep-teal">Your pets</h1>
+          <p className="text-sm text-neutral-gray mt-1 tabular-nums">
+            {!loading && !error && pets.length > 0
+              ? `${pets.length} ${pets.length === 1 ? 'pet' : 'pets'} registered for personalized stay matching`
+              : 'Manage your pet profiles, medical notes, and care preferences'}
           </p>
-          <h1 className="text-3xl xl:text-4xl font-bold text-deep-teal">
-            Your Pets
-          </h1>
-          {!loading && !error && pets.length > 0 && (
-            <p className="text-neutral-gray mt-1">
-              {pets.length} {pets.length === 1 ? 'pet' : 'pets'} registered
-            </p>
-          )}
         </div>
-        <Link href="/profile/pets/add/1">
-          <Button className="interact-button bg-accent-orange! gap-2 px-6">
+        <Link href="/profile/pets/add/1" className="shrink-0">
+          <Button className="bg-accent-orange hover:opacity-95 text-white gap-2 px-5 rounded-xl cursor-pointer">
             <Plus className="w-4 h-4" />
-            Add Pet
+            Add pet
           </Button>
         </Link>
-      </div>
+      </header>
 
-      <div className="pb-24 lg:pb-12">
-        {loading ? null : error ? (
+      <div>
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="h-56 rounded-2xl border border-border bg-white animate-pulse motion-reduce:animate-none"
+              />
+            ))}
+          </div>
+        ) : error ? (
           <div className="animate-in fade-in duration-300">
             <ErrorState message={error} />
           </div>
         ) : pets.length > 0 ? (
-          <div className="animate-in fade-in duration-300 grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-5 mt-4 lg:mt-0">
-            {/* Add Pet card — mobile only; desktop uses header button */}
-            <button
-              onClick={() => router.push('/profile/pets/add/1')}
-              className="lg:hidden block w-full cursor-pointer text-left group"
-            >
-              <div className="aspect-square w-full rounded-xl border-2 border-dashed border-gray-300 group-hover:border-deep-teal flex flex-col items-center justify-center transition-colors bg-gray-50 group-hover:bg-teal-50/50">
-                <div className="w-12 h-12 rounded-full bg-deep-teal/10 group-hover:bg-deep-teal/20 flex items-center justify-center transition-colors mb-2">
-                  <Plus className="w-6 h-6 text-deep-teal" />
-                </div>
-                <span className="text-sm font-medium text-deep-teal">
-                  Add Pet
-                </span>
-              </div>
-            </button>
-
+          <div className="animate-in fade-in duration-300 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
             {pets.map((pet) => (
               <PetCard
                 key={pet.id}
@@ -74,27 +61,27 @@ export default function PetsPage() {
             ))}
           </div>
         ) : (
-          <div className="animate-in fade-in duration-300 text-center mt-20 text-neutral-gray">
+          <div className="animate-in fade-in duration-300 rounded-2xl border border-dashed border-border bg-off-white py-14 px-6 text-center text-neutral-gray">
             <Image
               src={assetPath('/graphics/no-pet.png')}
               alt="No pets found"
-              width={200}
-              height={200}
-              className="w-auto h-auto max-w-sm mx-auto"
+              width={160}
+              height={160}
+              className="w-auto h-auto max-w-[160px] mx-auto"
             />
-            <h2 className="mt-4 text-lg font-semibold text-deep-teal">
-              Uh Oh!
+            <h2 className="mt-4 font-semibold text-deep-teal">
+              No pet profiles yet
             </h2>
-            <p className="mt-1">
-              Looks like you have no profiles set up at this moment, add your
-              pet now
+            <p className="mt-1 text-sm max-w-md mx-auto">
+              Add your pet once so stays automatically match weight limits, energy needs, and care facilities.
             </p>
             <button
+              type="button"
               onClick={() => router.push('/profile/pets/add/1')}
-              className="mt-6 inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-accent-orange text-white hover:bg-accent-orange/80 text-base font-semibold transition-colors"
+              className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent-orange text-white hover:opacity-95 text-sm font-semibold transition-opacity cursor-pointer"
             >
-              <Plus className="w-5 h-5" />
-              Add Your First Pet
+              <Plus className="w-4 h-4" />
+              Add your first pet
             </button>
           </div>
         )}

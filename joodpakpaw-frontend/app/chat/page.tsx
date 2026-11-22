@@ -30,8 +30,8 @@ export default function ChatPage() {
         transition={{ duration: 0.2, ease: 'easeOut' }}
         style={{ willChange: 'opacity' }}
       >
-        <AppHeader title="Messages" backPath={from ?? '/'} />
-        <div className="pb-24">
+        <AppHeader title="Messages" backPath={from || undefined} />
+        <div className="pt-14 pb-24">
           <ChatSidebar />
         </div>
       </motion.div>

@@ -8,6 +8,7 @@ export interface User {
   firstName: string
   id: number
   lastName: string
+  visibleName?: string | null
   role: Role[]
   avatar?: string
   phone?: string
@@ -19,6 +20,7 @@ export interface UserProfile {
   email: string
   firstName: string
   lastName: string
+  visibleName?: string | null
   avatar: string
   phone: string
   isBecomeToHost: boolean

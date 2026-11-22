@@ -321,3 +321,23 @@ textarea:focus-visible,
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* Modern sleek thin scrollbar for split panes */
+.modern-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(28, 79, 74, 0.22) transparent;
+}
+.modern-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.modern-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.modern-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(28, 79, 74, 0.22);
+  border-radius: 9999px;
+}
+.modern-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(28, 79, 74, 0.42);
+}

@@ -27,6 +27,19 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+export function getDisplayName(
+  user?: {
+    visibleName?: string | null
+    firstName?: string | null
+    lastName?: string | null
+  } | null
+): string {
+  if (!user) return ''
+  const custom = user.visibleName?.trim()
+  if (custom) return custom
+  return `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim()
+}
+
 export function getLowestPrice(
   roomCategories: RoomCategories | RoomCategories[] | undefined
 ): number | null {
