@@ -6,7 +6,7 @@ import { useAuth } from '@/app/_components/AuthContext'
 import { useProfileContext } from './ProfileContext'
 import { SettingsList } from './_components/SettingsList'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
-import { assetPath, cn } from '@/lib/utils'
+import { assetPath, cn, getDisplayName } from '@/lib/utils'
 import {
   BadgeCheck,
   CalendarClock,
@@ -189,7 +189,7 @@ export default function ProfilePage() {
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="font-bold text-deep-teal truncate">
-                {user.firstName} {user.lastName}
+                {getDisplayName(user)}
               </h1>
               {user.isVerifiedHost && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-medium shrink-0">

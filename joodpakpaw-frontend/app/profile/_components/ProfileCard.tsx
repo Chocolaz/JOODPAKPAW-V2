@@ -3,6 +3,7 @@
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
 import { UserProfile } from '@/types'
+import { getDisplayName } from '@/lib/utils'
 import { Mail, Phone, ShieldCheck, BadgeCheck, User } from 'lucide-react'
 
 export const ProfileCard = ({
@@ -33,7 +34,7 @@ export const ProfileCard = ({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-semibold text-deep-teal leading-tight truncate">
-                {profile.firstName} {profile.lastName}
+                {getDisplayName(profile)}
               </h3>
               {profile.isVerifiedHost && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-medium">

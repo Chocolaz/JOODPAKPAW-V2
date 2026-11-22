@@ -24,6 +24,7 @@ export const EditProfileForm = ({
   const { refreshAuth } = useAuth()
   const [firstName, setFirstName] = useState(profile.firstName)
   const [lastName, setLastName] = useState(profile.lastName)
+  const [visibleName, setVisibleName] = useState(profile.visibleName || '')
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(profile.avatar)
   const [cropSrc, setCropSrc] = useState<string | null>(null)
@@ -33,6 +34,7 @@ export const EditProfileForm = ({
   const isDirty =
     firstName !== profile.firstName ||
     lastName !== profile.lastName ||
+    visibleName.trim() !== (profile.visibleName || '').trim() ||
     avatarFile !== null
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,6 +63,7 @@ export const EditProfileForm = ({
       const formData = new FormData()
       formData.append('firstName', firstName)
       formData.append('lastName', lastName)
+      formData.append('visibleName', visibleName.trim())
       if (avatarFile) formData.append('avatar', avatarFile)
       await updateUserProfile(profile.id.toString(), formData)
       onRefreshProfile()
@@ -131,6 +134,22 @@ export const EditProfileForm = ({
 
         {/* Fields */}
         <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label htmlFor="visibleName" className="text-sm font-medium text-neutral-gray">
+              Visible name (optional)
+            </label>
+            <Input
+              id="visibleName"
+              value={visibleName}
+              onChange={e => setVisibleName(e.target.value)}
+              placeholder="Visible name"
+              maxLength={100}
+              disabled={saving}
+            />
+            <p className="text-xs text-neutral-gray">
+              Leave blank to display your first and last name
+            </p>
+          </div>
           <div className="space-y-1.5">
             <label htmlFor="firstName" className="text-sm font-medium text-neutral-gray">
               First name

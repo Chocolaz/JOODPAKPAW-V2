@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { assetPath, cn } from '@/lib/utils'
+import { assetPath, cn, getDisplayName } from '@/lib/utils'
 import { CropModal } from '@/app/_components/CropModal'
 import { useUserProfile } from '@/app/profile/_hooks/useUserProfile'
 import { useProfileContext } from '@/app/profile/ProfileContext'
@@ -62,6 +62,7 @@ export default function UserProfilePage() {
   // Edit form state (seeded on edit start — avoids synchronous setState in useEffect)
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+  const [visibleName, setVisibleName] = useState('')
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -93,12 +94,14 @@ export default function UserProfilePage() {
     Boolean(profile) &&
     (firstName !== profile!.firstName ||
       lastName !== profile!.lastName ||
+      visibleName.trim() !== (profile!.visibleName || '').trim() ||
       avatarFile !== null)
 
   const handleStartEdit = () => {
     if (!profile) return
     setFirstName(profile.firstName)
     setLastName(profile.lastName)
+    setVisibleName(profile.visibleName || '')
     setAvatarPreview(profile.avatar || null)
     setAvatarFile(null)
     setIsEditing(true)
@@ -136,6 +139,7 @@ export default function UserProfilePage() {
       const formData = new FormData()
       formData.append('firstName', firstName)
       formData.append('lastName', lastName)
+      formData.append('visibleName', visibleName.trim())
       if (avatarFile) formData.append('avatar', avatarFile)
       await updateUserProfile(profile.id.toString(), formData)
       refreshProfile()
@@ -259,28 +263,38 @@ export default function UserProfilePage() {
 
           <div className="min-w-0 space-y-1">
             {isEditing ? (
-              <div className="flex flex-wrap gap-2.5">
+              <div className="space-y-2.5">
                 <Input
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  maxLength={60}
-                  placeholder="First name"
-                  className="max-w-[170px] bg-white"
+                  value={visibleName}
+                  onChange={(e) => setVisibleName(e.target.value)}
+                  maxLength={100}
+                  placeholder="Visible name (optional)"
+                  className="max-w-[350px] bg-white"
                   disabled={saving}
                 />
-                <Input
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  maxLength={60}
-                  placeholder="Last name"
-                  className="max-w-[170px] bg-white"
-                  disabled={saving}
-                />
+                <div className="flex flex-wrap gap-2.5">
+                  <Input
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    maxLength={60}
+                    placeholder="First name"
+                    className="max-w-[170px] bg-white"
+                    disabled={saving}
+                  />
+                  <Input
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    maxLength={60}
+                    placeholder="Last name"
+                    className="max-w-[170px] bg-white"
+                    disabled={saving}
+                  />
+                </div>
               </div>
             ) : (
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="font-semibold text-deep-teal">
-                  {profile.firstName} {profile.lastName}
+                  {getDisplayName(profile)}
                 </h2>
                 {profile.isVerifiedHost && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -321,6 +335,16 @@ export default function UserProfilePage() {
       <section className="space-y-3">
         <h2 className="font-semibold text-deep-teal">Contact &amp; identity</h2>
         <div className="divide-y divide-border rounded-2xl border border-border bg-white px-5">
+          <InfoRow
+            icon={<User className="w-4 h-4" />}
+            label="Visible name"
+            value={
+              isEditing
+                ? visibleName.trim() || `${firstName} ${lastName}`.trim()
+                : profile.visibleName?.trim() ||
+                  `${profile.firstName} ${profile.lastName} (default)`
+            }
+          />
           <InfoRow
             icon={<User className="w-4 h-4" />}
             label="First name"

@@ -413,6 +413,7 @@ export async function verifyOtp(
       email: updatedUser.email,
       firstName: updatedUser.firstName || '',
       lastName: updatedUser.lastName || '',
+      visibleName: updatedUser.visibleName || '',
       avatar: updatedUser.avatar || '',
       isVerifiedHost: updatedUser.isVerifiedHost,
       role: roles,
@@ -604,6 +605,7 @@ export async function signIn(
       email: user.email,
       firstName: user.firstName || '',
       lastName: user.lastName || '',
+      visibleName: user.visibleName || '',
       avatar: user.avatar || '',
       isVerifiedHost: user.isVerifiedHost,
       role: roles,
@@ -916,6 +918,7 @@ export async function getProfile(
       email: user.email,
       firstName: user.firstName || '',
       lastName: user.lastName || '',
+      visibleName: user.visibleName || '',
       avatar: user.avatar || '',
       phone: user.phone || '',
       isVerified: user.isVerified,
@@ -1147,6 +1150,8 @@ export async function updateUserProfile(
       body.firstName !== undefined ? body.firstName : body.firstname;
     const rawLastName =
       body.lastName !== undefined ? body.lastName : body.lastname;
+    const rawVisibleName =
+      body.visibleName !== undefined ? body.visibleName : body.visible_name;
     const rawPhone = body.phone;
 
     const validationErrors: FieldValidationError[] = [];
@@ -1176,6 +1181,21 @@ export async function updateUserProfile(
         });
       } else {
         updatedLastName = trimmed;
+      }
+    }
+
+    let updatedVisibleName = existingUser.visibleName;
+    if (rawVisibleName !== undefined) {
+      const trimmed =
+        rawVisibleName === null ? '' : String(rawVisibleName).trim();
+      if (trimmed.length > 100) {
+        validationErrors.push({
+          field: 'visibleName',
+          tag: 'max',
+          value: trimmed,
+        });
+      } else {
+        updatedVisibleName = trimmed.length > 0 ? trimmed : null;
       }
     }
 
@@ -1254,6 +1274,7 @@ export async function updateUserProfile(
       data: {
         firstName: updatedFirstName,
         lastName: updatedLastName,
+        visibleName: updatedVisibleName,
         phone: updatedPhone,
         avatar: updatedAvatar,
         updatedAt: new Date(),
@@ -1280,6 +1301,7 @@ export async function updateUserProfile(
       email: updatedUser.email,
       firstName: updatedUser.firstName || '',
       lastName: updatedUser.lastName || '',
+      visibleName: updatedUser.visibleName || '',
       avatar: updatedUser.avatar || '',
       phone: updatedUser.phone || '',
       isVerified: updatedUser.isVerified,
