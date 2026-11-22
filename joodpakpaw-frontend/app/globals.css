@@ -1,3 +1,5 @@
+/* hallmark: v2.0.0 | genre: editorial | theme: joodpakpaw-airbnb-clay | job: book | signature: 3-part pet-aware availability search pill */
+/* critique: warm off-white hospitality canvas with deep-teal trust, terracotta CTA, 3D pastel clay icons, and crisp Airbnb card rhythm */
 @import 'tailwindcss';
 
 @plugin 'tailwindcss-animate';
@@ -11,6 +13,7 @@
   --neutral-gray: #6a6a6a;
   --positive-green: #65bf73;
   --off-white: #f7f2e8;
+  --map-canvas: #e7f1ee;
 
   --radius: 0.625rem;
   --background: oklch(1 0 0);
@@ -239,7 +242,12 @@ body {
   }
 }
 
-/* Hide vertical scrollbar globally */
+/* Hide vertical scrollbar globally & enforce Hallmark Floor overflow-x: clip */
+html,
+body {
+  overflow-x: clip;
+}
+
 html {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -247,6 +255,31 @@ html {
 
 html::-webkit-scrollbar {
   display: none;
+}
+
+/* Hallmark Floor #6: instant visible focus ring on every interactive element */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role='button']:focus-visible,
+[role='switch']:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--deep-teal);
+  outline-offset: 2px;
+}
+
+/* Hallmark Floor #7: reduced motion fallback */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Custom CSS to hide scrollbar on individual elements */

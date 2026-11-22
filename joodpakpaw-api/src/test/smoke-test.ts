@@ -7381,6 +7381,157 @@ async function main() {
         )
       }
     })
+
+    // Test 80: Airbnb Discovery — Real Date Availability & Dynamic Stay Pricing
+    await runTest('Airbnb Discovery: GET /api/v1/properties?checkIn&checkOut returns stayNights & stayTotalPrice sorted by stayTotalPrice', async () => {
+      const checkIn = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)
+      const checkOut = new Date(Date.now() + 17 * 86400000).toISOString().slice(0, 10)
+
+      const res = await makeRequest(
+        pipePath,
+        `/api/v1/properties?checkIn=${checkIn}&checkOut=${checkOut}&sortBy=price_asc&limit=10`
+      )
+      if (res.statusCode !== 200 || res.body?.code !== 'S-0000') {
+        throw new Error(
+          `Expected 200 S-0000 for date-filtered properties, got ${res.statusCode} ${JSON.stringify(res.body)}`
+        )
+      }
+      const items = res.body?.data
+      if (!Array.isArray(items) || items.length === 0) {
+        throw new Error(`Expected non-empty available properties array, got ${JSON.stringify(items)}`)
+      }
+      for (const item of items) {
+        if (item.stayNights !== 3) {
+          throw new Error(`Expected stayNights=3 for property ${item.id}, got ${item.stayNights}`)
+        }
+        if (typeof item.stayTotalPrice !== 'number' || item.stayTotalPrice <= 0) {
+          throw new Error(
+            `Expected positive numeric stayTotalPrice for property ${item.id}, got ${item.stayTotalPrice}`
+          )
+        }
+      }
+      for (let i = 1; i < items.length; i++) {
+        if (items[i].stayTotalPrice < items[i - 1].stayTotalPrice) {
+          throw new Error(
+            `Expected ascending stayTotalPrice order, got ${items[i - 1].stayTotalPrice} before ${items[i].stayTotalPrice}`
+          )
+        }
+      }
+    })
+
+    // Test 81: Airbnb Discovery — Lifestyle / Intent & Pet-Safe Filters (facilities, propertyType, petSizeCategoryId, petProfileIds)
+    await runTest('Airbnb Discovery: GET /api/v1/properties filters by facilities, propertyType, petSizeCategoryId, and authenticated petProfileIds', async () => {
+      // 1. facilities=Swimming+Pool
+      const facRes = await makeRequest(
+        pipePath,
+        '/api/v1/properties?facilities=Swimming+Pool&limit=20'
+      )
+      if (facRes.statusCode !== 200 || facRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 for facilities filter, got ${facRes.statusCode}`)
+      }
+      if (!Array.isArray(facRes.body?.data)) {
+        throw new Error('Expected data array for facilities filter')
+      }
+
+      // 2. propertyType=Pet+Resort
+      const typeRes = await makeRequest(
+        pipePath,
+        '/api/v1/properties?propertyType=Pet+Resort&limit=20'
+      )
+      if (typeRes.statusCode !== 200 || typeRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 for propertyType filter, got ${typeRes.statusCode}`)
+      }
+      for (const item of typeRes.body?.data || []) {
+        const typeName = String(item.propertyType?.name || '').toLowerCase()
+        if (!typeName.includes('pet resort')) {
+          throw new Error(`Expected propertyType matching Pet Resort, got "${item.propertyType?.name}"`)
+        }
+      }
+
+      // 3. petSizeCategoryId=3 (up-to-max-size rule)
+      const sizeRes = await makeRequest(
+        pipePath,
+        '/api/v1/properties?petSizeCategoryId=3&limit=20'
+      )
+      if (sizeRes.statusCode !== 200 || sizeRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 for petSizeCategoryId=3 filter, got ${sizeRes.statusCode}`)
+      }
+      if (!Array.isArray(sizeRes.body?.data) || sizeRes.body.data.length === 0) {
+        throw new Error('Expected at least 1 property matching petSizeCategoryId=3')
+      }
+
+      // 4. Authenticated petProfileIds filter
+      const user1Pets = await prisma.petProfile.findMany({
+        where: { guestId: user1Live.userId, deletedAt: null },
+        select: { id: true },
+        take: 2,
+      })
+      if (user1Pets.length > 0) {
+        const idsParam = user1Pets.map((p) => p.id).join(',')
+        const petFilterRes = await makeRequest(
+          pipePath,
+          `/api/v1/properties?petProfileIds=${idsParam}&limit=20`,
+          'GET',
+          undefined,
+          { Authorization: `Bearer ${user1Live.token}` }
+        )
+        if (petFilterRes.statusCode !== 200 || petFilterRes.body?.code !== 'S-0000') {
+          throw new Error(
+            `Expected 200 S-0000 for petProfileIds filter, got ${petFilterRes.statusCode} ${JSON.stringify(petFilterRes.body)}`
+          )
+        }
+      }
+    })
+
+    // Test 82: Airbnb Discovery — Invalid Date Range Validation returns 400
+    await runTest('Airbnb Discovery: GET /api/v1/properties rejects invalid date ranges (checkOut <= checkIn, single date, past date) with 400', async () => {
+      const checkIn = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10)
+      const earlierCheckOut = new Date(Date.now() + 8 * 86400000).toISOString().slice(0, 10)
+
+      // checkOut < checkIn
+      const badOrderRes = await makeRequest(
+        pipePath,
+        `/api/v1/properties?checkIn=${checkIn}&checkOut=${earlierCheckOut}`
+      )
+      if (badOrderRes.statusCode !== 400) {
+        throw new Error(
+          `Expected 400 for checkOut < checkIn, got ${badOrderRes.statusCode} ${JSON.stringify(badOrderRes.body)}`
+        )
+      }
+
+      // checkOut === checkIn
+      const sameDayRes = await makeRequest(
+        pipePath,
+        `/api/v1/properties?checkIn=${checkIn}&checkOut=${checkIn}`
+      )
+      if (sameDayRes.statusCode !== 400) {
+        throw new Error(
+          `Expected 400 for checkOut === checkIn, got ${sameDayRes.statusCode} ${JSON.stringify(sameDayRes.body)}`
+        )
+      }
+
+      // Only checkIn provided
+      const singleDateRes = await makeRequest(
+        pipePath,
+        `/api/v1/properties?checkIn=${checkIn}`
+      )
+      if (singleDateRes.statusCode !== 400) {
+        throw new Error(
+          `Expected 400 for missing checkOut, got ${singleDateRes.statusCode} ${JSON.stringify(singleDateRes.body)}`
+        )
+      }
+
+      // Past date
+      const pastRes = await makeRequest(
+        pipePath,
+        '/api/v1/properties?checkIn=2020-01-01&checkOut=2020-01-03'
+      )
+      if (pastRes.statusCode !== 400) {
+        throw new Error(
+          `Expected 400 for past checkIn date, got ${pastRes.statusCode} ${JSON.stringify(pastRes.body)}`
+        )
+      }
+    })
   } finally {
     config.mlServiceUrl = originalMlUrl
     config.mlTimeoutMs = originalMlTimeoutMs
