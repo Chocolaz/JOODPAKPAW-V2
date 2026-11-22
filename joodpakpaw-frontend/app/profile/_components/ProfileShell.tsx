@@ -158,10 +158,10 @@ export function ProfileShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Main container */}
-      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 py-6 lg:py-8">
-        <div className="flex items-start gap-8 xl:gap-12">
-          {/* Desktop sticky left sidebar (lg+) */}
-          <aside className="hidden lg:block w-[260px] shrink-0 sticky top-24 space-y-6">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 py-6 lg:py-0 lg:h-[calc(100dvh-64px)] xl:h-[calc(100dvh-72px)] lg:overflow-hidden">
+        <div className="flex items-start lg:items-stretch lg:h-full gap-8 xl:gap-10">
+          {/* Desktop independent-scroll left sidebar (lg+) */}
+          <aside className="hidden lg:block w-[260px] shrink-0 h-full overflow-y-auto overscroll-contain py-8 pr-6 border-r border-border space-y-6">
             <div>
               <p className="text-sm font-semibold text-deep-teal px-3 mb-2">
                 Account
@@ -241,8 +241,10 @@ export function ProfileShell({ children }: { children: React.ReactNode }) {
             </div>
           </aside>
 
-          {/* Right workspace pane */}
-          <div className="min-w-0 flex-1 pb-20 lg:pb-0">{children}</div>
+          {/* Right independent-scroll workspace pane */}
+          <div className="min-w-0 flex-1 pb-20 lg:pb-10 lg:h-full lg:overflow-y-auto overscroll-contain lg:py-8 lg:pr-2">
+            {children}
+          </div>
         </div>
       </div>
 
