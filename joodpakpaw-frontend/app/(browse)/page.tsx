@@ -539,6 +539,7 @@ export default function Home() {
                   showTotalPrice={showTotalPrice}
                   checkIn={checkIn || undefined}
                   checkOut={checkOut || undefined}
+                  priorityCount={5}
                 />
                 {filterTotalPages > 1 && (
                   <PaginationBar
@@ -619,6 +620,7 @@ export default function Home() {
                   showHeartIcon={isAuthenticated}
                   showMatchReason={true}
                   showTotalPrice={showTotalPrice}
+                  priorityCount={5}
                 />
               </section>
             )}

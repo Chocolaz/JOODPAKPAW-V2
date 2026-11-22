@@ -59,6 +59,7 @@ interface PropertyCardProps {
   checkOut?: string
   isHighlighted?: boolean
   onHoverChange?: (id: number | null) => void
+  priority?: boolean
 }
 
 export function PropertyCard({
@@ -76,6 +77,7 @@ export function PropertyCard({
   checkOut,
   isHighlighted = false,
   onHoverChange,
+  priority = false,
 }: PropertyCardProps) {
   const { user } = useAuth()
   const isOwner = Boolean(user && property.hostId === user.id)
@@ -282,6 +284,8 @@ export function PropertyCard({
                     alt={`${property.title} photo ${idx + 1}`}
                     fill
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                    loading={priority && idx === 0 ? 'eager' : undefined}
+                    priority={priority && idx === 0}
                     unoptimized
                     onLoad={() => {
                       if (idx === 0) setIsImageLoaded(true)

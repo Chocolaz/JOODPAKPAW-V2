@@ -17,6 +17,7 @@ interface PropertyListProps {
   checkOut?: string
   highlightedPropertyId?: number | null
   onPropertyHover?: (id: number | null) => void
+  priorityCount?: number
 }
 
 export function PropertyList({
@@ -33,10 +34,11 @@ export function PropertyList({
   checkOut,
   highlightedPropertyId,
   onPropertyHover,
+  priorityCount = 0,
 }: PropertyListProps) {
   return (
     <div className={className}>
-      {properties.map((property) => (
+      {properties.map((property, idx) => (
         <PropertyCard
           key={property.id}
           property={property}
@@ -51,6 +53,7 @@ export function PropertyList({
           checkOut={checkOut}
           isHighlighted={highlightedPropertyId === property.id}
           onHoverChange={onPropertyHover}
+          priority={idx < priorityCount}
         />
       ))}
     </div>

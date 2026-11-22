@@ -624,6 +624,7 @@ export function AirbnbSearchBar({
                     src={assetPath(sp.icon)}
                     alt={sp.label}
                     fill
+                    sizes="28px"
                     className="object-contain"
                   />
                 </div>

@@ -186,6 +186,7 @@ export function HomeMapView({
               src={imgSrc}
               alt={selectedProperty.title}
               fill
+              sizes="(max-width: 640px) 120px, 160px"
               unoptimized
               className="object-cover"
             />

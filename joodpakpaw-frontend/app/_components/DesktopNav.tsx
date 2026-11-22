@@ -83,6 +83,7 @@ export function DesktopNav() {
               src={assetPath('/icons/JOODPAK.svg')}
               alt="JoodPakPaw"
               fill
+              sizes="160px"
               className="object-cover object-center"
               priority
             />
@@ -189,6 +190,7 @@ export function DesktopNav() {
                     src={avatarUrl}
                     alt={shortName}
                     fill
+                    sizes="32px"
                     unoptimized
                     className="object-cover"
                   />
