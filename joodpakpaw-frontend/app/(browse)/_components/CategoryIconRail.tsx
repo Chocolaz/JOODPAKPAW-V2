@@ -2,14 +2,6 @@
 
 import Image from 'next/image'
 import {
-  LayoutGrid,
-  Waves,
-  Stethoscope,
-  Trees,
-  Home,
-  Tag,
-} from 'lucide-react'
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -33,12 +25,11 @@ type CategoryKey =
 interface CategoryDef {
   key: CategoryKey
   label: string
-  clayIcon?: string
-  LucideIcon?: React.ComponentType<{ className?: string; strokeWidth?: number }>
+  clayIcon: string
 }
 
 const CATEGORIES: CategoryDef[] = [
-  { key: 'all', label: 'All stays', LucideIcon: LayoutGrid },
+  { key: 'all', label: 'All stays', clayIcon: '/icons/categories/clay-all.webp' },
   {
     key: 'dogs',
     label: 'Dogs',
@@ -54,11 +45,11 @@ const CATEGORIES: CategoryDef[] = [
     label: 'Exotic & small',
     clayIcon: '/icons/species/clay-exotic-transparent.webp',
   },
-  { key: 'pool', label: 'Pool & play', LucideIcon: Waves },
-  { key: 'vet', label: 'Vet care', LucideIcon: Stethoscope },
-  { key: 'resort', label: 'Pet resorts', LucideIcon: Trees },
-  { key: 'homestay', label: 'Homestays', LucideIcon: Home },
-  { key: 'budget', label: 'Under ฿800', LucideIcon: Tag },
+  { key: 'pool', label: 'Pool & play', clayIcon: '/icons/categories/clay-pool.webp' },
+  { key: 'vet', label: 'Vet care', clayIcon: '/icons/categories/clay-vet.webp' },
+  { key: 'resort', label: 'Pet resorts', clayIcon: '/icons/categories/clay-resort.webp' },
+  { key: 'homestay', label: 'Homestays', clayIcon: '/icons/categories/clay-homestay.webp' },
+  { key: 'budget', label: 'Under ฿800', clayIcon: '/icons/categories/clay-budget.webp' },
 ]
 
 interface CategoryIconRailProps {
@@ -172,7 +163,6 @@ export function CategoryIconRail({
         <div className="flex items-center gap-5 sm:gap-7 overflow-x-auto scrollbar-hide pt-2.5">
           {CATEGORIES.map((cat) => {
             const isActive = activeKey === cat.key
-            const IconComp = cat.LucideIcon
             return (
               <button
                 key={cat.key}
@@ -185,29 +175,15 @@ export function CategoryIconRail({
                     : 'border-transparent text-neutral-gray hover:text-deep-teal hover:border-gray-200'
                 )}
               >
-                {cat.clayIcon ? (
-                  <span className="relative w-7 h-7 block">
-                    <Image
-                      src={assetPath(cat.clayIcon)}
-                      alt={cat.label}
-                      fill
-                      sizes="28px"
-                      className="object-contain"
-                    />
-                  </span>
-                ) : IconComp ? (
-                  <span className="w-7 h-7 flex items-center justify-center">
-                    <IconComp
-                      className={cn(
-                        'w-5 h-5 transition-colors',
-                        isActive
-                          ? 'text-deep-teal'
-                          : 'text-neutral-gray group-hover:text-deep-teal'
-                      )}
-                      strokeWidth={1.75}
-                    />
-                  </span>
-                ) : null}
+                <span className="relative w-7 h-7 block">
+                  <Image
+                    src={assetPath(cat.clayIcon)}
+                    alt={cat.label}
+                    fill
+                    sizes="28px"
+                    className="object-contain"
+                  />
+                </span>
                 <span className="text-xs font-medium whitespace-nowrap">
                   {cat.label}
                 </span>
