@@ -21,7 +21,6 @@ import {
 } from 'lucide-react'
 import { useBrowseFilters } from '@/app/_hooks/useBrowseFilters'
 import { useRecentlyViewed } from '@/app/_hooks/useRecentlyViewed'
-import { useFeaturedSections } from '@/app/_hooks/useFeaturedSections'
 import { useRecommendedProperties } from '@/app/_hooks/useRecommendedProperties'
 import { useBrowsePets } from './_components/BrowseLayoutClient'
 import { CategoryIconRail } from './_components/CategoryIconRail'
@@ -63,13 +62,7 @@ function scrollToSectionTop(el: HTMLElement | null) {
 }
 
 export default function Home() {
-  const {
-    featured,
-    isLoading: isFeaturedLoading,
-    mutate: mutateFeatured,
-  } = useFeaturedSections()
-
-  // Real backend pagination for "Explore verified stays" (limit = 12)
+  // Real backend pagination for "Explore verified stays" (limit = 20)
   const [explorePage, setExplorePage] = useState(1)
   const [exploreProperties, setExploreProperties] = useState<Property[]>([])
   const [exploreTotalPages, setExploreTotalPages] = useState(1)
@@ -129,15 +122,6 @@ export default function Home() {
   const [isFilterLoading, setIsFilterLoading] = useState(false)
 
   const filterKeyRef = useRef(0)
-
-  // Revalidate featured sections when auth status genuinely changes
-  const prevAuthRef = useRef(isAuthenticated)
-  useEffect(() => {
-    if (prevAuthRef.current !== isAuthenticated) {
-      prevAuthRef.current = isAuthenticated
-      mutateFeatured()
-    }
-  }, [isAuthenticated, mutateFeatured])
 
   // Fetch paginated "Explore verified stays"
   const fetchExplorePage = useCallback(async (targetPage: number) => {
@@ -228,7 +212,9 @@ export default function Home() {
       minRating: minRating || undefined,
       minPrice: minPrice || undefined,
       maxPrice: maxPrice || undefined,
-      sortBy: sortBy || undefined,
+      sortBy: sortBy || 'recommended',
+      lat: userLocation?.lat,
+      lng: userLocation?.lon,
     })
       .then((res) => {
         if (key !== filterKeyRef.current) return
@@ -256,19 +242,15 @@ export default function Home() {
     minPrice,
     maxPrice,
     sortBy,
+    userLocation?.lat,
+    userLocation?.lon,
   ])
 
   // Exclude the current user's own properties from public browse
   const visibleProperties = useMemo(() => {
-    const source =
-      exploreProperties.length > 0
-        ? exploreProperties
-        : explorePage === 1
-        ? featured?.allProperties || []
-        : []
-    if (!user) return source
-    return source.filter((p) => p.hostId !== user.id)
-  }, [exploreProperties, explorePage, featured?.allProperties, user])
+    if (!user) return exploreProperties
+    return exploreProperties.filter((p) => p.hostId !== user.id)
+  }, [exploreProperties, user])
 
   // Recently viewed batch hydration (preserving coordinated initial loading gate)
   const [extraRecentlyViewedMap, setExtraRecentlyViewedMap] = useState<
@@ -280,23 +262,14 @@ export default function Home() {
 
   const loadedPoolMap = useMemo(() => {
     const map = new Map<number, Property>(extraRecentlyViewedMap)
-    for (const prop of [
-      ...visibleProperties,
-      ...(featured?.allProperties || []),
-      ...(featured?.topRated || []),
-      ...(featured?.bestValue || []),
-      ...(featured?.newListings || []),
-      ...(featured?.trending || []),
-      ...recommendedProperties,
-    ]) {
+    for (const prop of [...visibleProperties, ...recommendedProperties]) {
       map.set(prop.id, prop)
     }
     return map
-  }, [visibleProperties, featured, recommendedProperties, extraRecentlyViewedMap])
+  }, [visibleProperties, recommendedProperties, extraRecentlyViewedMap])
 
   const coreFeedsSettled =
     !authLoading &&
-    !(!featured && isFeaturedLoading) &&
     !isRecommendedLoading &&
     !(explorePage === 1 && isExploreLoading && exploreProperties.length === 0)
 
@@ -414,6 +387,18 @@ export default function Home() {
     : visibleProperties
 
   const showHero = !hasActiveSearchOrFilters && viewMode === 'list'
+  const isRecommendedSort = !sortBy || sortBy === 'recommended'
+  const filteredSortSubtitle = isRecommendedSort
+    ? isAuthenticated
+      ? 'Ranked by ML match for your pets and filters.'
+      : 'Ranked by recommended quality and relevance.'
+    : sortBy === 'price_asc'
+    ? 'Sorted by lowest price.'
+    : sortBy === 'rating'
+    ? 'Sorted by highest guest rating.'
+    : sortBy === 'trending'
+    ? 'Sorted by most booked stays.'
+    : null
 
   return (
     <div className="min-h-screen bg-white">
@@ -465,7 +450,7 @@ export default function Home() {
           /* Split Map View Mode */
           <section className="space-y-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <h2 className="text-lg sm:text-xl font-bold text-deep-teal break-words min-w-0">
+              <h2 className="font-bold text-deep-teal break-words min-w-0">
                 {hasActiveSearchOrFilters
                   ? 'Matching stays on map'
                   : 'Explore stays on map'}
@@ -518,15 +503,20 @@ export default function Home() {
           <section ref={filteredSectionRef} className="space-y-5">
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div className="min-w-0">
-                <h2 className="text-xl sm:text-2xl font-bold text-deep-teal break-words min-w-0">
+                <h2 className="font-bold text-deep-teal break-words min-w-0">
                   {province
                     ? `Stays in ${province}`
                     : searchQuery
                     ? `Results for "${searchQuery}"`
                     : 'Filtered stays'}
                 </h2>
+                {filteredSortSubtitle && (
+                  <p className="text-sm text-neutral-gray mt-0.5">
+                    {filteredSortSubtitle}
+                  </p>
+                )}
                 {!isFilterLoading && (
-                  <p className="text-sm text-neutral-gray mt-0.5 tabular-nums">
+                  <p className="text-xs text-neutral-gray mt-1 tabular-nums">
                     {filterTotal}{' '}
                     {filterTotal === 1 ? 'stay available' : 'stays available'}
                   </p>
@@ -567,9 +557,11 @@ export default function Home() {
                   className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-5"
                   showPetPolicyChip={true}
                   showHeartIcon={isAuthenticated}
+                  showMatchReason={isRecommendedSort}
                   showTotalPrice={showTotalPrice}
                   checkIn={checkIn || undefined}
                   checkOut={checkOut || undefined}
+                  priorityCount={5}
                 />
                 {filterTotalPages > 1 && (
                   <PaginationBar
@@ -591,7 +583,7 @@ export default function Home() {
             {resolvedRecentlyViewed.length > 0 && (
               <section className="space-y-4">
                 <div className="flex items-baseline justify-between gap-4">
-                  <h2 className="text-xl sm:text-2xl font-bold text-deep-teal break-words min-w-0">
+                  <h2 className="font-bold text-deep-teal break-words min-w-0">
                     Recently viewed
                   </h2>
                   <Link
@@ -605,7 +597,7 @@ export default function Home() {
                   {resolvedRecentlyViewed.map((property) => (
                     <div
                       key={property.id}
-                      className="w-[260px] sm:w-[280px] lg:w-[295px] shrink-0 snap-start"
+                      className="w-[260px] sm:w-[calc((100%-20px)/2)] lg:w-[calc((100%-60px)/4)] xl:w-[calc((100%-80px)/5)] shrink-0 snap-start"
                     >
                       <PropertyCard
                         property={property}
@@ -624,7 +616,7 @@ export default function Home() {
               <section className="space-y-4">
                 <div className="flex items-baseline justify-between gap-4">
                   <div className="min-w-0">
-                    <h2 className="text-xl sm:text-2xl font-bold text-deep-teal break-words min-w-0">
+                    <h2 className="font-bold text-deep-teal break-words min-w-0">
                       {isAuthenticated
                         ? 'Recommended for you'
                         : 'Popular picks'}
@@ -650,6 +642,7 @@ export default function Home() {
                   showHeartIcon={isAuthenticated}
                   showMatchReason={true}
                   showTotalPrice={showTotalPrice}
+                  priorityCount={5}
                 />
               </section>
             )}
@@ -658,7 +651,7 @@ export default function Home() {
             <section ref={exploreSectionRef} className="space-y-5">
               <div className="flex items-baseline justify-between gap-4">
                 <div className="min-w-0">
-                  <h2 className="text-xl sm:text-2xl font-bold text-deep-teal break-words min-w-0">
+                  <h2 className="font-bold text-deep-teal break-words min-w-0">
                     Explore verified stays
                   </h2>
                   <p className="text-sm text-neutral-gray mt-0.5">
@@ -715,7 +708,7 @@ export default function Home() {
                     <ShieldCheck className="w-4 h-4 text-positive-green shrink-0" />
                     <span>Identity-verified host community</span>
                   </div>
-                  <h2 className="text-xl sm:text-2xl font-bold text-white leading-tight break-words min-w-0">
+                  <h2 className="font-bold text-white leading-tight break-words min-w-0">
                     Open your home to travelling pets
                   </h2>
                   <p className="text-sm sm:text-base text-off-white/85 leading-relaxed">

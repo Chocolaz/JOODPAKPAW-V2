@@ -34,8 +34,10 @@ interface BrowseLayoutClientProps {
 
 export function BrowseLayoutClient({ children }: BrowseLayoutClientProps) {
   const [isFilterOpen, setIsFilterOpen] = useState(false)
-  const [userPets, setUserPets] = useState<PetProfile[]>([])
-  const [isPetsLoading, setIsPetsLoading] = useState(false)
+  const [fetchedPetsState, setFetchedPetsState] = useState<{
+    loaded: boolean
+    pets: PetProfile[]
+  }>({ loaded: false, pets: [] })
 
   const { isAuthenticated } = useAuth()
   const {
@@ -58,27 +60,26 @@ export function BrowseLayoutClient({ children }: BrowseLayoutClientProps) {
   }, [pathname])
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      setUserPets([])
-      setIsPetsLoading(false)
-      return
-    }
+    if (!isAuthenticated) return
     let cancelled = false
-    setIsPetsLoading(true)
     getAllPetProfiles()
       .then((res) => {
-        if (!cancelled) setUserPets(res.petProfiles ?? [])
+        if (!cancelled) {
+          setFetchedPetsState({ loaded: true, pets: res.petProfiles ?? [] })
+        }
       })
       .catch(() => {
-        if (!cancelled) setUserPets([])
-      })
-      .finally(() => {
-        if (!cancelled) setIsPetsLoading(false)
+        if (!cancelled) {
+          setFetchedPetsState({ loaded: true, pets: [] })
+        }
       })
     return () => {
       cancelled = true
     }
   }, [isAuthenticated])
+
+  const userPets = isAuthenticated ? fetchedPetsState.pets : []
+  const isPetsLoading = isAuthenticated && !fetchedPetsState.loaded
 
   return (
     <BrowsePetsContext.Provider value={{ userPets, isPetsLoading }}>

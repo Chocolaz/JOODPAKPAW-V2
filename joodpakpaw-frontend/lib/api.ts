@@ -283,6 +283,8 @@ export const getProperties = async (
     facilities?: string
     propertyType?: string
     propertyTypeId?: string | number
+    lat?: number
+    lng?: number
   }
 ): Promise<PropertiesResponse> => {
   const params = new URLSearchParams({
@@ -308,6 +310,15 @@ export const getProperties = async (
   if (options?.propertyType) params.append('propertyType', options.propertyType)
   if (options?.propertyTypeId != null && options.propertyTypeId !== '') {
     params.append('propertyTypeId', String(options.propertyTypeId))
+  }
+  if (
+    typeof options?.lat === 'number' &&
+    Number.isFinite(options.lat) &&
+    typeof options?.lng === 'number' &&
+    Number.isFinite(options.lng)
+  ) {
+    params.append('lat', String(options.lat))
+    params.append('lng', String(options.lng))
   }
 
   const res = await request<any>({

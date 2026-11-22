@@ -27,10 +27,10 @@ export function BrowseHero({
       <div className="grid grid-cols-1 md:grid-cols-12 items-center gap-4 md:gap-6 px-5 py-4 sm:px-7 sm:py-5 lg:px-10 lg:py-5">
         {/* Left Copy + Personalized Pet Chips */}
         <div className="md:col-span-6 space-y-2 min-w-0">
-          <h1 className="text-deep-teal text-lg sm:text-xl lg:text-[22px] font-bold leading-snug break-words min-w-0">
+          <h1 className="text-deep-teal font-bold leading-snug break-words min-w-0">
             Find trusted stays for your pets
           </h1>
-          <p className="text-neutral-gray text-sm max-w-md leading-relaxed">
+          <p className="text-neutral-gray max-w-md leading-relaxed">
             Verified pet-safe boarding homes across Thailand tailored to your
             companions.
           </p>

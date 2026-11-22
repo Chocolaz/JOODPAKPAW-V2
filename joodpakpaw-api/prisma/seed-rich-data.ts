@@ -268,7 +268,7 @@ async function main() {
       facilities: ['Air Conditioning', 'Separated Zones', 'Daily Updates'],
       images: [
         'https://images.unsplash.com/photo-1513360371669-4adf3dd7dff8?auto=format&fit=crop&w=900&q=80',
-        'https://images.unsplash.com/photo-1533738363-b7f5aef12965?auto=format&fit=crop&w=900&q=80',
+        'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&w=900&q=80',
       ],
       rooms: [
         { name: 'Quiet Purr Loft', price: 520, totalRoom: 5, petsCount: 2, sizeId: sizeSmall, w: 1.6, l: 2.0, h: 2.2, petIds: [catId] },

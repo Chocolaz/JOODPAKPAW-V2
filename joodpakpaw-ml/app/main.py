@@ -9,7 +9,12 @@ from fastapi import FastAPI, Header, HTTPException, Query, Request
 from app.config import Settings, load_settings
 from app.database import DatabaseClient
 from app.engine.hybrid import HybridRecommender
-from app.schemas import HealthResponse, RecommendationResponse, RefreshResponse
+from app.schemas import (
+    HealthResponse,
+    RankCandidatesRequest,
+    RecommendationResponse,
+    RefreshResponse,
+)
 
 
 def create_app(
@@ -150,6 +155,31 @@ def create_app(
                 status_code=404,
                 detail=f"Property {property_id} not found in active catalog",
             )
+        return RecommendationResponse(
+            strategy=result.strategy,
+            snapshot_age_seconds=result.snapshot_age_seconds,
+            total_candidates=result.total_candidates,
+            recommendations=result.recommendations,
+        )
+
+    @application.post(
+        "/ml/v1/rank/candidates",
+        response_model=RecommendationResponse,
+        response_model_exclude_none=True,
+    )
+    def rank_candidates(
+        request: Request,
+        payload: RankCandidatesRequest,
+    ) -> RecommendationResponse:
+        rec: HybridRecommender = request.app.state.recommender
+        result = rec.rank_candidates(
+            user_id=payload.user_id,
+            candidate_property_ids=payload.candidate_property_ids,
+            filter_context=payload.filter_context,
+            user_lat=payload.lat,
+            user_lng=payload.lng,
+            debug=payload.debug,
+        )
         return RecommendationResponse(
             strategy=result.strategy,
             snapshot_age_seconds=result.snapshot_age_seconds,

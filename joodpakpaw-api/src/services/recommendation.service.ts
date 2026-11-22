@@ -1,12 +1,34 @@
+import crypto from 'crypto';
 import { prisma } from '../database/prisma';
 import { config } from '../config/env';
 import { cacheService } from './cache.service';
 
-export type MatchTier = 'all_pets' | 'partial_pets' | 'cold_start' | 'similar';
+export type MatchTier =
+  | 'all_pets'
+  | 'partial_pets'
+  | 'cold_start'
+  | 'similar'
+  | 'context_fallback';
 
 export interface UserLocation {
   lat: number;
   lng: number;
+}
+
+export interface RankFilterContext {
+  petTypes?: string[];
+  petProfileIds?: number[];
+  facilities?: string[];
+  maxPrice?: number;
+  province?: string;
+}
+
+export interface RankCandidatesParams {
+  userId: number | null;
+  candidatePropertyIds: number[];
+  filterContext?: RankFilterContext;
+  userLocation?: UserLocation | null;
+  debug?: boolean;
 }
 
 export interface ScoreBreakdown {
@@ -210,6 +232,22 @@ function extractEnglishLabel(rawName: string): string {
     if (inner) return inner;
   }
   return rawName.trim();
+}
+
+function normalizePetSpecies(rawName: string): string {
+  const trimmed = (rawName || '').trim();
+  const parenMatch = /\(([^)]+)\)/.exec(trimmed);
+  if (parenMatch && parenMatch[1]) {
+    return parenMatch[1].trim().toLowerCase();
+  }
+  const lower = trimmed.toLowerCase();
+  if (lower.includes('dog') || lower.includes('สุนัข') || lower.includes('หมา')) return 'dog';
+  if (lower.includes('cat') || lower.includes('แมว')) return 'cat';
+  if (lower.includes('rabbit') || lower.includes('กระต่าย')) return 'rabbit';
+  if (lower.includes('hamster') || lower.includes('แฮมสเตอร์')) return 'hamster';
+  if (lower.includes('bird') || lower.includes('นก')) return 'bird';
+  if (lower.includes('reptile') || lower.includes('สัตว์เลื้อยคลาน')) return 'reptile';
+  return lower;
 }
 
 function cleanTokenText(raw: string): string {
@@ -838,14 +876,24 @@ async function buildCatalogSnapshot(): Promise<CatalogSnapshot> {
   };
 }
 
+let catalogSnapshotInFlight: Promise<CatalogSnapshot> | null = null;
+
 async function getFallbackCatalogSnapshot(forceRefresh = false): Promise<CatalogSnapshot> {
   if (!forceRefresh) {
     const cached = await cacheService.get<CatalogSnapshot>(CATALOG_SNAPSHOT_KEY);
     if (cached) return cached;
   }
-  const snap = await buildCatalogSnapshot();
-  await cacheService.set(CATALOG_SNAPSHOT_KEY, snap, CATALOG_SNAPSHOT_TTL_SECONDS);
-  return snap;
+  if (!catalogSnapshotInFlight) {
+    catalogSnapshotInFlight = buildCatalogSnapshot()
+      .then(async (snap) => {
+        await cacheService.set(CATALOG_SNAPSHOT_KEY, snap, CATALOG_SNAPSHOT_TTL_SECONDS);
+        return snap;
+      })
+      .finally(() => {
+        catalogSnapshotInFlight = null;
+      });
+  }
+  return catalogSnapshotInFlight;
 }
 
 async function fetchUserContext(userId: number): Promise<UserContextData> {
@@ -1039,6 +1087,41 @@ function computeContentScores(
   return { scores, interactedProvinces, interactedTypes };
 }
 
+function appendFilterContextReasons(
+  candidates: Array<[number, string]>,
+  prop: SnapshotProperty,
+  filterContext: RankFilterContext | undefined,
+  facilityWeight: number,
+  priceWeight: number,
+  coveredLabels?: Set<string>
+): void {
+  if (!filterContext) return;
+  if (filterContext.facilities && filterContext.facilities.length > 0 && prop.facilities.length > 0) {
+    const propFacByLower = new Map<string, string>();
+    for (const fac of prop.facilities) {
+      const trimmed = fac.trim();
+      if (trimmed) propFacByLower.set(trimmed.toLowerCase(), fac);
+    }
+    for (const reqFac of filterContext.facilities) {
+      const key = reqFac.trim().toLowerCase();
+      const matched = propFacByLower.get(key);
+      if (matched && (!coveredLabels || !coveredLabels.has(key))) {
+        candidates.push([facilityWeight, `Includes ${matched}`]);
+        break;
+      }
+    }
+  }
+  if (
+    filterContext.maxPrice !== undefined &&
+    Number.isFinite(filterContext.maxPrice) &&
+    filterContext.maxPrice > 0 &&
+    prop.minPrice > 0 &&
+    prop.minPrice <= filterContext.maxPrice
+  ) {
+    candidates.push([priceWeight, `Great value under ฿${Math.floor(filterContext.maxPrice)}`]);
+  }
+}
+
 function buildPersonalizedReasons(params: {
   prop: SnapshotProperty;
   matchedPets: UserPetData[];
@@ -1053,6 +1136,8 @@ function buildPersonalizedReasons(params: {
   interactedTypes: Set<string>;
   distanceKm?: number | null;
   sGeo?: number | null;
+  filterContext?: RankFilterContext;
+  fallbackReason?: string;
 }): string[] {
   const {
     prop,
@@ -1068,11 +1153,13 @@ function buildPersonalizedReasons(params: {
     interactedTypes,
     distanceKm,
     sGeo,
+    filterContext,
+    fallbackReason,
   } = params;
 
   const candidates: Array<[number, string]> = [];
 
-  if (totalPets > 0) {
+  if (totalPets > 0 && matchedPets.length > 0 && matchTier !== 'context_fallback') {
     let petReason: string;
     if (matchTier === 'all_pets') {
       if (totalPets === 1) {
@@ -1103,9 +1190,11 @@ function buildPersonalizedReasons(params: {
     candidates.push([0.12 * (sGeo ?? 0) + 0.22, formatNearYouReason(distanceKm)]);
   }
 
+  const coveredLabels = new Set<string>();
   if (energyMatchedLabels.length > 0 && matchedPets.length > 0) {
     const sorted = [...energyMatchedLabels].sort((a, b) => b[0] - a[0]);
     const [topWeight, topBucket, topLabel] = sorted[0];
+    coveredLabels.add(topLabel.trim().toLowerCase());
     let energyReason: string;
     if (topBucket === 'high') {
       energyReason =
@@ -1140,6 +1229,8 @@ function buildPersonalizedReasons(params: {
     candidates.push([0.1 * sPopularity, 'Popular pet stay']);
   }
 
+  appendFilterContextReasons(candidates, prop, filterContext, 0.14, 0.15, coveredLabels);
+
   candidates.sort((a, b) => b[0] - a[0]);
   const reasons: string[] = [];
   for (const [, text] of candidates) {
@@ -1150,7 +1241,10 @@ function buildPersonalizedReasons(params: {
   }
 
   if (reasons.length === 0) {
-    reasons.push(prop.province ? `Pet-friendly stay in ${prop.province}` : 'Pet-friendly stay');
+    reasons.push(
+      fallbackReason ||
+        (prop.province ? `Pet-friendly stay in ${prop.province}` : 'Pet-friendly stay')
+    );
   }
   return reasons;
 }
@@ -1160,7 +1254,9 @@ function buildColdStartReasons(
   sQuality: number,
   sPopularity: number,
   distanceKm?: number | null,
-  sGeo?: number | null
+  sGeo?: number | null,
+  filterContext?: RankFilterContext,
+  fallbackReason?: string
 ): string[] {
   const candidates: Array<[number, string]> = [];
   if (distanceKm !== undefined && distanceKm !== null && distanceKm <= 35) {
@@ -1184,6 +1280,8 @@ function buildColdStartReasons(
     candidates.push([0.35 * sPopularity, 'Saved by pet owners']);
   }
 
+  appendFilterContextReasons(candidates, prop, filterContext, 0.22, 0.20);
+
   if (prop.province) {
     candidates.push([0.1, `Popular in ${prop.province}`]);
   }
@@ -1201,7 +1299,7 @@ function buildColdStartReasons(
   }
 
   if (reasons.length === 0) {
-    reasons.push('Verified pet boarding stay');
+    reasons.push(fallbackReason || 'Verified pet boarding stay');
   }
   return reasons;
 }
@@ -1401,20 +1499,7 @@ async function fallbackRecommendForUser(
 
     const matchTier: MatchTier = matchedCount === totalPets ? 'all_pets' : 'partial_pets';
 
-    let energySum = 0;
-    let sizeFitSum = 0;
-    const energyLabels: Array<[number, EnergyBucket, string]> = [];
-    for (const pet of matchedPets) {
-      const { score: efScore, matched } = computePetEnergyFacilityScore(pet, prop);
-      energySum += efScore;
-      sizeFitSum += computePetSizeFitScore(pet, prop);
-      energyLabels.push(...matched);
-    }
-
-    const avgEnergyScore = energySum / matchedCount;
-    const avgSizeFit = sizeFitSum / matchedCount;
-    const coverage = matchedCount / totalPets;
-    const sCompat = 0.55 * avgEnergyScore + 0.3 * coverage + 0.15 * avgSizeFit;
+    const { sCompat, energyLabels } = computeMatchedPetsCompat(matchedPets, totalPets, prop);
 
     const idx = snapshot.propIdxById.get(prop.id) ?? 0;
     const sContent = contentScores[idx] ?? 0;
@@ -1676,10 +1761,333 @@ function mapMlResponse(
   };
 }
 
+function computeMatchedPetsCompat(
+  matchedPets: UserPetData[],
+  totalPets: number,
+  prop: SnapshotProperty
+): {
+  sCompat: number;
+  energyLabels: Array<[number, EnergyBucket, string]>;
+} {
+  const matchedCount = matchedPets.length;
+  if (matchedCount === 0 || totalPets <= 0) {
+    return { sCompat: 0, energyLabels: [] };
+  }
+  let energySum = 0;
+  let sizeFitSum = 0;
+  const energyLabels: Array<[number, EnergyBucket, string]> = [];
+  for (const pet of matchedPets) {
+    const { score: efScore, matched } = computePetEnergyFacilityScore(pet, prop);
+    energySum += efScore;
+    sizeFitSum += computePetSizeFitScore(pet, prop);
+    energyLabels.push(...matched);
+  }
+  const avgEnergyScore = energySum / matchedCount;
+  const avgSizeFit = sizeFitSum / matchedCount;
+  const coverage = matchedCount / totalPets;
+  const sCompat = 0.55 * avgEnergyScore + 0.3 * coverage + 0.15 * avgSizeFit;
+  return { sCompat, energyLabels };
+}
+
+function resolveActiveScoringPets(
+  pets: UserPetData[],
+  filterContext?: RankFilterContext
+): UserPetData[] {
+  if (pets.length === 0) return [];
+
+  if (filterContext?.petProfileIds && filterContext.petProfileIds.length > 0) {
+    const wantedIds = new Set(filterContext.petProfileIds);
+    return pets.filter((pet) => wantedIds.has(pet.id));
+  }
+
+  if (filterContext?.petTypes && filterContext.petTypes.length > 0) {
+    const requestedTypeIds = new Set<number>();
+    const requestedSpecies = new Set<string>();
+    for (const rawTok of filterContext.petTypes) {
+      const tok = String(rawTok || '').trim();
+      if (!tok) continue;
+      if (/^\d+$/.test(tok)) {
+        requestedTypeIds.add(Number(tok));
+      } else {
+        requestedSpecies.add(normalizePetSpecies(tok));
+      }
+    }
+    return pets.filter((pet) => {
+      if (requestedTypeIds.has(pet.petTypeId)) return true;
+      return requestedSpecies.has(normalizePetSpecies(pet.petTypeName));
+    });
+  }
+
+  return pets;
+}
+
+function buildFallbackMissingItem(
+  propertyId: number,
+  matchTier: MatchTier,
+  debug: boolean,
+  userLocation: UserLocation | null
+): RecommendationItem {
+  const item: RecommendationItem = {
+    propertyId,
+    score: 0.0,
+    matchTier,
+    matchReasons: ['Matches your filter'],
+  };
+  if (debug) {
+    item.scoreBreakdown = {
+      sContent: 0,
+      sCompat: 0,
+      sQuality: 0,
+      sPopularity: 0,
+      ...(userLocation ? { sGeo: null, distanceKm: null } : {}),
+    };
+  }
+  return item;
+}
+
+async function fallbackRankCandidates(params: {
+  userId: number | null;
+  dedupedIds: number[];
+  filterContext?: RankFilterContext;
+  userLocation: UserLocation | null;
+  debug: boolean;
+}): Promise<Omit<RecommendationResult, 'meta'> & { meta: Omit<RecommendationMeta, 'latencyMs'> }> {
+  const { userId, dedupedIds, filterContext, userLocation, debug } = params;
+
+  const [snapshot, userCtx] = await Promise.all([
+    getFallbackCatalogSnapshot(),
+    userId !== null ? fetchUserContext(userId) : Promise.resolve(null),
+  ]);
+  const snapshotAgeSeconds = round2(Math.max(0, (Date.now() - snapshot.builtAtMs) / 1000));
+
+  const foundProps: SnapshotProperty[] = [];
+  const missingIds: number[] = [];
+  for (const id of dedupedIds) {
+    const prop = snapshot.propById.get(id);
+    if (prop) {
+      foundProps.push(prop);
+    } else {
+      missingIds.push(id);
+    }
+  }
+
+  const activePets = userCtx ? resolveActiveScoringPets(userCtx.pets, filterContext) : [];
+  const effectiveUserCtx: UserContextData | null = userCtx
+    ? { ...userCtx, pets: activePets }
+    : null;
+
+  const { scores: contentScores, interactedProvinces, interactedTypes } =
+    effectiveUserCtx !== null
+      ? computeContentScores(snapshot, effectiveUserCtx)
+      : {
+          scores: [] as number[],
+          interactedProvinces: new Set<string>(),
+          interactedTypes: new Set<string>(),
+        };
+
+  // Personalized branch when user has >= 1 active scoring pet matching the filter scope
+  if (effectiveUserCtx !== null && activePets.length > 0) {
+    const totalPets = activePets.length;
+    const tierA: Array<{ score: number; id: number; item: RecommendationItem }> = [];
+    const tierB: Array<{ matchedCount: number; score: number; id: number; item: RecommendationItem }> =
+      [];
+    const tierC: Array<{ score: number; id: number; item: RecommendationItem }> = [];
+
+    for (const prop of foundProps) {
+      const matchedPets = activePets.filter((pet) => petMatchesProperty(pet, prop));
+      const matchedCount = matchedPets.length;
+
+      const matchTier: MatchTier =
+        matchedCount === totalPets
+          ? 'all_pets'
+          : matchedCount > 0
+          ? 'partial_pets'
+          : 'context_fallback';
+
+      const { sCompat, energyLabels } = computeMatchedPetsCompat(matchedPets, totalPets, prop);
+
+      const idx = snapshot.propIdxById.get(prop.id) ?? 0;
+      const sContent = contentScores[idx] ?? 0;
+      const sQuality = snapshot.qualityScores.get(prop.id) ?? 0;
+      const sPopularity = snapshot.popularityScores.get(prop.id) ?? 0;
+
+      const baseHybridScore =
+        0.35 * sContent + 0.35 * sCompat + 0.2 * sQuality + 0.1 * sPopularity;
+      const { distanceKm, sGeo } = computePropertyGeo(prop, userLocation);
+      const finalScore =
+        sGeo !== null ? 0.88 * baseHybridScore + 0.12 * sGeo : baseHybridScore;
+      const roundedScore = round4(finalScore);
+
+      const reasons = buildPersonalizedReasons({
+        prop,
+        matchedPets,
+        totalPets,
+        matchTier,
+        energyMatchedLabels: energyLabels,
+        sContent,
+        sCompat,
+        sQuality,
+        sPopularity,
+        interactedProvinces,
+        interactedTypes,
+        distanceKm,
+        sGeo,
+        filterContext,
+        fallbackReason: 'Matches your filter',
+      });
+
+      const item: RecommendationItem = {
+        propertyId: prop.id,
+        score: roundedScore,
+        matchTier,
+        matchReasons: reasons,
+      };
+      if (debug) {
+        item.scoreBreakdown = {
+          sContent: round4(sContent),
+          sCompat: round4(sCompat),
+          sQuality: round4(sQuality),
+          sPopularity: round4(sPopularity),
+          ...(userLocation
+            ? {
+                sGeo: sGeo !== null ? round4(sGeo) : null,
+                distanceKm: distanceKm !== null ? round2(distanceKm) : null,
+              }
+            : {}),
+        };
+      }
+
+      if (matchTier === 'all_pets') {
+        tierA.push({ score: roundedScore, id: prop.id, item });
+      } else if (matchTier === 'partial_pets') {
+        tierB.push({ matchedCount, score: roundedScore, id: prop.id, item });
+      } else {
+        tierC.push({ score: roundedScore, id: prop.id, item });
+      }
+    }
+
+    tierA.sort((a, b) => (b.score !== a.score ? b.score - a.score : a.id - b.id));
+    tierB.sort((a, b) => {
+      if (b.matchedCount !== a.matchedCount) return b.matchedCount - a.matchedCount;
+      if (b.score !== a.score) return b.score - a.score;
+      return a.id - b.id;
+    });
+    tierC.sort((a, b) => (b.score !== a.score ? b.score - a.score : a.id - b.id));
+
+    const ordered: RecommendationItem[] = [
+      ...tierA.map((r) => r.item),
+      ...tierB.map((r) => r.item),
+      ...tierC.map((r) => r.item),
+      ...missingIds.map((id) => buildFallbackMissingItem(id, 'cold_start', debug, userLocation)),
+    ];
+
+    return {
+      recommendations: ordered,
+      meta: {
+        source: 'in_process_fallback',
+        strategy: 'hybrid_filtered_personalized',
+        snapshotAgeSeconds,
+        totalCandidates: dedupedIds.length,
+      },
+    };
+  }
+
+  // Behavioral or Cold-Start branch (guest, petless user, or no active pets matching species filter)
+  const hasUsableBehavior = effectiveUserCtx !== null && contentScores.some((s) => s > 0);
+  const strategy = hasUsableBehavior ? 'hybrid_filtered_behavioral' : 'hybrid_filtered_cold_start';
+
+  const scoredB: Array<{ score: number; id: number; item: RecommendationItem }> = [];
+  for (const prop of foundProps) {
+    const sQ = snapshot.qualityScores.get(prop.id) ?? 0;
+    const sP = snapshot.popularityScores.get(prop.id) ?? 0;
+    let sC = 0;
+    let baseScore: number;
+    if (hasUsableBehavior) {
+      const idx = snapshot.propIdxById.get(prop.id) ?? 0;
+      sC = contentScores[idx] ?? 0;
+      baseScore = 0.35 * sC + 0.4 * sQ + 0.25 * sP;
+    } else {
+      baseScore = 0.6 * sQ + 0.4 * sP;
+    }
+    const { distanceKm, sGeo } = computePropertyGeo(prop, userLocation);
+    const finalScore = sGeo !== null ? 0.85 * baseScore + 0.15 * sGeo : baseScore;
+    const roundedScore = round4(finalScore);
+
+    const reasons =
+      hasUsableBehavior && sC >= 0.12
+        ? buildPersonalizedReasons({
+            prop,
+            matchedPets: [],
+            totalPets: 0,
+            matchTier: 'cold_start',
+            energyMatchedLabels: [],
+            sContent: sC,
+            sCompat: 0,
+            sQuality: sQ,
+            sPopularity: sP,
+            interactedProvinces,
+            interactedTypes,
+            distanceKm,
+            sGeo,
+            filterContext,
+            fallbackReason: 'Matches your filter',
+          })
+        : buildColdStartReasons(
+            prop,
+            sQ,
+            sP,
+            distanceKm,
+            sGeo,
+            filterContext,
+            'Matches your filter'
+          );
+
+    const item: RecommendationItem = {
+      propertyId: prop.id,
+      score: roundedScore,
+      matchTier: 'cold_start',
+      matchReasons: reasons,
+    };
+    if (debug) {
+      item.scoreBreakdown = {
+        sContent: round4(sC),
+        sCompat: 0,
+        sQuality: round4(sQ),
+        sPopularity: round4(sP),
+        ...(userLocation
+          ? {
+              sGeo: sGeo !== null ? round4(sGeo) : null,
+              distanceKm: distanceKm !== null ? round2(distanceKm) : null,
+            }
+          : {}),
+      };
+    }
+    scoredB.push({ score: roundedScore, id: prop.id, item });
+  }
+
+  scoredB.sort((a, b) => (b.score !== a.score ? b.score - a.score : a.id - b.id));
+  const rankedItems: RecommendationItem[] = scoredB.map((r) => r.item);
+
+  for (const id of missingIds) {
+    rankedItems.push(buildFallbackMissingItem(id, 'cold_start', debug, userLocation));
+  }
+
+  return {
+    recommendations: rankedItems,
+    meta: {
+      source: 'in_process_fallback',
+      strategy,
+      snapshotAgeSeconds,
+      totalCandidates: dedupedIds.length,
+    },
+  };
+}
+
 async function fetchFromMlService<T>(
   path: string,
   method: 'GET' | 'POST' = 'GET',
-  timeoutMs = getMlTimeoutMs()
+  timeoutMs = getMlTimeoutMs(),
+  body?: unknown
 ): Promise<T> {
   const url = `${getMlBaseUrl()}${path}`;
   const headers: Record<string, string> = {};
@@ -1687,10 +2095,16 @@ async function fetchFromMlService<T>(
   if (secret && method === 'POST') {
     headers['X-ML-Secret'] = secret;
   }
+  let serializedBody: string | undefined;
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+    serializedBody = JSON.stringify(body);
+  }
 
   const response = await fetch(url, {
     method,
     headers,
+    ...(serializedBody !== undefined ? { body: serializedBody } : {}),
     signal: AbortSignal.timeout(timeoutMs),
   });
 
@@ -1699,6 +2113,164 @@ async function fetchFromMlService<T>(
   }
 
   return (await response.json()) as T;
+}
+
+export async function rankCandidateProperties(
+  params: RankCandidatesParams
+): Promise<RecommendationResult> {
+  const {
+    userId,
+    candidatePropertyIds,
+    filterContext,
+    userLocation = null,
+    debug = false,
+  } = params;
+
+  const dedupedIds: number[] = [];
+  const seen = new Set<number>();
+  for (const rawId of candidatePropertyIds || []) {
+    const id = Number(rawId);
+    if (Number.isInteger(id) && id > 0 && !seen.has(id)) {
+      seen.add(id);
+      dedupedIds.push(id);
+    }
+  }
+
+  if (dedupedIds.length === 0) {
+    return {
+      recommendations: [],
+      meta: {
+        source: 'in_process_fallback',
+        strategy: 'hybrid_filtered_cold_start',
+        snapshotAgeSeconds: 0,
+        latencyMs: 0,
+        totalCandidates: 0,
+      },
+    };
+  }
+
+  const normalizedFilter = {
+    petTypes: filterContext?.petTypes
+      ? [...filterContext.petTypes].map((s) => s.trim()).filter(Boolean).sort()
+      : [],
+    petProfileIds: filterContext?.petProfileIds
+      ? [...filterContext.petProfileIds]
+          .filter((n) => Number.isInteger(n) && n > 0)
+          .sort((a, b) => a - b)
+      : [],
+    facilities: filterContext?.facilities
+      ? [...filterContext.facilities].map((s) => s.trim()).filter(Boolean).sort()
+      : [],
+    maxPrice:
+      filterContext?.maxPrice !== undefined && Number.isFinite(filterContext.maxPrice)
+        ? filterContext.maxPrice
+        : null,
+    province: filterContext?.province?.trim() || null,
+  };
+
+  const sortedIds = [...dedupedIds].sort((a, b) => a - b);
+  const digest = crypto
+    .createHash('sha256')
+    .update(JSON.stringify({ ids: sortedIds, filter: normalizedFilter }))
+    .digest('hex')
+    .slice(0, 24);
+  const locKey = userLocation
+    ? `:loc=${userLocation.lat.toFixed(2)},${userLocation.lng.toFixed(2)}`
+    : '';
+  const cacheKey = `${REC_CACHE_PREFIX}user:${userId ?? 'guest'}:rank:debug=${
+    debug ? '1' : '0'
+  }:${digest}${locKey}`;
+
+  const cached = await cacheService.get<RecommendationResult>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const startedAt = Date.now();
+  let result: RecommendationResult;
+
+  const mlRequestBody: Record<string, unknown> = {
+    user_id: userId,
+    candidate_property_ids: dedupedIds,
+    debug,
+  };
+  if (filterContext?.petTypes && filterContext.petTypes.length > 0) {
+    mlRequestBody.pet_types = filterContext.petTypes;
+  }
+  if (filterContext?.petProfileIds && filterContext.petProfileIds.length > 0) {
+    mlRequestBody.pet_profile_ids = filterContext.petProfileIds;
+  }
+  if (filterContext?.facilities && filterContext.facilities.length > 0) {
+    mlRequestBody.facilities = filterContext.facilities;
+  }
+  if (filterContext?.maxPrice !== undefined && Number.isFinite(filterContext.maxPrice)) {
+    mlRequestBody.max_price = filterContext.maxPrice;
+  }
+  if (filterContext?.province && filterContext.province.trim() !== '') {
+    mlRequestBody.province = filterContext.province.trim();
+  }
+  if (userLocation) {
+    mlRequestBody.lat = userLocation.lat;
+    mlRequestBody.lng = userLocation.lng;
+  }
+
+  try {
+    const mlResp = await fetchFromMlService<MlApiRecommendationResponse>(
+      '/ml/v1/rank/candidates',
+      'POST',
+      getMlTimeoutMs(),
+      mlRequestBody
+    );
+    const latencyMs = Math.max(1, Date.now() - startedAt);
+    const mapped = mapMlResponse(mlResp, latencyMs, debug);
+
+    // Ensure every input candidatePropertyId is preserved once
+    const allowedSet = new Set(dedupedIds);
+    const seenReturned = new Set<number>();
+    const normalizedRecs: RecommendationItem[] = [];
+    for (const item of mapped.recommendations) {
+      if (allowedSet.has(item.propertyId) && !seenReturned.has(item.propertyId)) {
+        seenReturned.add(item.propertyId);
+        normalizedRecs.push(item);
+      }
+    }
+    for (const id of dedupedIds) {
+      if (!seenReturned.has(id)) {
+        seenReturned.add(id);
+        normalizedRecs.push(buildFallbackMissingItem(id, 'context_fallback', debug, userLocation));
+      }
+    }
+
+    result = {
+      recommendations: normalizedRecs,
+      meta: {
+        ...mapped.meta,
+        totalCandidates: dedupedIds.length,
+      },
+    };
+  } catch (err) {
+    console.warn(
+      '[RecommendationService] ML rank/candidates unavailable, using in-process fallback:',
+      err instanceof Error ? err.message : err
+    );
+    const fb = await fallbackRankCandidates({
+      userId,
+      dedupedIds,
+      filterContext,
+      userLocation,
+      debug,
+    });
+    result = {
+      recommendations: fb.recommendations,
+      meta: {
+        ...fb.meta,
+        latencyMs: Math.max(1, Date.now() - startedAt),
+      },
+    };
+  }
+
+  await cacheService.set(cacheKey, result, REC_CACHE_TTL_SECONDS);
+  return result;
 }
 
 export async function getUserOrColdStartRecommendations(
@@ -1852,13 +2424,16 @@ export async function recordUserBehaviorSafe(
 }
 
 export async function invalidateUserRecommendationCache(userId: number): Promise<number> {
-  return cacheService.delByPrefix(`${REC_CACHE_PREFIX}user:${userId}:`);
+  const recCount = await cacheService.delByPrefix(`${REC_CACHE_PREFIX}user:${userId}:`);
+  const listCount = await cacheService.delByPrefix(`properties:list:user:${userId}:`);
+  return recCount + listCount;
 }
 
 export async function invalidateAllRecommendationCaches(): Promise<number> {
   const recCount = await cacheService.delByPrefix(REC_CACHE_PREFIX);
+  const listCount = await cacheService.delByPrefix('properties:list:');
   await cacheService.del(CATALOG_SNAPSHOT_KEY);
-  return recCount;
+  return recCount + listCount;
 }
 
 export function triggerMlRefresh(): void {

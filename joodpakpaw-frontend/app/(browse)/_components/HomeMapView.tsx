@@ -32,10 +32,11 @@ interface HomeMapViewProps {
 
 function MapCenterSync({ center }: { center: { lat: number; lng: number } }) {
   const map = useMap()
+  const { lat, lng } = center
   useEffect(() => {
     if (!map) return
-    map.panTo(center)
-  }, [map, center.lat, center.lng])
+    map.panTo({ lat, lng })
+  }, [map, lat, lng])
   return null
 }
 
@@ -185,6 +186,7 @@ export function HomeMapView({
               src={imgSrc}
               alt={selectedProperty.title}
               fill
+              sizes="(max-width: 640px) 120px, 160px"
               unoptimized
               className="object-cover"
             />

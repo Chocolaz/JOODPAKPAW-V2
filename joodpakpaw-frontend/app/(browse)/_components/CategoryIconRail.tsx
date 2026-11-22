@@ -191,6 +191,7 @@ export function CategoryIconRail({
                       src={assetPath(cat.clayIcon)}
                       alt={cat.label}
                       fill
+                      sizes="28px"
                       className="object-contain"
                     />
                   </span>

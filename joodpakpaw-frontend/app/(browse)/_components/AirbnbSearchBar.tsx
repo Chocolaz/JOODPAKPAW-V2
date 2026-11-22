@@ -1,6 +1,18 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useSyncExternalStore } from 'react'
+
+function subscribeDesktopCalendar(cb: () => void) {
+  if (typeof window === 'undefined' || !window.matchMedia) return () => {}
+  const mq = window.matchMedia('(min-width: 768px)')
+  mq.addEventListener('change', cb)
+  return () => mq.removeEventListener('change', cb)
+}
+
+function getDesktopCalendarSnapshot() {
+  if (typeof window === 'undefined' || !window.matchMedia) return true
+  return window.matchMedia('(min-width: 768px)').matches
+}
 import Image from 'next/image'
 import Link from 'next/link'
 import {
@@ -192,7 +204,11 @@ export function AirbnbSearchBar({
   const [provinceFilter, setProvinceFilter] = useState('')
   const [draftProvince, setDraftProvince] = useState(province)
 
-  const [isDesktopCalendar, setIsDesktopCalendar] = useState(true)
+  const isDesktopCalendar = useSyncExternalStore(
+    subscribeDesktopCalendar,
+    getDesktopCalendarSnapshot,
+    () => true
+  )
   const [draftRange, setDraftRange] = useState<DateRange | undefined>(() => {
     const from = parseIsoSafe(checkIn)
     const to = parseIsoSafe(checkOut)
@@ -202,17 +218,6 @@ export function AirbnbSearchBar({
   const [draftSizeId, setDraftSizeId] = useState<string>(petSizeCategoryId)
   const [draftPetProfileIds, setDraftPetProfileIds] =
     useState<number[]>(petProfileIds)
-
-  // Responsive 2 months on desktop, 1 month on mobile
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return
-    const mq = window.matchMedia('(min-width: 768px)')
-    setIsDesktopCalendar(mq.matches)
-    const handleChange = (e: MediaQueryListEvent) =>
-      setIsDesktopCalendar(e.matches)
-    mq.addEventListener('change', handleChange)
-    return () => mq.removeEventListener('change', handleChange)
-  }, [])
 
   // Load all 77 Thai provinces once (API with automatic geothai fallback)
   useEffect(() => {
@@ -619,6 +624,7 @@ export function AirbnbSearchBar({
                     src={assetPath(sp.icon)}
                     alt={sp.label}
                     fill
+                    sizes="28px"
                     className="object-contain"
                   />
                 </div>

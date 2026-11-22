@@ -96,7 +96,12 @@ export interface PropertyHost {
   isVerifiedHost?: boolean
 }
 
-export type MatchTier = 'all_pets' | 'partial_pets' | 'cold_start' | 'similar'
+export type MatchTier =
+  | 'all_pets'
+  | 'partial_pets'
+  | 'cold_start'
+  | 'similar'
+  | 'context_fallback'
 
 export interface ScoreBreakdown {
   sContent: number
