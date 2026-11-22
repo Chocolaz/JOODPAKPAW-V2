@@ -12,17 +12,27 @@ interface PropertyListProps {
   showPetPolicyChip?: boolean
   showHeartIcon?: boolean
   showMatchReason?: boolean
+  showTotalPrice?: boolean
+  checkIn?: string
+  checkOut?: string
+  highlightedPropertyId?: number | null
+  onPropertyHover?: (id: number | null) => void
 }
 
 export function PropertyList({
   properties,
-  className = 'grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5 px-4 sm:px-5',
+  className = 'grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 md:gap-6',
   buildHref,
   showRoomCount,
   showStatusIcon,
   showPetPolicyChip,
   showHeartIcon,
   showMatchReason,
+  showTotalPrice = true,
+  checkIn,
+  checkOut,
+  highlightedPropertyId,
+  onPropertyHover,
 }: PropertyListProps) {
   return (
     <div className={className}>
@@ -36,6 +46,11 @@ export function PropertyList({
           showPetPolicyChip={showPetPolicyChip}
           showHeartIcon={showHeartIcon}
           showMatchReason={showMatchReason}
+          showTotalPrice={showTotalPrice}
+          checkIn={checkIn}
+          checkOut={checkOut}
+          isHighlighted={highlightedPropertyId === property.id}
+          onHoverChange={onPropertyHover}
         />
       ))}
     </div>

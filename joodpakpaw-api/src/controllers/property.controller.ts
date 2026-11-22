@@ -10,6 +10,8 @@ import {
 } from '../services/recommendation.service';
 import {
   syncPropertyBookingCount as syncPropertyBookingCountCanonical,
+  getBookingDateBounds,
+  getDatesInRange,
 } from '../services/bookingLifecycle.service';
 /**
  * Safely converts any Date object, ISO string, or timestamp into an ISO string.
@@ -278,6 +280,7 @@ export function formatPropertyDto(
  */
 export async function invalidatePropertyCaches(): Promise<number> {
   const deleted = await cacheService.delByPrefix('properties:');
+  await cacheService.del('locations:provinces');
   await invalidateAllRecommendationCaches();
   triggerMlRefresh();
   return deleted;
@@ -345,7 +348,201 @@ export async function getProperties(
   next: NextFunction
 ): Promise<void> {
   try {
-    const cacheKey = `properties:list:${JSON.stringify(req.query)}`;
+    // ------------------------------------------------------------------
+    // 0. Parse & validate discovery query params upfront (before cache)
+    // ------------------------------------------------------------------
+    const checkInRaw =
+      typeof req.query.checkIn === 'string' ? req.query.checkIn.trim() : '';
+    const checkOutRaw =
+      typeof req.query.checkOut === 'string' ? req.query.checkOut.trim() : '';
+    const hasDateFilter = Boolean(checkInRaw || checkOutRaw);
+    let nightDateStrs: string[] = [];
+
+    if (hasDateFilter) {
+      if (!checkInRaw || !checkOutRaw) {
+        throw new AppError(
+          'Both checkIn and checkOut are required when filtering by dates.',
+          400,
+          'B-4003'
+        );
+      }
+
+      const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!isoDateRegex.test(checkInRaw) || !isoDateRegex.test(checkOutRaw)) {
+        throw new AppError(
+          'Invalid date format. Expected YYYY-MM-DD for checkIn and checkOut.',
+          400,
+          'B-4003'
+        );
+      }
+
+      const checkInDate = new Date(`${checkInRaw}T00:00:00.000Z`);
+      const checkOutDate = new Date(`${checkOutRaw}T00:00:00.000Z`);
+      if (
+        isNaN(checkInDate.getTime()) ||
+        isNaN(checkOutDate.getTime()) ||
+        checkInDate.toISOString().slice(0, 10) !== checkInRaw ||
+        checkOutDate.toISOString().slice(0, 10) !== checkOutRaw
+      ) {
+        throw new AppError(
+          'Invalid calendar date for checkIn or checkOut.',
+          400,
+          'B-4003'
+        );
+      }
+
+      if (checkOutRaw <= checkInRaw) {
+        throw new AppError(
+          'Check-out date must be after check-in date.',
+          400,
+          'B-4003'
+        );
+      }
+
+      const { todayThaiStr, maxAdvanceStr } = getBookingDateBounds();
+      if (checkInRaw < todayThaiStr) {
+        throw new AppError(
+          'Check-in date cannot be in the past.',
+          400,
+          'B-4003'
+        );
+      }
+
+      if (checkOutRaw > maxAdvanceStr) {
+        throw new AppError(
+          'Dates cannot exceed 180 days in advance.',
+          400,
+          'B-4003'
+        );
+      }
+
+      const diffDays = Math.round(
+        (checkOutDate.getTime() - checkInDate.getTime()) / (24 * 60 * 60 * 1000)
+      );
+      if (diffDays <= 0 || diffDays > 90) {
+        throw new AppError(
+          'Stay length must be between 1 and 90 nights.',
+          400,
+          'B-4003'
+        );
+      }
+
+      nightDateStrs = getDatesInRange(checkInRaw, checkOutRaw);
+    }
+
+    const petSizeCategoryIdRaw =
+      req.query.petSizeCategoryId !== undefined
+        ? String(req.query.petSizeCategoryId).trim()
+        : '';
+    let petSizeCategoryId: number | null = null;
+    if (petSizeCategoryIdRaw !== '') {
+      if (!/^\d+$/.test(petSizeCategoryIdRaw)) {
+        throw new AppError(
+          'petSizeCategoryId must be a positive integer.',
+          400,
+          'T-2007'
+        );
+      }
+      const parsed = parseInt(petSizeCategoryIdRaw, 10);
+      if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+        throw new AppError(
+          'petSizeCategoryId must be a positive integer.',
+          400,
+          'T-2007'
+        );
+      }
+      petSizeCategoryId = parsed;
+    }
+
+    const petProfileIdsRaw =
+      req.query.petProfileIds !== undefined
+        ? Array.isArray(req.query.petProfileIds)
+          ? req.query.petProfileIds.join(',')
+          : String(req.query.petProfileIds).trim()
+        : '';
+    const parsedPetProfileIds: number[] = [];
+    if (petProfileIdsRaw !== '') {
+      const seen = new Set<number>();
+      for (const tok of petProfileIdsRaw
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean)) {
+        if (!/^\d+$/.test(tok)) {
+          throw new AppError(
+            'petProfileIds must be comma-separated positive integers.',
+            400,
+            'T-2007'
+          );
+        }
+        const num = parseInt(tok, 10);
+        if (!Number.isSafeInteger(num) || num <= 0) {
+          throw new AppError(
+            'petProfileIds must be comma-separated positive integers.',
+            400,
+            'T-2007'
+          );
+        }
+        if (!seen.has(num)) {
+          seen.add(num);
+          parsedPetProfileIds.push(num);
+        }
+      }
+    }
+
+    const propertyTypeIdRaw =
+      req.query.propertyTypeId !== undefined
+        ? String(req.query.propertyTypeId).trim()
+        : '';
+    let propertyTypeId: number | null = null;
+    if (propertyTypeIdRaw !== '') {
+      if (!/^\d+$/.test(propertyTypeIdRaw)) {
+        throw new AppError(
+          'propertyTypeId must be a positive integer.',
+          400,
+          'T-2007'
+        );
+      }
+      const parsed = parseInt(propertyTypeIdRaw, 10);
+      if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+        throw new AppError(
+          'propertyTypeId must be a positive integer.',
+          400,
+          'T-2007'
+        );
+      }
+      propertyTypeId = parsed;
+    }
+
+    const propertyTypeRaw =
+      typeof req.query.propertyType === 'string'
+        ? req.query.propertyType.trim()
+        : '';
+
+    const facilitiesRaw =
+      req.query.facilities !== undefined
+        ? Array.isArray(req.query.facilities)
+          ? req.query.facilities.join(',')
+          : String(req.query.facilities).trim()
+        : '';
+
+    const minPriceRaw =
+      req.query.minPrice !== undefined ? String(req.query.minPrice).trim() : '';
+    let minPrice = NaN;
+    if (minPriceRaw !== '') {
+      minPrice = parseFloat(minPriceRaw);
+      if (!Number.isFinite(minPrice) || minPrice < 0) {
+        throw new AppError(
+          'minPrice must be a non-negative number.',
+          400,
+          'T-2007'
+        );
+      }
+    }
+
+    // Scope cache key by user when petProfileIds is provided (prevents cross-user pet filter leak)
+    const cacheScope =
+      parsedPetProfileIds.length > 0 ? `u:${req.user?.id ?? 'anon'}:` : '';
+    const cacheKey = `properties:list:${cacheScope}${JSON.stringify(req.query)}`;
     const cached = await cacheService.get<any>(cacheKey);
 
     if (cached) {
@@ -415,7 +612,7 @@ export async function getProperties(
           images: {
             where: { deletedAt: null },
             orderBy: { id: 'asc' },
-            take: 3,
+            take: 5,
           },
           propertyType: true,
           roomCategories: {
@@ -510,6 +707,60 @@ export async function getProperties(
         ? parseFloat(String(req.query.maxPrice))
         : NaN;
 
+    // Load authenticated user's selected pet profiles (if petProfileIds passed)
+    let userPets: Array<{
+      id: number;
+      petTypeId: number;
+      weight: number | null;
+      petSizeCategoryId: number | null;
+      sizeCode: number | null;
+    }> = [];
+    if (parsedPetProfileIds.length > 0 && req.user?.id) {
+      const dbPets = await prisma.petProfile.findMany({
+        where: {
+          id: { in: parsedPetProfileIds },
+          guestId: req.user.id,
+          deletedAt: null,
+        },
+        include: {
+          petSizeCategory: true,
+        },
+      });
+      userPets = dbPets.map((p) => ({
+        id: p.id,
+        petTypeId: p.petTypeId,
+        weight: p.weight != null ? Number(p.weight) : null,
+        petSizeCategoryId: p.petSizeCategoryId ?? null,
+        sizeCode: p.petSizeCategory?.code ?? null,
+      }));
+
+      // None of the requested petProfileIds belong to this user -> return empty result safely
+      if (userPets.length === 0) {
+        res.status(200).json({
+          code: 'S-0000',
+          message: 'Success',
+          data: [],
+          pagination: {
+            page,
+            limit,
+            totalRows: 0,
+            totalPages: 0,
+          },
+        });
+        return;
+      }
+    }
+
+    // Resolve requested petSizeCategory code (if petSizeCategoryId passed)
+    let reqSizeCode: number | null = null;
+    if (petSizeCategoryId !== null) {
+      const sizeCat = await prisma.petSizeCategory.findUnique({
+        where: { id: petSizeCategoryId },
+        select: { id: true, code: true },
+      });
+      reqSizeCode = sizeCat?.code ?? null;
+    }
+
     const andConditions: Prisma.PropertyWhereInput[] = [
       { isActive: true },
       { deletedAt: null },
@@ -537,9 +788,29 @@ export async function getProperties(
     }
 
     if (province) {
-      andConditions.push({
-        province: { contains: province, mode: 'insensitive' },
+      const normalizedProvQuery = province.replace(/^(จังหวัด|จ\.)\s*/i, '').trim();
+      const matchedProvince = await prisma.province.findFirst({
+        where: {
+          OR: [
+            { nameEn: { equals: normalizedProvQuery, mode: 'insensitive' } },
+            { nameTh: { equals: normalizedProvQuery, mode: 'insensitive' } },
+          ],
+        },
+        select: { nameEn: true, nameTh: true },
       });
+
+      if (matchedProvince) {
+        andConditions.push({
+          OR: [
+            { province: { contains: matchedProvince.nameEn, mode: 'insensitive' } },
+            { province: { contains: matchedProvince.nameTh, mode: 'insensitive' } },
+          ],
+        });
+      } else {
+        andConditions.push({
+          province: { contains: province, mode: 'insensitive' },
+        });
+      }
     }
 
     if (!isNaN(days) && days > 0) {
@@ -549,39 +820,90 @@ export async function getProperties(
       });
     }
 
-    if (petTypesRaw) {
-      const tokens = petTypesRaw
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean);
+    const petTypeTokens = petTypesRaw
+      ? petTypesRaw
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : [];
 
-      if (tokens.length > 0) {
-        const petOrFilters: Prisma.RoomCategoryPetWhereInput[] = [];
-        for (const token of tokens) {
-          const numId = Number(token);
-          if (!isNaN(numId) && Number.isInteger(numId) && numId > 0) {
-            petOrFilters.push({ petId: numId });
-          } else {
-            petOrFilters.push({
-              pet: {
-                name: { contains: token, mode: 'insensitive' },
-              },
-            });
-          }
+    if (petTypeTokens.length > 0) {
+      const petOrFilters: Prisma.RoomCategoryPetWhereInput[] = [];
+      for (const token of petTypeTokens) {
+        const numId = Number(token);
+        if (!isNaN(numId) && Number.isInteger(numId) && numId > 0) {
+          petOrFilters.push({ petId: numId });
+        } else {
+          petOrFilters.push({
+            pet: {
+              name: { contains: token, mode: 'insensitive' },
+            },
+          });
         }
-        andConditions.push({
-          roomCategories: {
-            some: {
-              deletedAt: null,
-              pets: {
-                some: {
-                  OR: petOrFilters,
-                },
+      }
+      andConditions.push({
+        roomCategories: {
+          some: {
+            deletedAt: null,
+            pets: {
+              some: {
+                OR: petOrFilters,
               },
             },
           },
-        });
+        },
+      });
+    }
+
+    // Lifestyle / Intent filters: facilities, propertyType, propertyTypeId, minPrice
+    if (facilitiesRaw) {
+      const facilityTokens = facilitiesRaw
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      if (facilityTokens.length > 0) {
+        const facilityOrFilters: Prisma.PropertyFacilityWhereInput[] = [];
+        for (const token of facilityTokens) {
+          if (/^\d+$/.test(token)) {
+            const numId = parseInt(token, 10);
+            if (Number.isSafeInteger(numId) && numId > 0) {
+              facilityOrFilters.push({ facilityId: numId });
+              continue;
+            }
+          }
+          facilityOrFilters.push({
+            facility: {
+              name: { contains: token, mode: 'insensitive' },
+            },
+          });
+        }
+        if (facilityOrFilters.length > 0) {
+          andConditions.push({
+            facilities: {
+              some: {
+                OR: facilityOrFilters,
+              },
+            },
+          });
+        }
       }
+    }
+
+    if (propertyTypeId !== null) {
+      andConditions.push({ propertyTypeId });
+    }
+
+    if (propertyTypeRaw) {
+      andConditions.push({
+        propertyType: {
+          is: {
+            OR: [
+              { name: { contains: propertyTypeRaw, mode: 'insensitive' } },
+              { label: { contains: propertyTypeRaw, mode: 'insensitive' } },
+            ],
+          },
+        },
+      });
     }
 
     // 1. Push minRating directly to SQL
@@ -589,7 +911,10 @@ export async function getProperties(
       andConditions.push({ avgRating: { gte: minRating } });
     }
 
-    // 2. Push maxPrice directly to SQL
+    // 2. Push minPrice & maxPrice directly to SQL
+    if (!isNaN(minPrice) && minPrice >= 0) {
+      andConditions.push({ minPrice: { gte: minPrice } });
+    }
     if (!isNaN(maxPrice) && maxPrice >= 0) {
       andConditions.push({ minPrice: { lte: maxPrice, gt: 0 } });
     }
@@ -614,58 +939,330 @@ export async function getProperties(
       orderBy = { createdAt: 'desc' };
     }
 
-    // 4. Push pagination directly to SQL
-    const totalRows = await prisma.property.count({
-      where: { AND: andConditions },
-    });
-    const totalPages = totalRows > 0 ? Math.ceil(totalRows / limit) : 0;
+    const needsRoomLevelEval =
+      hasDateFilter || petSizeCategoryId !== null || userPets.length > 0;
 
-    const dbProperties =
-      totalRows > 0
-        ? await prisma.property.findMany({
-            where: { AND: andConditions },
-            include: {
-              images: {
-                where: { deletedAt: null },
-                orderBy: { id: 'asc' },
-                take: 3,
-              },
-              propertyType: true,
-              roomCategories: {
-                where: { deletedAt: null },
-                select: {
-                  id: true,
-                  basePrice: true,
-                  pets: {
-                    select: {
-                      pet: true,
+    let paginatedData: any[] = [];
+    let totalRows = 0;
+    let totalPages = 0;
+
+    if (!needsRoomLevelEval) {
+      // Fast SQL-paginated path (100% backward compatible)
+      totalRows = await prisma.property.count({
+        where: { AND: andConditions },
+      });
+      totalPages = totalRows > 0 ? Math.ceil(totalRows / limit) : 0;
+
+      const dbProperties =
+        totalRows > 0
+          ? await prisma.property.findMany({
+              where: { AND: andConditions },
+              include: {
+                images: {
+                  where: { deletedAt: null },
+                  orderBy: { id: 'asc' },
+                  take: 5,
+                },
+                propertyType: true,
+                roomCategories: {
+                  where: { deletedAt: null },
+                  select: {
+                    id: true,
+                    basePrice: true,
+                    pets: {
+                      select: {
+                        pet: true,
+                      },
                     },
                   },
+                  orderBy: { basePrice: 'asc' },
                 },
-                orderBy: { basePrice: 'asc' },
+                host: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    avatar: true,
+                    isVerifiedHost: true,
+                  },
+                },
               },
-              host: {
+              orderBy,
+              skip: (page - 1) * limit,
+              take: limit,
+            })
+          : [];
+
+      const anonymousFavMap = new Map<number, number>();
+      paginatedData = dbProperties.map((p) => {
+        const dto = formatPropertyDto(p, anonymousFavMap);
+        const { _bookingCount, ...rest } = dto;
+        return rest;
+      });
+    } else {
+      // Room-level availability & pet-safe eligibility path
+      const candidateProperties = await prisma.property.findMany({
+        where: { AND: andConditions },
+        include: {
+          images: {
+            where: { deletedAt: null },
+            orderBy: { id: 'asc' },
+            take: 5,
+          },
+          propertyType: true,
+          roomCategories: {
+            where: { deletedAt: null },
+            select: {
+              id: true,
+              name: true,
+              totalRoom: true,
+              numberOfPets: true,
+              basePrice: true,
+              propertyId: true,
+              petSizeCategoryId: true,
+              petSizeCategory: {
                 select: {
                   id: true,
-                  firstName: true,
-                  lastName: true,
-                  avatar: true,
-                  isVerifiedHost: true,
+                  name: true,
+                  code: true,
+                  min: true,
+                  max: true,
+                },
+              },
+              pets: {
+                select: {
+                  petId: true,
+                  pet: true,
                 },
               },
             },
-            orderBy,
-            skip: (page - 1) * limit,
-            take: limit,
-          })
-        : [];
+            orderBy: { basePrice: 'asc' },
+          },
+          host: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+              isVerifiedHost: true,
+            },
+          },
+        },
+        orderBy,
+      });
 
-    const anonymousFavMap = new Map<number, number>();
-    const paginatedData = dbProperties.map((p) => {
-      const dto = formatPropertyDto(p, anonymousFavMap);
-      const { _bookingCount, ...rest } = dto;
-      return rest;
-    });
+      // Batch fetch room_category_calendars across [checkIn, checkOut) if dates provided
+      const calendarMap = new Map<
+        string,
+        { bookedRooms: number; unavailableRooms: number; priceAdjustment: any }
+      >();
+      if (hasDateFilter && candidateProperties.length > 0 && nightDateStrs.length > 0) {
+        const allRcIds: number[] = [];
+        for (const prop of candidateProperties) {
+          for (const rc of prop.roomCategories) {
+            allRcIds.push(rc.id);
+          }
+        }
+        if (allRcIds.length > 0) {
+          const firstNight = new Date(`${nightDateStrs[0]}T00:00:00.000Z`);
+          const lastNight = new Date(
+            `${nightDateStrs[nightDateStrs.length - 1]}T00:00:00.000Z`
+          );
+          const calendars = await prisma.roomCategoryCalendar.findMany({
+            where: {
+              roomCategoryId: { in: allRcIds },
+              deletedAt: null,
+              date: {
+                gte: firstNight,
+                lte: lastNight,
+              },
+            },
+            select: {
+              roomCategoryId: true,
+              date: true,
+              bookedRooms: true,
+              unavailableRooms: true,
+              priceAdjustment: true,
+            },
+          });
+          for (const cal of calendars) {
+            const key = `${cal.roomCategoryId}:${toSafeIsoString(cal.date).slice(0, 10)}`;
+            calendarMap.set(key, {
+              bookedRooms: cal.bookedRooms,
+              unavailableRooms: cal.unavailableRooms,
+              priceAdjustment: cal.priceAdjustment,
+            });
+          }
+        }
+      }
+
+      const rcMatchesPetTypesFilter = (rc: any): boolean => {
+        if (petTypeTokens.length === 0) return true;
+        return rc.pets.some((rcp: any) => {
+          const petId = rcp.petId ?? rcp.pet?.id;
+          const petName = String(rcp.pet?.name || '').toLowerCase();
+          return petTypeTokens.some((tok) => {
+            const numId = Number(tok);
+            if (!isNaN(numId) && Number.isInteger(numId) && numId > 0) {
+              return petId === numId;
+            }
+            return petName.includes(tok.toLowerCase());
+          });
+        });
+      };
+
+      const rcMatchesSizeFilter = (rc: any): boolean => {
+        if (petSizeCategoryId === null) return true;
+        if (rc.petSizeCategoryId == null) return true;
+        const rcSizeCode = rc.petSizeCategory?.code ?? null;
+        if (reqSizeCode !== null && rcSizeCode !== null) {
+          return reqSizeCode <= rcSizeCode;
+        }
+        return petSizeCategoryId <= rc.petSizeCategoryId;
+      };
+
+      const rcMatchesUserPet = (
+        rc: any,
+        pet: {
+          petTypeId: number;
+          weight: number | null;
+          petSizeCategoryId: number | null;
+          sizeCode: number | null;
+        }
+      ): boolean => {
+        const speciesMatch = rc.pets.some(
+          (rcp: any) => (rcp.petId ?? rcp.pet?.id) === pet.petTypeId
+        );
+        if (!speciesMatch) return false;
+        if (rc.petSizeCategoryId == null) return true;
+        const rcSizeCode = rc.petSizeCategory?.code ?? null;
+        if (pet.sizeCode !== null && rcSizeCode !== null) {
+          return pet.sizeCode <= rcSizeCode;
+        }
+        if (pet.weight !== null && rc.petSizeCategory?.max != null) {
+          return pet.weight <= Number(rc.petSizeCategory.max);
+        }
+        if (pet.petSizeCategoryId !== null) {
+          return pet.petSizeCategoryId <= rc.petSizeCategoryId;
+        }
+        return false;
+      };
+
+      const evaluateRcAvailability = (
+        rc: any
+      ): { available: boolean; stayTotal: number } => {
+        const totalRoom = rc.totalRoom ?? 0;
+        if (totalRoom <= 0) return { available: false, stayTotal: 0 };
+        const basePrice = Number(rc.basePrice || 0);
+        let stayTotal = 0;
+        for (const dateKey of nightDateStrs) {
+          const cal = calendarMap.get(`${rc.id}:${dateKey}`);
+          const booked = cal ? cal.bookedRooms : 0;
+          const unavailable = cal ? cal.unavailableRooms : 0;
+          if (totalRoom - booked - unavailable < 1) {
+            return { available: false, stayTotal: 0 };
+          }
+          const priceAdj = cal ? Number(cal.priceAdjustment || 0) : 0;
+          stayTotal += Math.max(0, basePrice + priceAdj);
+        }
+        return { available: true, stayTotal };
+      };
+
+      const evaluatedProperties: Array<{
+        prop: any;
+        stayNights?: number;
+        stayTotalPrice?: number;
+      }> = [];
+
+      for (const prop of candidateProperties) {
+        const eligibleRcs: Array<{ rc: any; stayTotal: number }> = [];
+
+        for (const rc of prop.roomCategories) {
+          if (!rcMatchesPetTypesFilter(rc)) continue;
+          if (!rcMatchesSizeFilter(rc)) continue;
+
+          if (hasDateFilter) {
+            const avail = evaluateRcAvailability(rc);
+            if (!avail.available) continue;
+            eligibleRcs.push({ rc, stayTotal: avail.stayTotal });
+          } else {
+            eligibleRcs.push({ rc, stayTotal: Number(rc.basePrice || 0) });
+          }
+        }
+
+        if (eligibleRcs.length === 0) continue;
+
+        let pricingPool = eligibleRcs;
+        if (userPets.length > 0) {
+          // Every selected pet must have at least 1 eligible (and date-available) room category
+          let allPetsMatched = true;
+          const matchedRcSet = new Set<number>();
+          for (const pet of userPets) {
+            let petHasRoom = false;
+            for (const entry of eligibleRcs) {
+              if (rcMatchesUserPet(entry.rc, pet)) {
+                petHasRoom = true;
+                matchedRcSet.add(entry.rc.id);
+              }
+            }
+            if (!petHasRoom) {
+              allPetsMatched = false;
+              break;
+            }
+          }
+          if (!allPetsMatched) continue;
+          pricingPool = eligibleRcs.filter((e) => matchedRcSet.has(e.rc.id));
+        }
+
+        if (hasDateFilter) {
+          const stayTotalPrice = Math.min(...pricingPool.map((e) => e.stayTotal));
+          evaluatedProperties.push({
+            prop,
+            stayNights: nightDateStrs.length,
+            stayTotalPrice,
+          });
+        } else {
+          evaluatedProperties.push({ prop });
+        }
+      }
+
+      // Sort by stayTotalPrice when date-filtered and price sorting is requested
+      if (hasDateFilter) {
+        if (
+          sortBy === 'price' ||
+          sortBy === 'price_asc' ||
+          sortBy === 'best_value'
+        ) {
+          evaluatedProperties.sort(
+            (a, b) => (a.stayTotalPrice ?? 0) - (b.stayTotalPrice ?? 0)
+          );
+        } else if (sortBy === 'price_desc') {
+          evaluatedProperties.sort(
+            (a, b) => (b.stayTotalPrice ?? 0) - (a.stayTotalPrice ?? 0)
+          );
+        }
+      }
+
+      totalRows = evaluatedProperties.length;
+      totalPages = totalRows > 0 ? Math.ceil(totalRows / limit) : 0;
+      const pageSlice = evaluatedProperties.slice(
+        (page - 1) * limit,
+        page * limit
+      );
+
+      const anonymousFavMap = new Map<number, number>();
+      paginatedData = pageSlice.map(({ prop, stayNights, stayTotalPrice }) => {
+        const dto = formatPropertyDto(prop, anonymousFavMap);
+        const { _bookingCount, ...rest } = dto;
+        return hasDateFilter
+          ? {
+              ...rest,
+              stayNights,
+              stayTotalPrice,
+            }
+          : rest;
+      });
+    }
 
     const baseResponse = {
       code: 'S-0000',
@@ -679,8 +1276,12 @@ export async function getProperties(
       },
     };
 
-    // Cache the anonymous result for 60 seconds
-    await cacheService.set(cacheKey, baseResponse, 60);
+    // Cache the result (shorter TTL when date-filtered or pet-scoped)
+    await cacheService.set(
+      cacheKey,
+      baseResponse,
+      hasDateFilter || parsedPetProfileIds.length > 0 ? 30 : 60
+    );
 
     if (req.user?.id) {
       const favMap = await getUserFavoriteMap(req.user.id);
@@ -731,6 +1332,7 @@ export async function getFeaturedSections(
           images: {
             where: { deletedAt: null },
             orderBy: { id: 'asc' },
+            take: 5,
           },
           propertyType: true,
           facilities: {

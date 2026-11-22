@@ -951,6 +951,55 @@
             "description": "List report categories filtered by `type=property|review|unban`."
           },
           "response": []
+        },
+        {
+          "name": "Get All Thai Provinces (77 Provinces)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Returns clean standard envelope with 77 provinces\", function () {",
+                  "    pm.expect(json.code).to.eql(\"S-0000\");",
+                  "    pm.expect(json.data).to.be.an(\"object\");",
+                  "    pm.expect(json.data.provinces).to.be.an(\"array\");",
+                  "    pm.expect(json.data.provinces.length).to.eql(77);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/locations/provinces",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "locations",
+                "provinces"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Optional case-insensitive substring filter against nameEn and nameTh"
+                }
+              ]
+            },
+            "description": "Returns all 77 official Thai provinces from PostgreSQL with active property counts, ordered by propertyCount DESC, nameEn ASC. Supports optional ?q= bilingual substring search."
+          },
+          "response": []
         }
       ]
     },
@@ -1006,10 +1055,58 @@
                 {
                   "key": "sortBy",
                   "value": "rating"
+                },
+                {
+                  "key": "checkIn",
+                  "value": "2026-11-25",
+                  "description": "Optional check-in date (YYYY-MM-DD, within today..+180 days). Pairs with checkOut for real calendar availability and stayTotalPrice.",
+                  "disabled": true
+                },
+                {
+                  "key": "checkOut",
+                  "value": "2026-11-27",
+                  "description": "Optional check-out date (YYYY-MM-DD, must be > checkIn, max 90 nights).",
+                  "disabled": true
+                },
+                {
+                  "key": "petSizeCategoryId",
+                  "value": "3",
+                  "description": "Optional positive integer pet size category ID (enforces up-to-max-size room eligibility).",
+                  "disabled": true
+                },
+                {
+                  "key": "petProfileIds",
+                  "value": "1,2",
+                  "description": "Optional comma-separated pet profile IDs belonging to the authenticated user (requires Bearer token; every selected pet must have >= 1 eligible room).",
+                  "disabled": true
+                },
+                {
+                  "key": "facilities",
+                  "value": "Swimming Pool,Outdoor Play Area",
+                  "description": "Optional comma-separated facility names or numeric IDs (matches properties with at least one matching facility).",
+                  "disabled": true
+                },
+                {
+                  "key": "propertyType",
+                  "value": "Pet Resort",
+                  "description": "Optional case-insensitive property type name/label filter (e.g. Pet Resort, Pet Homestay, Pet Hotel, Pet Condo).",
+                  "disabled": true
+                },
+                {
+                  "key": "propertyTypeId",
+                  "value": "1",
+                  "description": "Optional positive integer property type ID filter.",
+                  "disabled": true
+                },
+                {
+                  "key": "minPrice",
+                  "value": "500",
+                  "description": "Optional minimum nightly base price (pairs with maxPrice).",
+                  "disabled": true
                 }
               ]
             },
-            "description": "Public property search supporting `page`, `limit`, `minRating`, `sortBy`, `days`, `search`, `petTypes`, `maxPrice`, `province`."
+            "description": "Public property discovery & search supporting `page`, `limit`, `minRating`, `sortBy`, `days`, `search`, `petTypes`, `minPrice`, `maxPrice`, `province`, `checkIn`, `checkOut` (returns `stayNights` & `stayTotalPrice` from `room_category_calendars`), `petSizeCategoryId`, `petProfileIds` (authenticated multi-pet eligibility), `facilities`, `propertyType`, `propertyTypeId`, and up to 5 photos per property for card carousels."
           },
           "response": []
         },

@@ -272,8 +272,17 @@ export const getProperties = async (
     sortBy?: string
     days?: number
     search?: string
+    province?: string
     petTypes?: string
+    minPrice?: string | number
     maxPrice?: string | number
+    checkIn?: string
+    checkOut?: string
+    petSizeCategoryId?: string | number
+    petProfileIds?: string
+    facilities?: string
+    propertyType?: string
+    propertyTypeId?: string | number
   }
 ): Promise<PropertiesResponse> => {
   const params = new URLSearchParams({
@@ -285,8 +294,21 @@ export const getProperties = async (
   if (options?.sortBy) params.append('sortBy', options.sortBy)
   if (options?.days != null) params.append('days', String(options.days))
   if (options?.search) params.append('search', options.search)
+  if (options?.province) params.append('province', options.province)
   if (options?.petTypes) params.append('petTypes', options.petTypes)
+  if (options?.minPrice != null && options.minPrice !== '') params.append('minPrice', String(options.minPrice))
   if (options?.maxPrice != null && options.maxPrice !== '') params.append('maxPrice', String(options.maxPrice))
+  if (options?.checkIn) params.append('checkIn', options.checkIn)
+  if (options?.checkOut) params.append('checkOut', options.checkOut)
+  if (options?.petSizeCategoryId != null && options.petSizeCategoryId !== '') {
+    params.append('petSizeCategoryId', String(options.petSizeCategoryId))
+  }
+  if (options?.petProfileIds) params.append('petProfileIds', options.petProfileIds)
+  if (options?.facilities) params.append('facilities', options.facilities)
+  if (options?.propertyType) params.append('propertyType', options.propertyType)
+  if (options?.propertyTypeId != null && options.propertyTypeId !== '') {
+    params.append('propertyTypeId', String(options.propertyTypeId))
+  }
 
   const res = await request<any>({
     endpoint: `api/v1/properties?${params.toString()}`,
@@ -2061,4 +2083,61 @@ export const searchAdminMlProperties = async (
     return res.data.properties as MlSampleProperty[]
   if (Array.isArray(res?.properties)) return res.properties as MlSampleProperty[]
   return []
+}
+
+// --- Locations (77 Thai Provinces) ---
+import { THAI_PROVINCES } from './thaiProvinces'
+
+export interface ProvinceOption {
+  id: number
+  code: string
+  nameEn: string
+  nameTh: string
+  propertyCount: number
+}
+
+function getThaiProvincesFallback(q?: string): ProvinceOption[] {
+  const term = q?.trim().toLowerCase()
+  if (!term) return THAI_PROVINCES
+  return THAI_PROVINCES.filter(
+    (p) =>
+      p.nameEn.toLowerCase().includes(term) ||
+      p.nameTh.toLowerCase().includes(term)
+  )
+}
+
+export const getProvinces = async (q?: string): Promise<ProvinceOption[]> => {
+  const trimmed = q?.trim()
+  const endpoint = trimmed
+    ? `api/v1/locations/provinces?${new URLSearchParams({ q: trimmed }).toString()}`
+    : 'api/v1/locations/provinces'
+
+  try {
+    const res = await request<any>({
+      endpoint,
+      method: 'GET',
+      errorContext: 'Get Provinces',
+    })
+    const rows = Array.isArray(res?.data)
+      ? res.data
+      : Array.isArray(res?.provinces)
+      ? res.provinces
+      : Array.isArray(res)
+      ? res
+      : []
+
+    if (rows.length > 0) {
+      return rows.map((row: any, idx: number) => ({
+        id: Number(row.id ?? row.code ?? idx + 1),
+        code: String(row.code ?? row.id ?? idx + 1),
+        nameEn: String(row.nameEn ?? row.name_en ?? ''),
+        nameTh: String(row.nameTh ?? row.name_th ?? ''),
+        propertyCount: Number(row.propertyCount ?? row.property_count ?? 0),
+      }))
+    }
+  } catch {
+    // Graceful client-side fallback to browser-safe 77 Thai provinces dataset
+  }
+
+  return getThaiProvincesFallback(trimmed)
 }
