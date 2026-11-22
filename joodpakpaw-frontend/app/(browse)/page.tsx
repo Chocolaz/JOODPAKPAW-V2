@@ -450,7 +450,7 @@ export default function Home() {
           /* Split Map View Mode */
           <section className="space-y-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <h2 className="text-lg sm:text-xl font-bold text-deep-teal break-words min-w-0">
+              <h2 className="font-bold text-deep-teal break-words min-w-0">
                 {hasActiveSearchOrFilters
                   ? 'Matching stays on map'
                   : 'Explore stays on map'}
@@ -503,7 +503,7 @@ export default function Home() {
           <section ref={filteredSectionRef} className="space-y-5">
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div className="min-w-0">
-                <h2 className="text-xl sm:text-2xl font-bold text-deep-teal break-words min-w-0">
+                <h2 className="font-bold text-deep-teal break-words min-w-0">
                   {province
                     ? `Stays in ${province}`
                     : searchQuery
@@ -583,7 +583,7 @@ export default function Home() {
             {resolvedRecentlyViewed.length > 0 && (
               <section className="space-y-4">
                 <div className="flex items-baseline justify-between gap-4">
-                  <h2 className="text-xl sm:text-2xl font-bold text-deep-teal break-words min-w-0">
+                  <h2 className="font-bold text-deep-teal break-words min-w-0">
                     Recently viewed
                   </h2>
                   <Link
@@ -616,7 +616,7 @@ export default function Home() {
               <section className="space-y-4">
                 <div className="flex items-baseline justify-between gap-4">
                   <div className="min-w-0">
-                    <h2 className="text-xl sm:text-2xl font-bold text-deep-teal break-words min-w-0">
+                    <h2 className="font-bold text-deep-teal break-words min-w-0">
                       {isAuthenticated
                         ? 'Recommended for you'
                         : 'Popular picks'}
@@ -651,7 +651,7 @@ export default function Home() {
             <section ref={exploreSectionRef} className="space-y-5">
               <div className="flex items-baseline justify-between gap-4">
                 <div className="min-w-0">
-                  <h2 className="text-xl sm:text-2xl font-bold text-deep-teal break-words min-w-0">
+                  <h2 className="font-bold text-deep-teal break-words min-w-0">
                     Explore verified stays
                   </h2>
                   <p className="text-sm text-neutral-gray mt-0.5">
@@ -708,7 +708,7 @@ export default function Home() {
                     <ShieldCheck className="w-4 h-4 text-positive-green shrink-0" />
                     <span>Identity-verified host community</span>
                   </div>
-                  <h2 className="text-xl sm:text-2xl font-bold text-white leading-tight break-words min-w-0">
+                  <h2 className="font-bold text-white leading-tight break-words min-w-0">
                     Open your home to travelling pets
                   </h2>
                   <p className="text-sm sm:text-base text-off-white/85 leading-relaxed">

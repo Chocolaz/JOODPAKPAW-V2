@@ -31,9 +31,8 @@ The locked system. Every Hallmark run reads this first and pages share it. Chang
 ## Typography
 - **Display & UI Headings / Buttons:** `--font-baloo2`, `--font-prompt`, `sans-serif`
 - **Body & Captions:** `--font-afacad`, `--font-sarabun`, `sans-serif`
-- **Responsive Type Scale (`app/globals.css`):**
-  - `h1` (global): `20px` base · `21px` (`md`) · `22px` (`lg`) · `24px` (`xl`) · weight `600`
-  - Home Hero `h1` (`BrowseHero.tsx`): `18px` (`text-lg`) · `20px` (`sm:text-xl`) · `22px` (`lg:text-[22px]`) · weight `700`
+- **Responsive Type Scale (`app/globals.css` `@layer base` — single source of truth; Home `h1`–`h5` and `body` inherit directly without per-component `text-*` size overrides):**
+  - `h1`: `20px` base · `21px` (`md`) · `22px` (`lg`) · `24px` (`xl`) · weight `600`–`700`
   - `h2`: `18px` base · `19px` (`md`) · `20px` (`lg`) · `22px` (`xl`) · weight `500`–`700`
   - `h3`: `16px` base · `17px` (`md`) · `18px` (`lg`) · `19px` (`xl`) · weight `600`
   - `h4`: `15px` base · `16px` (`md`/`lg`) · `17px` (`xl`) · weight `600`
