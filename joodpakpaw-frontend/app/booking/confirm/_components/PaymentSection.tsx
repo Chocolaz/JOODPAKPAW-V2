@@ -753,10 +753,12 @@ export default function PaymentSection({
         </div>
 
         {/* Right column: Property Snapshot + Price Summary + Sticky Confirmation CTA */}
-        <div className="space-y-4 lg:sticky lg:top-24 min-w-0">
-          {priceSummaryNode}
+        <div className="space-y-4 lg:space-y-0 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:flex lg:flex-col lg:gap-4 min-w-0">
+          <div className="lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain modern-scrollbar rounded-2xl">
+            {priceSummaryNode}
+          </div>
 
-          <div className="hidden lg:block bg-white rounded-2xl p-5 border border-border shadow-sm space-y-3.5">
+          <div className="hidden lg:block shrink-0 bg-white rounded-2xl p-4 border border-border shadow-sm space-y-3">
             {confirmationActions}
           </div>
         </div>

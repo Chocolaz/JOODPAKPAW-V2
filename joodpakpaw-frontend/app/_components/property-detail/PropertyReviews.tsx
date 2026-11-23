@@ -370,7 +370,7 @@ export function PropertyReviews({
       ) : (
         <div className="xl:grid xl:grid-cols-[260px_minmax(0,1fr)] xl:gap-8 xl:items-start">
           {/* Left: summary */}
-          <div className="xl:sticky xl:top-24 mb-5 xl:mb-0 min-w-0">
+          <div className="xl:sticky xl:top-6 mb-5 xl:mb-0 min-w-0">
             <div className="bg-off-white/70 rounded-2xl p-5 border border-border flex flex-row xl:flex-col gap-6 xl:gap-4">
               <div className="flex flex-col items-center gap-1 shrink-0">
                 <span className="text-4xl font-bold text-foreground leading-none tabular-nums">

@@ -323,10 +323,10 @@ export function BookingDrawer({
     return (
       <div
         id="booking-sidebar"
-        className="rounded-2xl border border-border shadow-sm bg-white overflow-hidden"
+        className="flex flex-col max-h-[calc(100dvh-3rem)] rounded-2xl border border-border shadow-sm bg-white overflow-hidden"
       >
         {/* Header */}
-        <div className="px-5 py-4 border-b border-border bg-off-white/40 flex items-center justify-between gap-3">
+        <div className="shrink-0 px-5 py-3.5 border-b border-border bg-off-white/40 flex items-center justify-between gap-3">
           {itemizedPricing.totalPayable > 0 && itemizedPricing.nights > 0 ? (
             <div>
               <div className="flex items-baseline gap-1.5">
@@ -372,8 +372,8 @@ export function BookingDrawer({
           )}
         </div>
 
-        {/* Form Body */}
-        <div className="px-5 py-5 flex flex-col gap-4">
+        {/* Scrollable Form Body */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain modern-scrollbar px-5 py-4 flex flex-col gap-3.5">
           <BookingSearchBar
             onSearch={onSearch}
             date={date}
@@ -474,11 +474,14 @@ export function BookingDrawer({
           )}
 
           {priceBreakdownNode}
+        </div>
 
+        {/* Pinned Primary CTA Footer */}
+        <div className="shrink-0 border-t border-border bg-white px-5 py-3.5 space-y-2">
           <Button
             type="button"
             onClick={handleDesktopSmartCta}
-            className="w-full h-12 bg-accent-orange hover:bg-accent-orange/90 text-white text-base font-semibold rounded-xl cursor-pointer"
+            className="w-full h-11 bg-accent-orange hover:bg-accent-orange/90 text-white text-base font-semibold rounded-xl cursor-pointer"
           >
             {desktopCtaLabel}
           </Button>

@@ -150,7 +150,7 @@ export function PropertyImageGallery({
   const renderDesktopGrid = () => {
     if (count === 1) {
       return (
-        <div className="relative rounded-2xl overflow-hidden border border-border h-[440px] xl:h-[480px]">
+        <div className="relative rounded-2xl overflow-hidden border border-border h-[320px] lg:h-[360px] xl:h-[380px]">
           <Thumb src={images[0]} index={0} onClick={openLightbox} />
         </div>
       )
@@ -158,7 +158,7 @@ export function PropertyImageGallery({
 
     if (count === 2) {
       return (
-        <div className="relative grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 rounded-2xl overflow-hidden border border-border h-[440px] xl:h-[480px]">
+        <div className="relative grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 rounded-2xl overflow-hidden border border-border h-[320px] lg:h-[360px] xl:h-[380px]">
           <Thumb src={images[0]} index={0} onClick={openLightbox} />
           <Thumb src={images[1]} index={1} onClick={openLightbox} />
         </div>
@@ -167,7 +167,7 @@ export function PropertyImageGallery({
 
     if (count === 3) {
       return (
-        <div className="relative grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 rounded-2xl overflow-hidden border border-border h-[440px] xl:h-[480px]">
+        <div className="relative grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 rounded-2xl overflow-hidden border border-border h-[320px] lg:h-[360px] xl:h-[380px]">
           <Thumb src={images[0]} index={0} onClick={openLightbox} />
           <div className="grid grid-rows-2 gap-2">
             <Thumb src={images[1]} index={1} onClick={openLightbox} />
@@ -179,7 +179,7 @@ export function PropertyImageGallery({
 
     if (count === 4) {
       return (
-        <div className="relative grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 rounded-2xl overflow-hidden border border-border h-[440px] xl:h-[480px]">
+        <div className="relative grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 rounded-2xl overflow-hidden border border-border h-[320px] lg:h-[360px] xl:h-[380px]">
           <Thumb src={images[0]} index={0} onClick={openLightbox} />
           <div className="grid grid-rows-2 gap-2">
             <Thumb src={images[1]} index={1} onClick={openLightbox} />
@@ -193,7 +193,7 @@ export function PropertyImageGallery({
     }
 
     return (
-      <div className="relative grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 rounded-2xl overflow-hidden border border-border h-[440px] xl:h-[480px]">
+      <div className="relative grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 rounded-2xl overflow-hidden border border-border h-[320px] lg:h-[360px] xl:h-[380px]">
         <Thumb src={images[0]} index={0} onClick={openLightbox} />
         <div className="grid grid-rows-2 gap-2">
           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">

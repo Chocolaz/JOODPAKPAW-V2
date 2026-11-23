@@ -54,7 +54,7 @@ function PropertyDetailSkeleton() {
       <div className="md:hidden -mx-4">
         <Skeleton className="w-full aspect-[4/3] rounded-none bg-neutral-200 motion-reduce:animate-none" />
       </div>
-      <div className="hidden md:grid grid-cols-2 gap-2 rounded-2xl overflow-hidden h-[440px] xl:h-[480px] mb-8">
+      <div className="hidden md:grid grid-cols-2 gap-2 rounded-2xl overflow-hidden h-[320px] lg:h-[360px] xl:h-[380px] mb-6">
         <Skeleton className="w-full h-full rounded-none bg-neutral-200 motion-reduce:animate-none" />
         <div className="grid grid-rows-2 gap-2">
           <Skeleton className="w-full h-full rounded-none bg-neutral-200 motion-reduce:animate-none" />
@@ -374,7 +374,7 @@ export default function PropertyDetailPage() {
       </div>
 
       {/* Desktop: Editorial Top Bar ABOVE Photo Mosaic */}
-      <div className="hidden lg:block px-8 xl:px-10 pt-5 pb-5 space-y-3">
+      <div className="hidden lg:block px-8 xl:px-10 pt-4 pb-4 space-y-2.5">
         <button
           type="button"
           onClick={handleBack}
@@ -393,7 +393,7 @@ export default function PropertyDetailPage() {
       </div>
 
       {/* Main Content Split */}
-      <div className="px-4 md:px-8 lg:px-8 xl:px-10 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-12 lg:items-start mt-5 lg:mt-8">
+      <div className="px-4 md:px-8 lg:px-8 xl:px-10 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-12 lg:items-start mt-5 lg:mt-6">
         {/* Left: Editorial Content & Unified Room Selection */}
         <div className="min-w-0 space-y-8">
           {/* Mobile Header sits below gallery */}
@@ -452,7 +452,7 @@ export default function PropertyDetailPage() {
         </div>
 
         {/* Right: Sticky Booking Card (Desktop only) */}
-        <aside className="hidden lg:block sticky top-24">
+        <aside className="hidden lg:block sticky top-6">
           <BookingDrawer
             propertyId={property.id}
             sidebarMode
