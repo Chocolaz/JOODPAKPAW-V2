@@ -1,46 +1,60 @@
 'use client'
 
 import { AppHeader } from '@/app/_components/AppHeader'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
 import { getFavoriteFolders, createFavoriteFolder } from '@/lib/api'
 import { FavoriteFolder } from '@/types/favorite'
 import { FavoriteFolderCard } from '@/app/_components/FavoriteFolderCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Drawer,
   DrawerContent,
   DrawerHeader,
   DrawerTitle,
 } from '@/components/ui/drawer'
-import { Plus, FolderPlus, Loader2, Search } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Plus, FolderPlus, Loader2, Search, LogIn } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/app/_components/AuthContext'
+import { useAuthModal } from '@/app/_context/AuthModalContext'
+import { useMediaQuery } from '@/app/_hooks/useMediaQuery'
 import Image from 'next/image'
 import { assetPath } from '@/lib/utils'
 
-const SkeletonCard = () => (
-  <div className="animate-pulse">
-    <div className="aspect-square w-full bg-gray-200 rounded-[20px]"></div>
-    <div className="mt-2 space-y-2">
-      <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+function WishlistSkeletonGrid() {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 lg:gap-6">
+      {Array.from({ length: 10 }).map((_, index) => (
+        <div key={index} className="space-y-2.5">
+          <Skeleton className="aspect-square w-full rounded-2xl bg-neutral-200 motion-reduce:animate-none" />
+          <Skeleton className="h-4 w-3/4 bg-neutral-200 motion-reduce:animate-none" />
+          <Skeleton className="h-3 w-1/2 bg-neutral-200 motion-reduce:animate-none" />
+        </div>
+      ))}
     </div>
-  </div>
-)
+  )
+}
 
 export default function FavoritesPage() {
   const [folders, setFolders] = useState<FavoriteFolder[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const { isAuthenticated, loading: authLoading } = useAuth()
+  const { openAuthModal } = useAuthModal()
+  const isDesktop = useMediaQuery('(min-width: 1024px)')
 
   const fetchFolders = useCallback(async () => {
     if (!isAuthenticated) {
@@ -53,7 +67,7 @@ export default function FavoritesPage() {
       const response = await getFavoriteFolders()
       setFolders(response.favoriteFolders)
     } catch {
-      setError('Failed to fetch favorite folders.')
+      setError('Failed to load wishlists.')
     } finally {
       setIsLoading(false)
     }
@@ -66,10 +80,16 @@ export default function FavoritesPage() {
   }, [fetchFolders, authLoading])
 
   useEffect(() => {
-    if (isDrawerOpen && inputRef.current) {
-      setTimeout(() => inputRef.current?.focus(), 300)
+    if (isModalOpen && inputRef.current) {
+      const timer = setTimeout(() => inputRef.current?.focus(), 80)
+      return () => clearTimeout(timer)
     }
-  }, [isDrawerOpen])
+  }, [isModalOpen])
+
+  const totalSavedStays = useMemo(
+    () => folders.reduce((sum, f) => sum + (f.propertyCount ?? 0), 0),
+    [folders]
+  )
 
   const handleFolderClick = (folderId: number) => {
     router.push(`/favorites/${folderId}`)
@@ -82,233 +102,269 @@ export default function FavoritesPage() {
     setIsCreating(true)
     try {
       await createFavoriteFolder(trimmed)
-      toast.success(`"${trimmed}" folder created!`)
+      toast.success(`"${trimmed}" wishlist created`)
       setNewFolderName('')
-      setIsDrawerOpen(false)
+      setIsModalOpen(false)
       setIsLoading(true)
       await fetchFolders()
     } catch {
-      toast.error('Failed to create folder.')
+      toast.error('Failed to create wishlist.')
     } finally {
       setIsCreating(false)
     }
   }
 
-  const handleDrawerClose = (open: boolean) => {
-    setIsDrawerOpen(open)
+  const handleModalOpenChange = (open: boolean) => {
+    setIsModalOpen(open)
     if (!open) {
-      setTimeout(() => setNewFolderName(''), 300)
+      setTimeout(() => setNewFolderName(''), 200)
     }
   }
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.08,
-      },
-    },
-  }
-
-  const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-    },
-  }
-
   const renderContent = () => {
-    if (isLoading) {
-      return (
-        <div className="px-4">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {Array.from({ length: 8 }).map((_, index) => (
-              <SkeletonCard key={index} />
-            ))}
-          </div>
-        </div>
-      )
+    if (isLoading || authLoading) {
+      return <WishlistSkeletonGrid />
     }
 
     if (error) {
       return (
-        <div className="text-red-500 text-center flex flex-col items-center justify-center h-64">
-          <p>{error}</p>
-          <Button onClick={() => window.location.reload()} className="mt-4">
-            Retry
+        <div className="rounded-2xl border border-border bg-white p-10 text-center space-y-4 max-w-md mx-auto mt-8">
+          <p className="text-sm text-red-600">{error}</p>
+          <Button
+            type="button"
+            onClick={() => {
+              setIsLoading(true)
+              fetchFolders()
+            }}
+            className="bg-deep-teal hover:bg-deep-teal/90 text-white rounded-xl cursor-pointer"
+          >
+            Try again
           </Button>
+        </div>
+      )
+    }
+
+    if (!isAuthenticated) {
+      return (
+        <div className="rounded-2xl border border-border bg-white px-6 py-12 text-center max-w-md mx-auto mt-4">
+          <Image
+            src={assetPath('/graphics/no-fav.png')}
+            alt="Sign in to view wishlists"
+            width={180}
+            height={180}
+            className="mx-auto"
+            priority
+          />
+          <h2 className="font-semibold text-deep-teal mt-4">
+            Sign in to save your favorite stays
+          </h2>
+          <p className="text-sm text-neutral-gray mt-1.5 leading-relaxed">
+            Create wishlists for your next trip and revisit pet-friendly places
+            anytime.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2.5 mt-6 justify-center">
+            <Button
+              type="button"
+              onClick={() =>
+                openAuthModal('login', { returnUrl: '/favorites' })
+              }
+              className="h-11 px-6 rounded-xl bg-accent-orange hover:bg-accent-orange/90 text-white font-semibold cursor-pointer"
+            >
+              <LogIn className="mr-2 h-4 w-4" />
+              Sign in
+            </Button>
+            <Button
+              type="button"
+              onClick={() => router.push('/')}
+              variant="outline"
+              className="h-11 px-5 rounded-xl border-border text-foreground hover:bg-off-white/70 font-medium cursor-pointer"
+            >
+              <Search className="mr-2 h-4 w-4" />
+              Explore stays
+            </Button>
+          </div>
         </div>
       )
     }
 
     if (folders.length === 0) {
       return (
-        <motion.div
-          className="flex flex-col items-center justify-center pt-12 pb-8 text-center px-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: 'easeOut' }}
-        >
-          <motion.div
-            initial={{ scale: 0.9 }}
-            animate={{ scale: 1 }}
-            transition={{ duration: 0.5, ease: 'easeOut', delay: 0.1 }}
-          >
-            <Image
-              src={assetPath('/graphics/no-fav.png')}
-              alt="No favorites yet"
-              width={200}
-              height={200}
-              className="mx-auto"
-              priority
-            />
-          </motion.div>
-
-          <h3 className="text-[22px] font-semibold text-deep-teal mt-4">
-            No favorites yet
-          </h3>
-          <p className="text-neutral-gray mt-2 max-w-[260px] leading-relaxed">
-            {isAuthenticated
-              ? 'Save places you love and organize them into folders.'
-              : 'Sign in to save your favorite places and access them anytime.'}
+        <div className="rounded-2xl border border-border bg-white px-6 py-12 text-center max-w-md mx-auto mt-4">
+          <Image
+            src={assetPath('/graphics/no-fav.png')}
+            alt="No wishlists yet"
+            width={180}
+            height={180}
+            className="mx-auto"
+            priority
+          />
+          <h2 className="font-semibold text-deep-teal mt-4">
+            No wishlists yet
+          </h2>
+          <p className="text-sm text-neutral-gray mt-1.5 leading-relaxed">
+            Save pet-friendly stays you love and organize them into wishlists
+            for upcoming trips.
           </p>
-
-          <div className="flex flex-col gap-3 w-full max-w-[260px] mt-8">
-            {isAuthenticated ? (
-              <>
-                <Button
-                  onClick={() => setIsDrawerOpen(true)}
-                  className="w-full py-5 rounded-xl bg-accent-orange text-white hover:bg-accent-orange/80 text-base font-semibold"
-                >
-                  <FolderPlus className="mr-2 h-5 w-5" />
-                  Create a Folder
-                </Button>
-                <Button
-                  onClick={() => router.push('/')}
-                  variant="outline"
-                  className="w-full py-5 rounded-xl text-base font-medium border-gray-200"
-                >
-                  <Search className="mr-2 h-5 w-5" />
-                  Explore Places
-                </Button>
-              </>
-            ) : (
-              <Button
-                onClick={() => router.push('/')}
-                variant="outline"
-                className="w-full py-5 rounded-xl text-base font-medium border-gray-200"
-              >
-                <Search className="mr-2 h-5 w-5" />
-                Explore Places
-              </Button>
-            )}
+          <div className="flex flex-col sm:flex-row gap-2.5 mt-6 justify-center">
+            <Button
+              type="button"
+              onClick={() => setIsModalOpen(true)}
+              className="h-11 px-6 rounded-xl bg-accent-orange hover:bg-accent-orange/90 text-white font-semibold cursor-pointer"
+            >
+              <FolderPlus className="mr-2 h-4 w-4" />
+              Create wishlist
+            </Button>
+            <Button
+              type="button"
+              onClick={() => router.push('/')}
+              variant="outline"
+              className="h-11 px-5 rounded-xl border-border text-foreground hover:bg-off-white/70 font-medium cursor-pointer"
+            >
+              <Search className="mr-2 h-4 w-4" />
+              Explore stays
+            </Button>
           </div>
-        </motion.div>
+        </div>
       )
     }
 
     return (
-      <motion.div
-        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        {/* Create New Folder Card */}
-        <motion.div variants={itemVariants}>
-          <button
-            onClick={() => setIsDrawerOpen(true)}
-            className="block w-full cursor-pointer text-left group"
-          >
-            <div className="aspect-square w-full rounded-[20px] border-2 border-dashed border-gray-300 group-hover:border-deep-teal flex flex-col items-center justify-center transition-colors bg-gray-50 group-hover:bg-teal-50/50">
-              <div className="w-12 h-12 rounded-full bg-deep-teal/10 group-hover:bg-deep-teal/20 flex items-center justify-center transition-colors mb-2">
-                <Plus className="w-6 h-6 text-deep-teal" />
-              </div>
-              <span className="text-sm font-medium text-deep-teal">
-                New Folder
-              </span>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 lg:gap-6">
+        {/* Create New Wishlist Card */}
+        <button
+          type="button"
+          onClick={() => setIsModalOpen(true)}
+          className="block w-full cursor-pointer text-left group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-deep-teal rounded-2xl"
+        >
+          <div className="aspect-square w-full rounded-2xl border-2 border-dashed border-border group-hover:border-deep-teal flex flex-col items-center justify-center transition-colors bg-off-white/40 group-hover:bg-deep-teal/[0.04]">
+            <div className="w-12 h-12 rounded-full bg-deep-teal/10 group-hover:bg-deep-teal/15 flex items-center justify-center transition-colors mb-2">
+              <Plus className="w-6 h-6 text-deep-teal" />
             </div>
-            <div className="mt-2">
-              <p className="text-sm font-medium text-deep-teal">
-                Create folder
-              </p>
-              <p className="text-xs text-neutral-gray">
-                Organize your favorites
-              </p>
-            </div>
-          </button>
-        </motion.div>
+            <span className="text-sm font-semibold text-deep-teal">
+              New wishlist
+            </span>
+          </div>
+          <div className="mt-2.5 px-0.5 space-y-0.5">
+            <p className="text-sm font-semibold text-deep-teal">
+              Create wishlist
+            </p>
+            <p className="text-xs text-neutral-gray">Organize your saved stays</p>
+          </div>
+        </button>
 
-        {/* Existing Folder Cards */}
-        <AnimatePresence>
-          {folders.map((folder) => (
-            <motion.div key={folder.id} variants={itemVariants} layout>
-              <FavoriteFolderCard
-                folder={folder}
-                onClick={(folderId) => handleFolderClick(folderId)}
-                disabled={false}
-                widthClass="w-full"
-              />
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </motion.div>
+        {/* Wishlist Cards */}
+        {folders.map((folder) => (
+          <FavoriteFolderCard
+            key={folder.id}
+            folder={folder}
+            onClick={(folderId) => handleFolderClick(folderId)}
+            disabled={false}
+            widthClass="w-full"
+          />
+        ))}
+      </div>
     )
   }
 
-  return (
-    <div>
-      <div className="lg:hidden"><AppHeader title="Favorites" /></div>
-      <div className="container mx-auto px-5 pt-8 mb-30">{renderContent()}</div>
+  const createForm = (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <Input
+          ref={inputRef}
+          placeholder="e.g. Summer Trips, Bangkok Stays"
+          value={newFolderName}
+          onChange={(e) => setNewFolderName(e.target.value)}
+          maxLength={20}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && newFolderName.trim() && !isCreating) {
+              handleCreateFolder()
+            }
+          }}
+        />
+        <p className="text-xs text-neutral-gray text-right tabular-nums">
+          {newFolderName.length} / 20
+        </p>
+      </div>
+      <Button
+        type="button"
+        onClick={handleCreateFolder}
+        disabled={isCreating || !newFolderName.trim()}
+        className="w-full h-11 rounded-xl bg-deep-teal hover:bg-deep-teal/90 text-white font-semibold disabled:opacity-50 cursor-pointer"
+      >
+        {isCreating ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Creating...
+          </>
+        ) : (
+          <>
+            <FolderPlus className="mr-2 h-4 w-4" />
+            Create wishlist
+          </>
+        )}
+      </Button>
+    </div>
+  )
 
-      {/* Create Folder Drawer */}
-      <Drawer open={isDrawerOpen} onOpenChange={handleDrawerClose}>
-        <DrawerContent>
-          <div className="mx-auto w-full max-w-sm pb-6">
-            <DrawerHeader>
-              <DrawerTitle>Create new folder</DrawerTitle>
-            </DrawerHeader>
-            <div className="px-4 space-y-4">
-              <div className="space-y-1">
-                <Input
-                  ref={inputRef}
-                  placeholder="e.g. Summer Trips, Dream Stays..."
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  maxLength={20}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && newFolderName.trim()) {
-                      handleCreateFolder()
-                    }
-                  }}
-                />
-                <p className="text-xs text-gray-400 text-right">
-                  {newFolderName.length}/20
-                </p>
-              </div>
-              <Button
-                onClick={handleCreateFolder}
-                disabled={isCreating || !newFolderName.trim()}
-                className="w-full py-5 bg-deep-teal text-white disabled:opacity-50"
-              >
-                {isCreating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <FolderPlus className="mr-2 h-4 w-4" />
-                    Create Folder
-                  </>
-                )}
-              </Button>
-            </div>
+  return (
+    <div className="min-h-screen bg-white">
+      <div className="lg:hidden">
+        <AppHeader title="Wishlists" />
+      </div>
+
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 pt-[calc(3.5rem+1.25rem)] pb-24 lg:pt-8 lg:pb-12 space-y-6">
+        {/* Desktop Editorial Header */}
+        <div className="hidden lg:flex items-end justify-between gap-4 pb-5 border-b border-border">
+          <div className="space-y-1">
+            <h1 className="font-bold text-deep-teal">Wishlists</h1>
+            <p className="text-sm text-neutral-gray tabular-nums">
+              {isAuthenticated && folders.length > 0
+                ? `${folders.length} ${folders.length === 1 ? 'wishlist' : 'wishlists'}, ${totalSavedStays} saved ${totalSavedStays === 1 ? 'stay' : 'stays'}`
+                : 'Save stays you love and organize them for your next trip'}
+            </p>
           </div>
-        </DrawerContent>
-      </Drawer>
+
+          {isAuthenticated && (
+            <Button
+              type="button"
+              onClick={() => setIsModalOpen(true)}
+              className="h-10 px-4 rounded-xl bg-deep-teal hover:bg-deep-teal/90 text-white text-sm font-semibold cursor-pointer"
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              New wishlist
+            </Button>
+          )}
+        </div>
+
+        {renderContent()}
+      </div>
+
+      {/* Create Wishlist — Dialog on Desktop, Drawer on Mobile */}
+      {isDesktop ? (
+        <Dialog open={isModalOpen} onOpenChange={handleModalOpenChange}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-deep-teal">
+                Create new wishlist
+              </DialogTitle>
+            </DialogHeader>
+            {createForm}
+          </DialogContent>
+        </Dialog>
+      ) : (
+        <Drawer open={isModalOpen} onOpenChange={handleModalOpenChange}>
+          <DrawerContent>
+            <div className="mx-auto w-full max-w-sm pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+              <DrawerHeader>
+                <DrawerTitle className="text-deep-teal">
+                  Create new wishlist
+                </DrawerTitle>
+              </DrawerHeader>
+              <div className="px-4">{createForm}</div>
+            </div>
+          </DrawerContent>
+        </Drawer>
+      )}
     </div>
   )
 }
