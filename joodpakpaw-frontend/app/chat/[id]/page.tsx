@@ -1,29 +1,44 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Lightbox from 'yet-another-react-lightbox'
 import 'yet-another-react-lightbox/styles.css'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Send, Check, CheckCheck, Trash2, ImagePlus, ArrowLeft, X, BadgeCheck, Calendar, Building } from 'lucide-react'
+import {
+  Send,
+  Check,
+  CheckCheck,
+  Trash2,
+  ImagePlus,
+  ChevronLeft,
+  X,
+  BadgeCheck,
+  Calendar,
+  Building2,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { useChat } from '@/app/_components/ChatContext'
 import { useAuth } from '@/app/_components/AuthContext'
 import { ConfirmationModal } from '@/app/_components/ConfirmationModal'
+import { cn, getDisplayName } from '@/lib/utils'
 import type { ChatMessage } from '@/types/chat'
-
-/* ─── helpers ─── */
 
 function formatDateLabel(dateStr: string): string {
   const date = new Date(dateStr.replace(' ', 'T'))
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-  const diffDays = Math.round((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24))
+  const diffDays = Math.round(
+    (today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24)
+  )
   if (diffDays === 0) return 'Today'
   if (diffDays === 1) return 'Yesterday'
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: diffDays > 365 ? 'numeric' : undefined })
+  return date.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: diffDays > 365 ? 'numeric' : undefined,
+  })
 }
 
 function getDateKey(dateStr: string): string {
@@ -31,7 +46,10 @@ function getDateKey(dateStr: string): string {
 }
 
 function formatTime(dateStr: string): string {
-  return new Date(dateStr.replace(' ', 'T')).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+  return new Date(dateStr.replace(' ', 'T')).toLocaleTimeString('th-TH', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 function formatReadAt(readAt: string): string {
@@ -41,31 +59,33 @@ function formatReadAt(readAt: string): string {
   return `Read ${date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`
 }
 
-/* ─── pending image thumbnail ─── */
-
-function PendingImageThumb({ file, onRemove }: { file: File; onRemove: () => void }) {
-  const [src, setSrc] = useState('')
+function PendingImageThumb({
+  file,
+  onRemove,
+}: {
+  file: File
+  onRemove: () => void
+}) {
+  const src = useMemo(() => URL.createObjectURL(file), [file])
   useEffect(() => {
-    const url = URL.createObjectURL(file)
-    setSrc(url)
-    return () => URL.revokeObjectURL(url)
-  }, [file])
-  if (!src) return null
+    return () => URL.revokeObjectURL(src)
+  }, [src])
+
   return (
-    <div className="relative shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-      <img src={src} alt="" className="w-full h-full object-cover" />
+    <div className="relative shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-border">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="Pending attachment" className="w-full h-full object-cover" />
       <button
         type="button"
         onClick={onRemove}
-        className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center transition-colors"
+        aria-label="Remove attachment"
+        className="absolute top-1 right-1 w-5 h-5 bg-foreground/80 hover:bg-foreground rounded-full flex items-center justify-center transition-colors cursor-pointer"
       >
         <X className="w-3 h-3 text-white" />
       </button>
     </div>
   )
 }
-
-/* ─── message bubble ─── */
 
 function MessageBubble({
   message,
@@ -81,61 +101,74 @@ function MessageBubble({
   showAvatar: boolean
 }) {
   const [lightboxIndex, setLightboxIndex] = useState(-1)
+  const senderDisplayName = getDisplayName(message.sender) || 'User'
 
   const attachmentUrls = (message.attachments ?? []).map((att) =>
-    typeof att === 'string' ? att : (att.url ?? att.path ?? att.filePath ?? att.file ?? '')
+    typeof att === 'string'
+      ? att
+      : (att.url ?? att.path ?? att.filePath ?? att.file ?? '')
   )
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.15 }}
-      className={`flex items-end gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}
+    <div
+      className={cn(
+        'flex items-end gap-2',
+        isOwn ? 'flex-row-reverse' : 'flex-row'
+      )}
     >
-      {/* Other user avatar — placeholder keeps spacing consistent */}
       <div className="w-7 h-7 lg:w-8 lg:h-8 shrink-0 mb-1">
-        {!isOwn && showAvatar && (
-          message.sender.avatar ? (
-            <div className="relative w-7 h-7 lg:w-8 lg:h-8">
+        {!isOwn &&
+          showAvatar &&
+          (message.sender.avatar ? (
+            <div className="relative w-7 h-7 lg:w-8 lg:h-8 rounded-full overflow-hidden border border-border">
               <Image
                 src={message.sender.avatar}
-                alt={message.sender.firstName}
+                alt={senderDisplayName}
                 fill
                 unoptimized
-                className="rounded-full object-cover"
+                className="object-cover"
               />
             </div>
           ) : (
             <div className="w-7 h-7 lg:w-8 lg:h-8 rounded-full bg-deep-teal/10 flex items-center justify-center">
               <span className="text-deep-teal text-xs font-semibold">
-                {message.sender.firstName.charAt(0)}
+                {senderDisplayName.charAt(0).toUpperCase()}
               </span>
             </div>
-          )
-        )}
+          ))}
       </div>
 
-      <div className={`max-w-[65%] lg:max-w-[55%] min-w-0 flex flex-col gap-0.5 ${isOwn ? 'items-end' : 'items-start'}`}>
-        {/* Attachments */}
+      <div
+        className={cn(
+          'max-w-[70%] lg:max-w-[58%] min-w-0 flex flex-col gap-1',
+          isOwn ? 'items-end' : 'items-start'
+        )}
+      >
         {attachmentUrls.length > 0 && (
           <>
-            <div className={`flex flex-wrap gap-1.5 ${message.content ? 'mb-1' : ''}`}>
+            <div
+              className={cn(
+                'flex flex-wrap gap-1.5',
+                message.content && 'mb-0.5'
+              )}
+            >
               {attachmentUrls.map((url, i) => (
                 <button
                   key={i}
                   type="button"
                   onClick={() => setLightboxIndex(i)}
-                  className="rounded-2xl overflow-hidden shadow-sm hover:opacity-95 transition-opacity"
+                  className="rounded-2xl overflow-hidden border border-border hover:opacity-95 transition-opacity cursor-pointer"
                 >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={url}
-                    alt="attachment"
-                    className={`object-cover ${
+                    alt={`Attachment ${i + 1}`}
+                    className={cn(
+                      'object-cover',
                       attachmentUrls.length === 1
                         ? 'w-52 h-52 lg:w-64 lg:h-64'
                         : 'w-36 h-36 lg:w-44 lg:h-44'
-                    }`}
+                    )}
                   />
                 </button>
               ))}
@@ -146,7 +179,10 @@ function MessageBubble({
               index={lightboxIndex}
               slides={attachmentUrls.map((src) => ({ src }))}
               on={{ view: ({ index }) => setLightboxIndex(index) }}
-              carousel={{ finite: attachmentUrls.length <= 1, imageFit: 'contain' }}
+              carousel={{
+                finite: attachmentUrls.length <= 1,
+                imageFit: 'contain',
+              }}
               controller={{ closeOnBackdropClick: true }}
               render={{ buttonPrev: () => null, buttonNext: () => null }}
               styles={{ root: { '--yarl__color_backdrop': 'rgba(0,0,0,0.9)' } }}
@@ -154,55 +190,65 @@ function MessageBubble({
           </>
         )}
 
-        {/* Text bubble */}
         {message.content && (
           <div
-            className={`px-3.5 py-2 lg:px-4 lg:py-2.5 text-sm leading-relaxed shadow-sm break-words max-w-full whitespace-pre-wrap ${
+            className={cn(
+              'px-3.5 py-2 lg:px-4 lg:py-2.5 text-sm leading-relaxed break-words max-w-full whitespace-pre-wrap',
               isOwn
                 ? 'bg-accent-orange text-white rounded-2xl rounded-br-md'
-                : 'bg-white border border-gray-100 text-gray-800 rounded-2xl rounded-bl-md'
-            }`}
+                : 'bg-white border border-border text-foreground rounded-2xl rounded-bl-md'
+            )}
           >
             {message.content}
           </div>
         )}
 
-        {/* Time + unread check */}
-        <div className={`flex items-center gap-1 px-1 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-          <span className="text-[10px] lg:text-xs text-neutral-gray/70">
+        <div
+          className={cn(
+            'flex items-center gap-1 px-1',
+            isOwn ? 'flex-row-reverse' : 'flex-row'
+          )}
+        >
+          <span className="text-[11px] text-neutral-gray tabular-nums">
             {formatTime(message.createdAt)}
           </span>
           {isOwn && showIcon && !message.readAt && (
-            <Check className="w-3.5 h-3.5 text-neutral-gray/40" />
+            <Check className="w-3.5 h-3.5 text-neutral-gray/50" />
           )}
         </div>
 
-        {/* Read receipt: double-check + time together */}
         {isOwn && showReadAt && message.readAt && (
           <div className="flex items-center gap-1 px-1">
-            <CheckCheck className="w-3.5 h-3.5 text-accent-orange" />
-            <span className="text-[10px] lg:text-xs text-accent-orange/80">
+            <CheckCheck className="w-3.5 h-3.5 text-deep-teal" />
+            <span className="text-[11px] text-deep-teal font-medium tabular-nums">
               {formatReadAt(message.readAt)}
             </span>
           </div>
         )}
       </div>
-    </motion.div>
+    </div>
   )
 }
 
-/* ─── skeleton ─── */
-
 function MessageSkeleton() {
   return (
-    <div className="flex flex-col gap-3 px-4 lg:px-6 py-4 animate-pulse">
+    <div className="flex flex-col gap-3 px-4 lg:px-6 py-4 animate-pulse motion-reduce:animate-none">
       {[false, true, false, false, true, true].map((isOwn, i) => (
-        <div key={i} className={`flex items-end gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-          {!isOwn && <div className="w-7 h-7 rounded-full bg-gray-200 shrink-0 mb-1" />}
+        <div
+          key={i}
+          className={cn(
+            'flex items-end gap-2',
+            isOwn ? 'flex-row-reverse' : 'flex-row'
+          )}
+        >
+          {!isOwn && (
+            <div className="w-7 h-7 rounded-full bg-neutral-200 shrink-0 mb-1" />
+          )}
           <div
-            className={`h-9 rounded-2xl bg-gray-200 ${
+            className={cn(
+              'h-9 rounded-2xl bg-neutral-200',
               isOwn ? 'rounded-br-md' : 'rounded-bl-md'
-            }`}
+            )}
             style={{ width: `${[38, 26, 50, 32, 20, 44][i]}%` }}
           />
         </div>
@@ -211,12 +257,11 @@ function MessageSkeleton() {
   )
 }
 
-/* ─── main page ─── */
-
 export default function ChatRoomPage() {
   const { id } = useParams<{ id: string }>()
   const roomId = Number(id)
-  const { roomMessages, loadRoom, sendMessage, markAsRead, deleteRoom, rooms } = useChat()
+  const { roomMessages, loadRoom, sendMessage, markAsRead, deleteRoom, rooms } =
+    useChat()
   const { user, requireAuth, isAuthenticated, loading: authLoading } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -235,25 +280,40 @@ export default function ChatRoomPage() {
 
   const messages = roomMessages[roomId] ?? []
   const room = rooms.find((r) => r.id === roomId)
-  const otherUserName = room ? `${room.otherUser.firstName} ${room.otherUser.lastName}` : '...'
+  const otherUserName = room
+    ? getDisplayName(room.otherUser) || 'User'
+    : 'Conversation'
 
   useEffect(() => {
     if (authLoading) return
     if (!requireAuth()) return
+    let active = true
     initialScrollDone.current = false
     prevMessagesLengthRef.current = 0
-    setIsLoading(true)
-    loadRoom(roomId).finally(() => setIsLoading(false))
+    Promise.resolve().then(() => {
+      if (active) setIsLoading(true)
+    })
+    loadRoom(roomId).finally(() => {
+      if (active) setIsLoading(false)
+    })
     markAsRead(roomId)
+    return () => {
+      active = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, isAuthenticated, authLoading])
 
   useEffect(() => {
     if (isLoading || messages.length === 0) return
-    if (messages.length > prevMessagesLengthRef.current && initialScrollDone.current) {
+    if (
+      messages.length > prevMessagesLengthRef.current &&
+      initialScrollDone.current
+    ) {
       const lastMsg = messages[messages.length - 1]
       if (lastMsg && lastMsg.sender.id !== user?.id) markAsRead(roomId)
     }
     prevMessagesLengthRef.current = messages.length
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, isLoading, roomId])
 
   useLayoutEffect(() => {
@@ -274,18 +334,25 @@ export default function ChatRoomPage() {
     setPendingImages([])
     setIsSending(true)
     try {
-      await sendMessage(roomId, content, prevImages.length > 0 ? prevImages : undefined)
+      await sendMessage(
+        roomId,
+        content,
+        prevImages.length > 0 ? prevImages : undefined
+      )
     } catch (e) {
-      console.error(e)
       setInput(prevInput)
       setPendingImages(prevImages)
-      toast.error(e instanceof Error ? e.message : 'Failed to send message. Please try again.')
+      toast.error(
+        e instanceof Error
+          ? e.message
+          : 'Failed to send message. Please try again.'
+      )
     } finally {
       setIsSending(false)
     }
   }
 
-  const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
+  const MAX_FILE_SIZE = 5 * 1024 * 1024
   const MAX_MESSAGE_LENGTH = 1000
 
   function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
@@ -301,12 +368,16 @@ export default function ChatRoomPage() {
 
     const msgs: string[] = []
     if (tooBig.length > 0)
-      msgs.push(`${tooBig.length} file${tooBig.length > 1 ? 's' : ''} exceeded 5 MB`)
+      msgs.push(
+        `${tooBig.length} ${tooBig.length > 1 ? 'files' : 'file'} exceeded 5 MB`
+      )
     if (tooMany > 0)
-      msgs.push(`${tooMany} file${tooMany > 1 ? 's' : ''} exceeded the 5-image limit`)
+      msgs.push(
+        `${tooMany} ${tooMany > 1 ? 'files' : 'file'} exceeded the 5-image limit`
+      )
 
     if (msgs.length > 0) {
-      setFileSizeError(msgs.join(' · '))
+      setFileSizeError(msgs.join(', '))
       setTimeout(() => setFileSizeError(''), 3500)
     }
 
@@ -321,128 +392,155 @@ export default function ChatRoomPage() {
     router.push('/chat')
   }
 
-  const canSend = (input.trim().length > 0 || pendingImages.length > 0) && !isSending
+  const canSend =
+    (input.trim().length > 0 || pendingImages.length > 0) && !isSending
 
   return (
-    <motion.div
-      className="flex flex-col h-[100dvh] lg:h-full bg-white"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.2, ease: 'easeOut' }}
-      style={{ willChange: 'opacity' }}
-    >
-
-      {/* ── Header ── */}
-      <div className="shrink-0 flex items-center gap-3 px-3 lg:px-5 py-2.5 lg:py-3 bg-white border-b border-gray-100 shadow-sm">
-        {/* Back — always visible */}
+    <div className="flex flex-col h-[100dvh] lg:h-full bg-white">
+      {/* Header */}
+      <div className="shrink-0 flex items-center gap-3 px-3 lg:px-5 py-3 bg-white border-b border-border">
         <button
-          onClick={() => router.push(from && !from.startsWith('/chat') ? from : '/chat')}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors shrink-0"
+          type="button"
+          aria-label="Back to messages"
+          onClick={() =>
+            router.push(from && !from.startsWith('/chat') ? from : '/chat')
+          }
+          className="lg:hidden w-10 h-10 rounded-full flex items-center justify-center text-deep-teal hover:bg-off-white transition-colors shrink-0 cursor-pointer"
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ChevronLeft className="w-5 h-5" />
         </button>
 
-        {/* Avatar */}
         <div className="relative shrink-0">
           {room?.otherUser.avatar ? (
-            <div className="relative w-10 h-10 lg:w-11 lg:h-11">
+            <div className="relative w-10 h-10 rounded-full overflow-hidden border border-border">
               <Image
                 src={room.otherUser.avatar}
                 alt={otherUserName}
                 fill
                 unoptimized
-                className="rounded-full object-cover"
+                className="object-cover"
               />
             </div>
           ) : (
-            <div className="w-10 h-10 lg:w-11 lg:h-11 rounded-full bg-deep-teal/10 flex items-center justify-center">
-              <span className="text-deep-teal font-semibold text-sm">{otherUserName.charAt(0)}</span>
+            <div className="w-10 h-10 rounded-full bg-deep-teal/10 flex items-center justify-center">
+              <span className="text-deep-teal font-semibold text-sm">
+                {otherUserName.charAt(0).toUpperCase()}
+              </span>
             </div>
           )}
         </div>
 
-        {/* Name */}
         <div className="flex-1 min-w-0">
           {room?.otherUser?.isHost ? (
-            <p
-              className="font-semibold text-deep-teal text-base lg:text-lg truncate cursor-pointer hover:underline inline-flex items-center gap-1.5"
-              onClick={() => router.push(`/hosts/${room.otherUser.id}?from=${encodeURIComponent(`/chat/${roomId}`)}`)}
+            <button
+              type="button"
+              onClick={() =>
+                router.push(
+                  `/hosts/${room.otherUser.id}?from=${encodeURIComponent(`/chat/${roomId}`)}`
+                )
+              }
+              className="font-semibold text-deep-teal text-sm lg:text-base truncate cursor-pointer hover:underline inline-flex items-center gap-1.5 max-w-full"
             >
-              <span>{otherUserName}</span>
-              {room.otherUser.isVerifiedHost && <BadgeCheck className="w-4 h-4 text-blue-500 shrink-0" />}
-            </p>
+              <span className="truncate">{otherUserName}</span>
+              {room.otherUser.isVerifiedHost && (
+                <BadgeCheck className="w-4 h-4 text-deep-teal shrink-0" />
+              )}
+            </button>
           ) : (
-            <p className="font-semibold text-deep-teal text-base lg:text-lg truncate text-gray-800">
+            <p className="font-semibold text-deep-teal text-sm lg:text-base truncate">
               {otherUserName}
             </p>
           )}
         </div>
 
-        {/* Delete */}
         <button
+          type="button"
+          aria-label="Delete conversation"
           onClick={() => setShowDeleteModal(true)}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-red-400 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
+          className="w-9 h-9 rounded-full flex items-center justify-center text-neutral-gray hover:text-red-600 hover:bg-red-50 transition-colors shrink-0 cursor-pointer"
         >
-          <Trash2 className="w-4.5 h-4.5" />
+          <Trash2 className="w-4 h-4" />
         </button>
       </div>
 
-      {/* ── Sticky Context Banner (Active Booking or Context Property) ── */}
+      {/* Sticky Context Banner */}
       {room?.activeBooking ? (
-        <div className="shrink-0 bg-orange-50/80 border-b border-orange-100 px-3 lg:px-5 py-2.5 flex items-center justify-between gap-3 text-xs md:text-sm">
+        <div className="shrink-0 bg-off-white/75 border-b border-border px-3 lg:px-5 py-2.5 flex items-center justify-between gap-3 text-xs md:text-sm">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-accent-orange/15 flex items-center justify-center shrink-0">
               <Calendar className="w-4 h-4 text-accent-orange" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-deep-teal truncate">{room.activeBooking.propertyTitle}</span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-accent-orange/15 text-accent-orange capitalize">
+                <span className="font-semibold text-deep-teal truncate">
+                  {room.activeBooking.propertyTitle}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-accent-orange/15 text-accent-orange capitalize shrink-0">
                   {room.activeBooking.bookingStatus}
                 </span>
               </div>
-              <p className="text-neutral-gray text-[11px] mt-0.5 truncate">
-                {new Date(room.activeBooking.checkInDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} –{' '}
-                {new Date(room.activeBooking.checkOutDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+              <p className="text-neutral-gray text-[11px] mt-0.5 truncate tabular-nums">
+                {new Date(room.activeBooking.checkInDate).toLocaleDateString(
+                  'en-GB',
+                  { day: 'numeric', month: 'short' }
+                )}{' '}
+                –{' '}
+                {new Date(room.activeBooking.checkOutDate).toLocaleDateString(
+                  'en-GB',
+                  { day: 'numeric', month: 'short', year: 'numeric' }
+                )}
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={() => {
-              const isHostView = user?.role?.some((r) => r.name === 'host') && !room.otherUser?.isHost
-              router.push(isHostView ? `/profile/host/booking/${room.activeBooking!.id}` : `/profile/bookings/${room.activeBooking!.id}`)
+              const isHostView =
+                user?.role?.some((r) => r.name === 'host') &&
+                !room.otherUser?.isHost
+              router.push(
+                isHostView
+                  ? `/profile/host/booking/${room.activeBooking!.id}`
+                  : `/profile/bookings/${room.activeBooking!.id}`
+              )
             }}
-            className="shrink-0 font-medium text-accent-orange hover:text-accent-orange/80 bg-white border border-accent-orange/30 hover:border-accent-orange rounded-lg px-3 py-1 transition-all"
+            className="shrink-0 text-xs font-semibold text-deep-teal hover:bg-off-white bg-white border border-border rounded-xl px-3 py-1.5 transition-colors cursor-pointer"
           >
-            View Booking
+            View booking
           </button>
         </div>
       ) : room?.contextProperty ? (
-        <div className="shrink-0 bg-teal-50/70 border-b border-teal-100 px-3 lg:px-5 py-2.5 flex items-center justify-between gap-3 text-xs md:text-sm">
+        <div className="shrink-0 bg-off-white/60 border-b border-border px-3 lg:px-5 py-2.5 flex items-center justify-between gap-3 text-xs md:text-sm">
           <div className="flex items-center gap-2.5 min-w-0">
             {room.contextProperty.thumbnail ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 src={room.contextProperty.thumbnail}
                 alt={room.contextProperty.title}
-                className="w-8 h-8 rounded-lg object-cover shrink-0"
+                className="w-8 h-8 rounded-lg object-cover shrink-0 border border-border"
               />
             ) : (
               <div className="w-8 h-8 rounded-lg bg-deep-teal/10 flex items-center justify-center shrink-0">
-                <Building className="w-4 h-4 text-deep-teal" />
+                <Building2 className="w-4 h-4 text-deep-teal" />
               </div>
             )}
             <div className="min-w-0">
-              <span className="text-[11px] text-neutral-gray block">Inquiring about listing</span>
-              <span className="font-semibold text-deep-teal truncate block">{room.contextProperty.title}</span>
+              <span className="text-[11px] text-neutral-gray block">
+                Inquiring about stay
+              </span>
+              <span className="font-semibold text-deep-teal truncate block">
+                {room.contextProperty.title}
+              </span>
             </div>
           </div>
           <button
             type="button"
-            onClick={() => router.push(`/detail/${room.contextProperty!.id}`)}
-            className="shrink-0 font-medium text-deep-teal hover:text-deep-teal/80 bg-white border border-deep-teal/30 hover:border-deep-teal rounded-lg px-3 py-1 transition-all"
+            onClick={() =>
+              router.push(`/detail/${room.contextProperty!.id}`)
+            }
+            className="shrink-0 text-xs font-semibold text-deep-teal hover:bg-off-white bg-white border border-border rounded-xl px-3 py-1.5 transition-colors cursor-pointer"
           >
-            View Listing
+            View stay
           </button>
         </div>
       ) : null}
@@ -453,105 +551,94 @@ export default function ChatRoomPage() {
         onConfirm={handleDelete}
         title="Delete Conversation"
         message={`Are you sure you want to delete your conversation with <strong>${otherUserName}</strong>? This cannot be undone.`}
-        confirmButtonClassName="bg-red-500 hover:bg-red-600 text-white"
+        confirmButtonClassName="bg-red-600 hover:bg-red-700 text-white"
       />
 
-      {/* ── Messages ── */}
+      {/* Messages Canvas */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto scrollbar-thin px-3 lg:px-5 py-3 space-y-1"
-        style={{ background: 'linear-gradient(180deg, #f9f7f4 0%, #f4f2ef 100%)' }}
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain modern-scrollbar px-3 lg:px-5 py-4 space-y-1.5 bg-off-white/35"
       >
         {isLoading ? (
           <MessageSkeleton />
         ) : (
-          <AnimatePresence initial={false}>
-            {(() => {
-              const lastReadOwnIdx = messages.reduce(
-                (acc, msg, i) => (msg.sender.id === user?.id && msg.readAt ? i : acc),
-                -1
-              )
-              const lastOwnIdx = messages.reduce(
-                (acc, msg, i) => (msg.sender.id === user?.id ? i : acc),
-                -1
-              )
-              let lastDateKey = ''
-              return messages.flatMap((msg, i) => {
-                const dateKey = getDateKey(msg.createdAt)
-                const items: React.ReactNode[] = []
+          (() => {
+            const lastReadOwnIdx = messages.reduce(
+              (acc, msg, i) =>
+                msg.sender.id === user?.id && msg.readAt ? i : acc,
+              -1
+            )
+            const lastOwnIdx = messages.reduce(
+              (acc, msg, i) => (msg.sender.id === user?.id ? i : acc),
+              -1
+            )
+            let lastDateKey = ''
+            return messages.flatMap((msg, i) => {
+              const dateKey = getDateKey(msg.createdAt)
+              const items: React.ReactNode[] = []
 
-                if (dateKey !== lastDateKey) {
-                  lastDateKey = dateKey
-                  items.push(
-                    <div key={`date-${dateKey}`} className="flex justify-center my-4">
-                      <span className="text-[11px] text-neutral-gray bg-black/6 rounded-full px-3 py-1 select-none">
-                        {formatDateLabel(msg.createdAt)}
-                      </span>
-                    </div>
-                  )
-                }
-
-                // Show avatar only on the last consecutive message from same sender
-                const nextMsg = messages[i + 1]
-                const showAvatar = !nextMsg || nextMsg.sender.id !== msg.sender.id
-
+              if (dateKey !== lastDateKey) {
+                lastDateKey = dateKey
                 items.push(
-                  <MessageBubble
-                    key={msg.id}
-                    message={msg}
-                    isOwn={msg.sender.id === user?.id}
-                    showReadAt={i === lastReadOwnIdx}
-                    showIcon={i === lastOwnIdx}
-                    showAvatar={showAvatar}
-                  />
+                  <div
+                    key={`date-${dateKey}`}
+                    className="flex justify-center my-4"
+                  >
+                    <span className="text-[11px] font-medium text-neutral-gray bg-white border border-border rounded-full px-3 py-1 select-none tabular-nums">
+                      {formatDateLabel(msg.createdAt)}
+                    </span>
+                  </div>
                 )
-                return items
-              })
-            })()}
-          </AnimatePresence>
+              }
+
+              const nextMsg = messages[i + 1]
+              const showAvatar =
+                !nextMsg || nextMsg.sender.id !== msg.sender.id
+
+              items.push(
+                <MessageBubble
+                  key={msg.id}
+                  message={msg}
+                  isOwn={msg.sender.id === user?.id}
+                  showReadAt={i === lastReadOwnIdx}
+                  showIcon={i === lastOwnIdx}
+                  showAvatar={showAvatar}
+                />
+              )
+              return items
+            })
+          })()
         )}
       </div>
 
-      {/* ── Pending image strip ── */}
-      <AnimatePresence>
-        {pendingImages.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="shrink-0 overflow-hidden bg-white border-t border-gray-100"
-          >
-            <div className="flex gap-2 px-4 lg:px-6 py-2.5 overflow-x-auto scrollbar-hide">
-              {pendingImages.map((file, i) => (
-                <PendingImageThumb
-                  key={i}
-                  file={file}
-                  onRemove={() => setPendingImages((prev) => prev.filter((_, idx) => idx !== i))}
-                />
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Pending image strip */}
+      {pendingImages.length > 0 && (
+        <div className="shrink-0 overflow-hidden bg-white border-t border-border">
+          <div className="flex gap-2 px-4 lg:px-6 py-2.5 overflow-x-auto scrollbar-hide">
+            {pendingImages.map((file, i) => (
+              <PendingImageThumb
+                key={i}
+                file={file}
+                onRemove={() =>
+                  setPendingImages((prev) => prev.filter((_, idx) => idx !== i))
+                }
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
-      {/* ── File size error ── */}
-      <AnimatePresence>
-        {fileSizeError && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="shrink-0 overflow-hidden bg-white"
-          >
-            <p className="text-xs text-red-500 px-5 py-1.5 border-t border-red-100 bg-red-50">
-              {fileSizeError}
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* File size error */}
+      {fileSizeError && (
+        <div className="shrink-0 overflow-hidden bg-white">
+          <p className="text-xs text-red-600 px-5 py-1.5 border-t border-red-100 bg-red-50">
+            {fileSizeError}
+          </p>
+        </div>
+      )}
 
-      {/* ── Input bar ── */}
-      <div className="shrink-0 flex items-end gap-2 px-3 lg:px-5 py-2.5 lg:py-3 bg-white border-t border-gray-100">
+      {/* Composer Bar */}
+      <div className="shrink-0 flex items-end gap-2 px-3 lg:px-5 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] lg:py-3 bg-white border-t border-border">
         <input
           ref={fileInputRef}
           type="file"
@@ -561,16 +648,15 @@ export default function ChatRoomPage() {
           onChange={handleImagePick}
         />
 
-        {/* Image attach */}
         <button
           type="button"
+          aria-label="Attach photo"
           onClick={() => fileInputRef.current?.click()}
-          className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-neutral-gray hover:text-deep-teal hover:bg-gray-100 transition-colors"
+          className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-neutral-gray hover:text-deep-teal hover:bg-off-white transition-colors cursor-pointer"
         >
           <ImagePlus className="w-5 h-5" />
         </button>
 
-        {/* Text input */}
         <div className="flex-1 relative">
           <textarea
             ref={textareaRef}
@@ -588,31 +674,32 @@ export default function ChatRoomPage() {
                 handleSend()
               }
             }}
-            placeholder="Type a message…"
+            placeholder="Type a message..."
             style={{ height: '40px' }}
-            className={`w-full rounded-2xl bg-gray-100 border px-4 py-2.5 text-sm outline-none resize-none overflow-y-auto scrollbar-hide transition-colors leading-normal border-transparent focus:bg-white focus:border-accent-orange/40 ${
-              input.length >= MAX_MESSAGE_LENGTH * 0.8 ? 'pb-5' : ''
-            }`}
+            className={cn(
+              'w-full rounded-2xl bg-off-white/60 border border-border px-4 py-2 text-sm outline-none resize-none overflow-y-auto scrollbar-hide transition-colors leading-normal focus:bg-white focus:border-deep-teal',
+              input.length >= MAX_MESSAGE_LENGTH * 0.8 && 'pb-5'
+            )}
           />
           {input.length >= MAX_MESSAGE_LENGTH * 0.8 && (
-            <span className="absolute bottom-1.5 right-3 text-[10px] font-medium pointer-events-none text-neutral-gray/50">
+            <span className="absolute bottom-1.5 right-3 text-[10px] font-medium pointer-events-none text-neutral-gray tabular-nums">
               {input.length}/{MAX_MESSAGE_LENGTH}
             </span>
           )}
         </div>
 
-        {/* Send */}
-        <motion.button
+        <button
           type="button"
+          aria-label="Send message"
           onClick={handleSend}
           disabled={!canSend}
-          animate={{ scale: canSend ? 1 : 0.9, opacity: canSend ? 1 : 0.4 }}
-          transition={{ duration: 0.15 }}
-          className="shrink-0 w-10 h-10 lg:w-11 lg:h-11 rounded-full bg-accent-orange flex items-center justify-center hover:bg-accent-orange/90 transition-colors"
+          className={cn(
+            'shrink-0 w-10 h-10 rounded-full bg-accent-orange flex items-center justify-center hover:bg-accent-orange/90 transition-opacity cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed'
+          )}
         >
-          <Send className="w-4 h-4 lg:w-5 lg:h-5 text-white" />
-        </motion.button>
+          <Send className="w-4 h-4 text-white" />
+        </button>
       </div>
-    </motion.div>
+    </div>
   )
 }

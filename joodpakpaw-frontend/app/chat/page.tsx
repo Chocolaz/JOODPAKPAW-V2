@@ -1,55 +1,101 @@
 'use client'
 
-import { useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
-import { motion } from 'framer-motion'
+import { LogIn, Search } from 'lucide-react'
 import { useAuth } from '@/app/_components/AuthContext'
+import { useAuthModal } from '@/app/_context/AuthModalContext'
 import { assetPath } from '@/lib/utils'
 import { AppHeader } from '@/app/_components/AppHeader'
+import { Button } from '@/components/ui/button'
 import { ChatSidebar } from './_components/ChatSidebar'
 
 export default function ChatPage() {
-  const { requireAuth, loading: authLoading } = useAuth()
+  const { isAuthenticated, loading: authLoading } = useAuth()
+  const { openAuthModal } = useAuthModal()
   const router = useRouter()
   const searchParams = useSearchParams()
   const from = searchParams.get('from')
 
-  useEffect(() => {
-    if (authLoading) return
-    requireAuth()
-  }, [authLoading])
+  const guestSignInCard = (
+    <div className="rounded-2xl border border-border bg-white px-6 py-10 text-center max-w-md mx-auto space-y-4">
+      <Image
+        src={assetPath('/graphics/no-chat.png')}
+        alt="Sign in to view messages"
+        width={150}
+        height={150}
+        className="mx-auto"
+      />
+      <div className="space-y-1.5">
+        <h2 className="font-semibold text-deep-teal">
+          Sign in to message hosts
+        </h2>
+        <p className="text-sm text-neutral-gray leading-relaxed">
+          Chat directly with verified pet-boarding hosts about care routines,
+          rooms, and check-in details.
+        </p>
+      </div>
+      <div className="flex flex-col sm:flex-row gap-2.5 justify-center pt-1">
+        <Button
+          type="button"
+          onClick={() => openAuthModal('login', { returnUrl: '/chat' })}
+          className="h-11 px-6 rounded-xl bg-accent-orange hover:bg-accent-orange/90 text-white font-semibold cursor-pointer"
+        >
+          <LogIn className="mr-2 h-4 w-4" />
+          Sign in
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => router.push('/')}
+          className="h-11 px-5 rounded-xl border-border text-foreground hover:bg-off-white/70 font-medium cursor-pointer"
+        >
+          <Search className="mr-2 h-4 w-4" />
+          Explore stays
+        </Button>
+      </div>
+    </div>
+  )
 
   return (
     <>
-      {/* Mobile: full room list */}
-      <motion.div
-        className="lg:hidden"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.2, ease: 'easeOut' }}
-        style={{ willChange: 'opacity' }}
-      >
+      {/* Mobile: clean single header + room list or guest prompt */}
+      <div className="lg:hidden min-h-screen bg-white">
         <AppHeader title="Messages" backPath={from || undefined} />
         <div className="pt-14 pb-24">
-          <ChatSidebar />
+          {!authLoading && !isAuthenticated ? (
+            <div className="px-4 pt-6">{guestSignInCard}</div>
+          ) : (
+            <ChatSidebar />
+          )}
         </div>
-      </motion.div>
+      </div>
 
-      {/* Desktop: right-panel empty state */}
-      <motion.div
-        className="hidden lg:flex h-full flex-col items-center justify-center gap-3"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.2, ease: 'easeOut' }}
-        style={{ willChange: 'opacity' }}
-      >
-        <Image src={assetPath('/graphics/no-chat.png')} alt="No chat selected" width={160} height={160} className="opacity-90" />
-        <div className="text-center">
-          <p className="text-base font-medium text-gray-500">Select a conversation</p>
-          <p className="text-sm text-gray-400 mt-1">Choose from the list on the left to start chatting</p>
-        </div>
-      </motion.div>
+      {/* Desktop: right-panel editorial empty state or guest prompt */}
+      <div className="hidden lg:flex h-full flex-col items-center justify-center p-8 text-center">
+        {!authLoading && !isAuthenticated ? (
+          guestSignInCard
+        ) : (
+          <div className="space-y-3 max-w-sm">
+            <Image
+              src={assetPath('/graphics/no-chat.png')}
+              alt="Select a conversation"
+              width={150}
+              height={150}
+              className="mx-auto opacity-90"
+            />
+            <div className="space-y-1">
+              <h2 className="font-semibold text-deep-teal">
+                Select a conversation
+              </h2>
+              <p className="text-sm text-neutral-gray leading-relaxed">
+                Choose a host or guest from the left sidebar to read and send
+                messages.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </>
   )
 }
