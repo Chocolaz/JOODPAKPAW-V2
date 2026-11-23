@@ -23,14 +23,12 @@ import {
 import { AppNotification } from '@/types'
 import { getNotificationRoute } from '@/app/notifications/_utils'
 
-// localStorage only stores which IDs have been read — notifications themselves
-// come from the API so they persist across devices.
 const READ_IDS_KEY = 'joodpakpaw_read_ids'
 
 interface NotificationContextType {
   notifications: AppNotification[]
   unreadCount: number
-  isConnected: boolean | null // null = connecting, true = connected, false = disconnected
+  isConnected: boolean | null
   isLoading: boolean
   markAsRead: (id: string) => void
   markAllAsRead: () => void
@@ -51,8 +49,6 @@ const NotificationContext = createContext<NotificationContextType>({
 
 export const useNotifications = () => useContext(NotificationContext)
 
-// ─── Read-state helpers (device-local) ───────────────────────────────────────
-
 function loadReadIds(): Set<string> {
   if (typeof window === 'undefined') return new Set()
   try {
@@ -70,8 +66,6 @@ function saveReadIds(ids: Set<string>) {
     // ignore
   }
 }
-
-// ─── Parser ──────────────────────────────────────────────────────────────────
 
 function parseNotification(
   raw: unknown,
@@ -97,20 +91,19 @@ function parseNotification(
     category: String(data?.category ?? 'general'),
     title: String(data?.title ?? 'Notification'),
     message: String(data?.message ?? ''),
-    // Read state: prefer local override, fall back to server value
     isRead: readIds.has(id) || Boolean(data?.isRead ?? false),
     receivedAt: String(data?.createdAt ?? new Date().toISOString()),
     referenceId,
     referenceTable:
-      typeof data?.referenceTable === 'string' ? data.referenceTable : undefined,
+      typeof data?.referenceTable === 'string'
+        ? data.referenceTable
+        : undefined,
     roleName:
       typeof data?.roleName === 'string' ? data.roleName : undefined,
     actionName:
       typeof data?.actionName === 'string' ? data.actionName : undefined,
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
@@ -122,7 +115,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const unreadCount = notifications.filter((n) => !n.isRead).length
 
-  // Fetch all notifications from the server
   const fetchNotifications = useCallback(async () => {
     setIsLoading(true)
     try {
@@ -131,7 +123,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       const parsed = response.notifications.map((n) =>
         parseNotification(n, readIds)
       )
-      console.log('[Notification] Fetched:', parsed)
       setNotifications(parsed)
     } catch {
       // Keep existing state on error
@@ -140,16 +131,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Fetch on login
   useEffect(() => {
     if (!isAuthenticated) {
-      setNotifications([])
+      queueMicrotask(() => setNotifications([]))
       return
     }
     fetchNotifications()
   }, [isAuthenticated, fetchNotifications])
 
-  // Prepend incoming socket notification (dedup by id)
   const addNotification = useCallback((raw: unknown) => {
     try {
       const readIds = loadReadIds()
@@ -170,7 +159,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
     )
-    markNotificationAsRead(id).catch(console.error)
+    markNotificationAsRead(id).catch(() => {})
   }, [])
 
   const markAllAsRead = useCallback(() => {
@@ -180,7 +169,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       saveReadIds(readIds)
       return prev.map((n) => ({ ...n, isRead: true }))
     })
-    markAllNotificationsAsRead().catch(console.error)
+    markAllNotificationsAsRead().catch(() => {})
   }, [])
 
   const deleteOne = useCallback(async (id: string) => {
@@ -193,23 +182,20 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     setNotifications([])
   }, [])
 
-  // Socket lifecycle
   useEffect(() => {
     if (!isAuthenticated) {
       disconnectSocket()
-      setIsConnected(null)
+      queueMicrotask(() => setIsConnected(null))
       return
     }
 
-    setIsConnected(null)
+    queueMicrotask(() => setIsConnected(null))
     const socket = connectSocket()
     if (!socket) return
 
-    // Debounce disconnect so brief proxy-caused reconnects don't flicker the UI
     let disconnectTimer: ReturnType<typeof setTimeout> | null = null
 
     const onConnect = () => {
-      console.log('[Socket] Connected')
       if (disconnectTimer) {
         clearTimeout(disconnectTimer)
         disconnectTimer = null
@@ -218,22 +204,17 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       fetchNotifications()
     }
     const onDisconnect = () => {
-      console.log('[Socket] Disconnected — waiting to confirm...')
       disconnectTimer = setTimeout(async () => {
-        console.log('[Socket] Confirmed disconnected — refreshing token and reconnecting')
         const newToken = await refreshAccessToken()
-        disconnectSocket() // clear stale socket so connectSocket() creates a fresh one
+        disconnectSocket()
         if (newToken) {
-          setReconnectKey((k) => k + 1) // triggers effect re-run with fresh token
+          setReconnectKey((k) => k + 1)
         } else {
-          // Refresh failed — session truly expired
-          console.warn('[Socket] Token refresh failed, staying disconnected')
           setIsConnected(false)
         }
       }, 4000)
     }
     const onNotification = (data: unknown) => {
-      console.log('[Notification] Received:', data)
       try {
         const readIds = loadReadIds()
         const notif = parseNotification(data, readIds)
@@ -258,13 +239,22 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           'account_banned',
           'account_unbanned',
         ]
-        const rawObj = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {}
-        const eventName = String(rawObj.actionName ?? rawObj.type ?? notif.actionName ?? notif.type ?? '')
+        const rawObj =
+          typeof data === 'object' && data !== null
+            ? (data as Record<string, unknown>)
+            : {}
+        const eventName = String(
+          rawObj.actionName ??
+            rawObj.type ??
+            notif.actionName ??
+            notif.type ??
+            ''
+        )
         if (govEvents.includes(eventName)) {
-          refreshAuth().catch(console.error)
+          refreshAuth().catch(() => {})
         }
-      } catch (err) {
-        console.error('[Notification] Error handling notification event:', err)
+      } catch {
+        // ignore malformed notification payload
       }
     }
 
@@ -273,7 +263,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     socket.on('disconnect', onDisconnect)
     socket.on('notification', onNotification)
 
-    if (socket.connected) setIsConnected(true)
+    if (socket.connected) {
+      queueMicrotask(() => setIsConnected(true))
+    }
 
     return () => {
       if (disconnectTimer) clearTimeout(disconnectTimer)
@@ -282,7 +274,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       socket.off('disconnect', onDisconnect)
       socket.off('notification', onNotification)
     }
-  }, [isAuthenticated, reconnectKey, addNotification, fetchNotifications, refreshAuth, router])
+  }, [
+    isAuthenticated,
+    reconnectKey,
+    addNotification,
+    fetchNotifications,
+    refreshAuth,
+    router,
+  ])
 
   return (
     <NotificationContext.Provider
