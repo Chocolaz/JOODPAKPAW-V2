@@ -34,8 +34,8 @@ jobs:
       - name: Run pytest suite
         run: pytest -v
 
-  api-typecheck:
-    name: Backend API Typecheck (Node 22)
+  api-build:
+    name: Backend API Typecheck & Build (Node 22)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -54,14 +54,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Prisma Client
-        run: npx prisma generate
-
       - name: Run TypeScript typecheck
         run: npm run typecheck
 
+      - name: Generate Prisma Client & build API
+        run: npm run build
+
   frontend-build:
-    name: Frontend Typecheck & Build (Node 22)
+    name: Frontend Lint, Typecheck & Build (Node 22)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -78,7 +78,11 @@ jobs:
           cache-dependency-path: joodpakpaw-frontend/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
+
+      - name: Run ESLint (non-blocking report)
+        continue-on-error: true
+        run: npm run lint
 
       - name: Run TypeScript typecheck
         run: npm run typecheck
