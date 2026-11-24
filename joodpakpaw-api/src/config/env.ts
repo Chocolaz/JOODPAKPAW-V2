@@ -17,6 +17,7 @@ export const config = {
     .map((s) => s.trim())
     .filter(Boolean),
   email: {
+    brevoApiKey: (process.env.BREVO_API_KEY || '').trim(),
     resendApiKey: (process.env.RESEND_API_KEY || '').trim(),
     from: (process.env.EMAIL_FROM || 'JoodPakPaw <no-reply@joodpakpaw.com>').trim(),
     smtpHost: (process.env.SMTP_HOST || '').trim(),

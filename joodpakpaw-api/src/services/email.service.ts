@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 import { config } from '../config/env';
 
 const RESEND_API_ENDPOINT = 'https://api.resend.com/emails';
+const BREVO_API_ENDPOINT = 'https://api.brevo.com/v3/smtp/email';
 const EMAIL_REQUEST_TIMEOUT_MS = 5000;
 const DEFAULT_FROM_ADDRESS = 'JoodPakPaw <no-reply@joodpakpaw.com>';
 
@@ -45,12 +46,67 @@ async function dispatchViaSmtp(payload: EmailPayload): Promise<void> {
   });
 }
 
+function parseSender(from: string): { name: string; email: string } {
+  const match = from.match(/^(.+?)\s*<([^>]+)>$/);
+  if (match) {
+    return {
+      name: match[1].trim().replace(/^["']|["']$/g, '') || 'JoodPakPaw',
+      email: match[2].trim(),
+    };
+  }
+  return { name: 'JoodPakPaw', email: from.trim() };
+}
+
+async function dispatchViaBrevo(payload: EmailPayload): Promise<void> {
+  const { brevoApiKey, from, smtpUser } = config.email;
+  const rawSender =
+    from && from !== DEFAULT_FROM_ADDRESS
+      ? from
+      : smtpUser
+        ? `JoodPakPaw <${smtpUser}>`
+        : DEFAULT_FROM_ADDRESS;
+  const sender = parseSender(rawSender);
+
+  const response = await fetch(BREVO_API_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'api-key': brevoApiKey,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      sender,
+      to: [{ email: payload.to }],
+      subject: payload.subject,
+      htmlContent: payload.html,
+      textContent: payload.text,
+    }),
+    signal: AbortSignal.timeout(EMAIL_REQUEST_TIMEOUT_MS),
+  });
+
+  if (!response.ok) {
+    console.error(
+      `[EmailService] Brevo API error for ${payload.emailType} email: HTTP ${response.status}`
+    );
+  }
+}
+
 async function dispatchEmail(payload: EmailPayload): Promise<void> {
-  const apiKey = config.email.resendApiKey;
-  const from = config.email.from;
-  const { smtpUser, smtpPass } = config.email;
+  const { brevoApiKey, resendApiKey: apiKey, from, smtpUser, smtpPass } = config.email;
   const hasSmtp = Boolean(smtpUser && smtpPass);
   const isProd = isProductionRuntime();
+
+  if (brevoApiKey) {
+    try {
+      await dispatchViaBrevo(payload);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      console.error(
+        `[EmailService] Failed to send ${payload.emailType} email via Brevo: ${message}`
+      );
+    }
+    return;
+  }
 
   if (hasSmtp) {
     try {
