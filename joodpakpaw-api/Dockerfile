@@ -13,15 +13,17 @@ RUN apk add --no-cache openssl
 COPY package*.json ./
 RUN npm ci
 
-COPY tsconfig.json ./
+COPY tsconfig.json prisma.config.ts ./
 COPY prisma ./prisma/
 RUN npx prisma generate
 
 COPY src ./src/
-RUN npm run build
+RUN npx tsc
 
-# Remove development dependencies
-RUN npm prune --production
+# Remove development dependencies while preserving generated Prisma client engines
+RUN cp -r node_modules/.prisma /tmp/.prisma && \
+    npm prune --omit=dev && \
+    mv /tmp/.prisma node_modules/.prisma
 
 # --- Stage 2: Production Runner ---
 FROM node:22-alpine AS runner
