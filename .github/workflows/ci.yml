@@ -54,11 +54,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
       - name: Run TypeScript typecheck
         run: npm run typecheck
 
-      - name: Generate Prisma Client & build API
-        run: npm run build
+      - name: Build API
+        run: npx tsc
 
   frontend-build:
     name: Frontend Lint, Typecheck & Build (Node 22)
@@ -83,6 +86,9 @@ jobs:
       - name: Run ESLint (non-blocking report)
         continue-on-error: true
         run: npm run lint
+
+      - name: Generate Next.js types (next-env.d.ts)
+        run: npx next typegen
 
       - name: Run TypeScript typecheck
         run: npm run typecheck
