@@ -266,7 +266,7 @@ export function AddRoomCategoryForm({
   if (variant === 'desktop') {
     return (
       <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-        <div className="flex-1 overflow-y-auto scrollbar-modern px-6 py-5">
+        <div className="flex-1 overflow-y-auto modern-scrollbar px-6 py-5">
           {errorMessage && (
             <p className="text-sm text-red-500 mb-4">{errorMessage}</p>
           )}

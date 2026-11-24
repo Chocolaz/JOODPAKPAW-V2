@@ -13,7 +13,6 @@ import { useAddProperty } from '../../_context/AddPropertyContext'
 import { StepNavigation } from '../StepNavigation'
 import { AddressComponents } from '@/types'
 
-
 const libraries: 'places'[] = ['places']
 
 export function Step2({
@@ -29,7 +28,8 @@ export function Step2({
     lat: Number(formData.latitude) || 13.736717,
     lng: Number(formData.longitude) || 100.523186,
   })
-  const [searchBox, setSearchBox] = useState<google.maps.places.SearchBox | null>(null)
+  const [searchBox, setSearchBox] =
+    useState<google.maps.places.SearchBox | null>(null)
   const [address, setAddress] = useState(formData.address || '')
   const [isLocating, setIsLocating] = useState(false)
   const [isGeocoding, setIsGeocoding] = useState(false)
@@ -68,23 +68,33 @@ export function Step2({
               const types = c.types
               if (types.includes('country')) components.country = c.long_name
               if (types.includes('administrative_area_level_1')) {
-                const prov = /krung\s*thep/i.test(c.long_name) ? 'Bangkok' : stripProvince(c.long_name)
+                const prov = /krung\s*thep/i.test(c.long_name)
+                  ? 'Bangkok'
+                  : stripProvince(c.long_name)
                 components.province = prov
               }
               if (types.includes('administrative_area_level_2'))
                 components.district = stripDistrict(c.long_name)
               if (types.includes('sublocality_level_1') && !components.district)
                 components.district = stripDistrict(c.long_name)
-              if (types.includes('administrative_area_level_3') && !components.district)
+              if (
+                types.includes('administrative_area_level_3') &&
+                !components.district
+              )
                 components.district = stripDistrict(c.long_name)
               if (types.includes('locality') && !components.district)
                 components.district = stripDistrict(c.long_name)
               if (types.includes('route')) components.route = c.long_name
-              if (types.includes('street_number')) components.street_number = c.long_name
-              if (types.includes('postal_code')) components.zipcode = c.long_name
+              if (types.includes('street_number'))
+                components.street_number = c.long_name
+              if (types.includes('postal_code'))
+                components.zipcode = c.long_name
             })
 
-            if (components.district?.toLowerCase() === 'mueang' && components.province) {
+            if (
+              components.district?.toLowerCase() === 'mueang' &&
+              components.province
+            ) {
               components.district = `Mueang ${components.province}`
             }
 
@@ -106,14 +116,18 @@ export function Step2({
     [updateField]
   )
 
-  // Auto-locate the user if no coordinates are saved yet
   useEffect(() => {
     if (formData.latitude || formData.longitude) return
     if (!navigator.geolocation) return
 
-    setIsLocating(true)
+    let cancelled = false
+    queueMicrotask(() => {
+      if (!cancelled) setIsLocating(true)
+    })
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (cancelled) return
         const { latitude: lat, longitude: lng } = pos.coords
         setCenter({ lat, lng })
         updateField('latitude', String(lat))
@@ -121,8 +135,14 @@ export function Step2({
         setIsLocating(false)
         reverseGeocode(lat, lng)
       },
-      () => setIsLocating(false) // user denied or error — fail silently
+      () => {
+        if (!cancelled) setIsLocating(false)
+      }
     )
+
+    return () => {
+      cancelled = true
+    }
   }, [formData.latitude, formData.longitude, reverseGeocode, updateField])
 
   const onPlacesChanged = () => {
@@ -150,23 +170,20 @@ export function Step2({
     reverseGeocode(lat, lng)
   }
 
-  // ── Map API still loading ───────────────────────────────────────────────
   if (!isLoaded) {
     return (
       <>
-        <div className="w-full text-center mt-5">
+        <div className="w-full text-center mt-5 pb-24">
           <h3 className="text-deep-teal">Where is your property located?</h3>
-          <p className="mb-4 text-neutral-gray text-sm">
+          <p className="mb-4 text-neutral-gray text-sm mt-1">
             Drag the marker or search to choose your location (within Thailand).
           </p>
 
-          {/* Search box skeleton */}
-          <div className="w-full h-10 mb-3 bg-gray-100 animate-pulse rounded-lg" />
+          <div className="w-full h-10 mb-3 bg-gray-100 animate-pulse motion-reduce:animate-none rounded-xl" />
 
-          {/* Map skeleton */}
-          <div className="w-full h-[380px] rounded-xl bg-gray-100 animate-pulse flex flex-col items-center justify-center gap-2 text-gray-400 border">
+          <div className="w-full h-[380px] rounded-2xl bg-gray-100 animate-pulse motion-reduce:animate-none flex flex-col items-center justify-center gap-2 text-neutral-gray border border-border">
             <MapPin className="w-8 h-8 opacity-40" />
-            <span className="text-sm">Loading map…</span>
+            <span className="text-sm">Loading map...</span>
           </div>
         </div>
 
@@ -175,30 +192,27 @@ export function Step2({
     )
   }
 
-  // ── Map loaded ──────────────────────────────────────────────────────────
   return (
     <>
-      <div className="w-full text-center mt-5">
+      <div className="w-full text-center mt-5 pb-24">
         <h3 className="text-deep-teal">Where is your property located?</h3>
-        <p className="mb-4 text-neutral-gray text-sm">
+        <p className="mb-4 text-neutral-gray text-sm mt-1">
           Drag the marker or search to choose your location (within Thailand).
         </p>
 
-        {/* Search box */}
         <StandaloneSearchBox
           onLoad={(ref) => setSearchBox(ref)}
           onPlacesChanged={onPlacesChanged}
         >
           <Input
-            placeholder="Search location…"
+            placeholder="Search location..."
             value={address}
             onChange={(e) => setAddress(e.target.value)}
-            className="w-full mb-3"
+            className="w-full mb-3 border-border rounded-xl"
           />
         </StandaloneSearchBox>
 
-        {/* Map */}
-        <div className="relative w-full h-[380px] rounded-xl overflow-hidden shadow-md border">
+        <div className="relative w-full h-[380px] rounded-2xl overflow-hidden border border-border">
           <GoogleMap
             mapContainerStyle={{ width: '100%', height: '100%' }}
             center={center}
@@ -221,29 +235,29 @@ export function Step2({
             <Marker position={center} draggable onDragEnd={onMarkerDragEnd} />
           </GoogleMap>
 
-          {/* Geolocation overlay — shown while waiting for GPS */}
           {isLocating && (
-            <div className="absolute inset-0 bg-white/75 backdrop-blur-[2px] flex flex-col items-center justify-center gap-2">
+            <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center gap-2">
               <Loader2 className="w-6 h-6 animate-spin text-deep-teal" />
-              <span className="text-sm font-medium text-deep-teal">Getting your location…</span>
+              <span className="text-sm font-medium text-deep-teal">
+                Getting your location...
+              </span>
             </div>
           )}
         </div>
 
-        {/* Status row below map */}
         <div className="flex items-center justify-center gap-1.5 text-neutral-gray text-xs mt-3 h-5">
           {isGeocoding ? (
             <>
               <Loader2 className="w-3 h-3 animate-spin" />
-              <span>Updating address…</span>
+              <span>Updating address...</span>
             </>
           ) : formData.latitude && formData.longitude ? (
             formData.country === 'Thailand' ? (
               <span className="text-positive-green font-medium">
-                Location set — drag the pin to adjust
+                Location set — drag the pin to fine-tune
               </span>
             ) : (
-              <span className="text-red-500 font-medium">
+              <span className="text-red-600 font-medium">
                 We currently only support properties in Thailand
               </span>
             )

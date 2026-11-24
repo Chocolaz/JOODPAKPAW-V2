@@ -23,47 +23,52 @@ export function Step5({
     updateField('facilities', updated)
   }
 
-  if (loading) return (
-    <>
-      <div className="w-full text-center mt-5 animate-pulse">
-        <div className="h-7 w-72 bg-gray-200 rounded-lg mx-auto mb-3" />
-        <div className="h-4 w-48 bg-gray-100 rounded mx-auto mb-6" />
-        <div className="space-y-10">
-          {[1, 2, 3].map((g) => (
-            <div key={g}>
-              <div className="h-4 w-24 bg-gray-200 rounded mb-4" />
-              <div className="grid grid-cols-2 gap-6">
-                {[1, 2, 3, 4].map((c) => (
-                  <div key={c} className="h-16 rounded-[14px] bg-gray-100" />
-                ))}
+  if (loading) {
+    return (
+      <>
+        <div className="w-full text-center mt-5 pb-24 animate-pulse motion-reduce:animate-none">
+          <div className="h-7 w-72 bg-gray-200 rounded-lg mx-auto mb-3" />
+          <div className="h-4 w-48 bg-gray-100 rounded mx-auto mb-6" />
+          <div className="space-y-8">
+            {[1, 2, 3].map((g) => (
+              <div key={g}>
+                <div className="h-4 w-24 bg-gray-200 rounded mb-4" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {[1, 2, 3, 4].map((c) => (
+                    <div key={c} className="h-16 rounded-2xl bg-gray-100" />
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
-      <StepNavigation onBack={onBack} onNext={onNext} isNextDisabled />
-    </>
-  )
-  if (error) return <div className="text-red-500 mt-20">{error}</div>
+        <StepNavigation onBack={onBack} onNext={onNext} isNextDisabled />
+      </>
+    )
+  }
+
+  if (error) {
+    return <div className="text-red-600 text-sm mt-20 text-center">{error}</div>
+  }
 
   return (
     <>
-      <div className="w-full text-center mt-5">
+      <div className="w-full text-center mt-5 pb-24">
         <h3 className="text-deep-teal">
           What facilities does your property offer?
         </h3>
-        <p className="mb-6 text-neutral-gray text-sm">
-          Select all the facilities available for pets
+        <p className="mb-6 text-neutral-gray text-sm mt-1">
+          Select all pet care facilities available at your space
         </p>
 
-        <div className="max-h-[57vh] overflow-y-auto scrollbar-modern pr-2 space-y-10 mb-20">
+        <div className="max-h-[58vh] overflow-y-auto modern-scrollbar pr-2 space-y-8">
           {Object.entries(groupedFacilities).map(([category, facilities]) => (
             <div key={category}>
-              <h5 className="text-left text-deep-teal capitalize mb-4">
+              <h5 className="text-left text-deep-teal capitalize font-semibold mb-3">
                 {category}
               </h5>
 
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {facilities.map((facility) => (
                   <FacilityCard
                     key={facility.id}

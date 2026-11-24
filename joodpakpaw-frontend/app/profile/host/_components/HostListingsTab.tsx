@@ -252,7 +252,7 @@ export function HostListingsTab({
                     </div>
                   )}
 
-                  {/* Top status pill (solid, zero backdrop-blur) */}
+                  {/* Top solid status pill */}
                   <div className="absolute top-2.5 left-2.5">
                     <span
                       className={cn(

@@ -154,7 +154,7 @@ function LayoutContent({ children }: { children: ReactNode }) {
           {(() => {
             if (normalizedPath.startsWith('/profile/host/add-property')) {
               const stepId = parseInt(normalizedPath.split('/').pop() || '', 10)
-              if (!isNaN(stepId) && stepId >= 1 && stepId <= 7) {
+              if (!isNaN(stepId) && stepId >= 1 && stepId <= 9) {
                 return (
                   <div className="hidden lg:block">
                     <DesktopStepper stepId={stepId} />

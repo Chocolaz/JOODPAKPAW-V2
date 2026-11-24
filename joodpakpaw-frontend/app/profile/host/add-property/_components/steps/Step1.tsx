@@ -18,9 +18,9 @@ export function Step1({ onNext }: { onNext: () => void }) {
 
   return (
     <>
-      <div className="w-full text-center mt-5">
+      <div className="w-full text-center mt-5 pb-24">
         <h3 className="text-deep-teal">What type of place is this?</h3>
-        <p className="mb-8 text-neutral-gray text-sm">
+        <p className="mb-8 text-neutral-gray text-sm mt-1">
           Choose the kind of space where pets will stay
         </p>
 
@@ -32,21 +32,22 @@ export function Step1({ onNext }: { onNext: () => void }) {
             return (
               <button
                 key={id}
+                type="button"
                 onClick={() => updateField('propertyTypeId', id)}
                 className={cn(
-                  'relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer transition-all w-[145px] h-[145px]',
+                  'relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer transition-colors w-[150px] h-[150px]',
                   isSelected
-                    ? 'border-positive-green bg-teal-50 shadow-sm'
-                    : 'border-[#ECEFF2] bg-white hover:border-deep-teal/40 hover:bg-gray-50'
+                    ? 'border-deep-teal bg-off-white'
+                    : 'border-border bg-white hover:border-deep-teal/40 hover:bg-off-white/40'
                 )}
               >
                 {isSelected && (
-                  <span className="absolute top-2 right-2 bg-positive-green rounded-full p-0.5">
+                  <span className="absolute top-2.5 right-2.5 bg-deep-teal rounded-full p-1">
                     <Check className="w-3 h-3 text-white" strokeWidth={3} />
                   </span>
                 )}
                 <Image src={icon} alt={label} width={72} height={72} />
-                <span className="mt-3 text-sm font-medium text-neutral-dark text-center leading-tight">
+                <span className="mt-3 text-sm font-semibold text-foreground text-center leading-tight">
                   {label}
                 </span>
               </button>
@@ -55,7 +56,10 @@ export function Step1({ onNext }: { onNext: () => void }) {
         </div>
       </div>
 
-      <StepNavigation onNext={onNext} isNextDisabled={!formData.propertyTypeId} />
+      <StepNavigation
+        onNext={onNext}
+        isNextDisabled={!formData.propertyTypeId}
+      />
     </>
   )
 }
