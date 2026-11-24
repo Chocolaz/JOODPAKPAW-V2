@@ -14,6 +14,7 @@ import {
 import { HostOverviewTab } from './_components/HostOverviewTab'
 import { HostListingsTab } from './_components/HostListingsTab'
 import { HostBookingList } from './_components/HostBookingList'
+import { HostCalendarTab } from './_components/HostCalendarTab'
 import { HostBookingHistoryList } from './_components/HostBookingHistoryList'
 import { HostReviewsTab } from './_components/HostReviewsTab'
 import { UnbanPropertyDrawer } from './_components/UnbanPropertyDrawer'
@@ -38,6 +39,7 @@ export default function HostPage() {
   const [reviewsTotalRows, setReviewsTotalRows] = useState(0)
   const [bookingFilterOverride, setBookingFilterOverride] = useState<string | null>(null)
   const [reviewFilterOverride, setReviewFilterOverride] = useState<'all' | 'needs_reply' | null>(null)
+  const [selectedCalendarPropertyId, setSelectedCalendarPropertyId] = useState<number | null>(null)
 
   const tabParam = searchParams.get('tab') as HostWorkspaceTab | null
   const filterParam = searchParams.get('filter') || 'all'
@@ -50,6 +52,7 @@ export default function HostPage() {
       tabParam === 'overview' ||
       tabParam === 'properties' ||
       tabParam === 'bookings' ||
+      tabParam === 'calendar' ||
       tabParam === 'history' ||
       tabParam === 'reviews'
     ) {
@@ -126,9 +129,12 @@ export default function HostPage() {
 
   const handleOpenCalendarForProperty = useCallback(
     (propertyId: number) => {
-      router.push(`/profile/host/${propertyId}`)
+      setSelectedCalendarPropertyId(propertyId)
+      const params = new URLSearchParams(searchParams.toString())
+      params.set('tab', 'calendar')
+      router.push(`/profile/host?${params.toString()}`, { scroll: false })
     },
-    [router]
+    [router, searchParams]
   )
 
   return (
@@ -190,11 +196,21 @@ export default function HostPage() {
           </div>
         )}
 
+        {isHost && activeTab === 'calendar' && (
+          <HostCalendarTab
+            properties={properties}
+            initialPropertyId={selectedCalendarPropertyId}
+          />
+        )}
+
         {isHost && activeTab === 'history' && <HostBookingHistoryList />}
 
         {isHost && activeTab === 'reviews' && (
           <div key={reviewFilterOverride ?? 'default'}>
-            <HostReviewsTab />
+            <HostReviewsTab
+              initialFilter={reviewFilterOverride ?? 'all'}
+              onReviewsUpdated={loadWorkspaceData}
+            />
           </div>
         )}
       </HostWorkspaceShell>
