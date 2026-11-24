@@ -3,16 +3,19 @@
 export class ApiError extends Error {
   code: string
   errors?: { field: string; tag: string; value: string }[]
+  status?: number
 
   constructor(
     message: string,
     code: string,
-    errors?: { field: string; tag: string; value: string }[]
+    errors?: { field: string; tag: string; value: string }[],
+    status?: number
   ) {
     super(message)
     this.name = 'ApiError'
     this.code = code
     this.errors = errors
+    this.status = status
   }
 }
 

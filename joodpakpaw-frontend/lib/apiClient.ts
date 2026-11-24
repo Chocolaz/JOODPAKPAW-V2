@@ -2,7 +2,6 @@ import { ApiError } from './errorHandling'
 import { getAccessToken, refreshAccessToken, clearTokens } from './authenUtils'
 import { AuthRequiredError, authErrorEmitter } from './authErrors'
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL
-const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || ''
 
 // JWT tokens are base64url-encoded and must be ASCII-only.
 // If the cookie was manually edited with non-ASCII chars the Headers API throws.
@@ -83,27 +82,37 @@ async function request<T>({
     }
 
     const text = await response.text()
-    let data: any = null
+    let data: unknown = null
     try {
       data = text ? JSON.parse(text) : null
     } catch {
       data = text
     }
 
+    const payload =
+      typeof data === 'object' && data !== null
+        ? (data as {
+            message?: string
+            code?: string
+            errors?: { field: string; tag: string; value: string }[]
+          })
+        : null
+
     if (!response.ok) {
       throw new ApiError(
-        data?.message ||
+        payload?.message ||
           (response.status === 403
             ? 'Access forbidden.'
             : response.status === 404
             ? 'Resource not found.'
             : 'Something went wrong'),
-        data?.code,
-        data?.errors
+        payload?.code || '',
+        payload?.errors,
+        response.status
       )
     }
 
-    return data
+    return data as T
   } catch (error: unknown) {
     if (error instanceof ApiError) {
       console.error(`${errorContext} failed:`, error.message, error.code)
