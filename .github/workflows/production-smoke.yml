@@ -1,0 +1,61 @@
+name: Production Smoke Check
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '0 */3 * * *'
+  workflow_dispatch:
+
+jobs:
+  smoke-check:
+    name: Verify Live Production Endpoints
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait briefly for Render/Vercel deployment rollout
+        if: github.event_name == 'push'
+        run: sleep 45
+
+      - name: Check Vercel Frontend (https://joodpakpaw.vercel.app/)
+        run: |
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://joodpakpaw.vercel.app/)
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then exit 0; fi
+            sleep 15
+          done
+          exit 1
+
+      - name: Check Render ML Health (https://joodpakpaw-ml.onrender.com/health)
+        run: |
+          for i in 1 2 3 4 5; do
+            BODY=$(curl -sS -w "\n%{http_code}" https://joodpakpaw-ml.onrender.com/health || true)
+            STATUS=$(echo "$BODY" | tail -n1)
+            JSON=$(echo "$BODY" | sed '$d')
+            echo "Attempt $i: HTTP $STATUS $JSON"
+            if [ "$STATUS" = "200" ] && echo "$JSON" | grep -q '"status":"ok"'; then exit 0; fi
+            sleep 20
+          done
+          exit 1
+
+      - name: Check Render API Health (https://joodpakpaw-api.onrender.com/health)
+        run: |
+          for i in 1 2 3 4 5; do
+            BODY=$(curl -sS -w "\n%{http_code}" https://joodpakpaw-api.onrender.com/health || true)
+            STATUS=$(echo "$BODY" | tail -n1)
+            JSON=$(echo "$BODY" | sed '$d')
+            echo "Attempt $i: HTTP $STATUS $JSON"
+            if [ "$STATUS" = "200" ] && echo "$JSON" | grep -q '"status":"ok"' && echo "$JSON" | grep -q '"database":"connected"'; then exit 0; fi
+            sleep 20
+          done
+          exit 1
+
+      - name: Check Live Properties Discovery API (S-0000)
+        run: |
+          BODY=$(curl -sS -w "\n%{http_code}" -H "Origin: https://joodpakpaw.vercel.app" "https://joodpakpaw-api.onrender.com/api/v1/properties?page=1&limit=3")
+          STATUS=$(echo "$BODY" | tail -n1)
+          JSON=$(echo "$BODY" | sed '$d')
+          echo "HTTP $STATUS"
+          if [ "$STATUS" != "200" ]; then exit 1; fi
+          echo "$JSON" | grep -q '"code":"S-0000"'

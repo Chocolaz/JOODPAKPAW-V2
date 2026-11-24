@@ -19,6 +19,11 @@ export const config = {
   email: {
     resendApiKey: (process.env.RESEND_API_KEY || '').trim(),
     from: (process.env.EMAIL_FROM || 'JoodPakPaw <no-reply@joodpakpaw.com>').trim(),
+    smtpHost: (process.env.SMTP_HOST || '').trim(),
+    smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
+    smtpSecure: process.env.SMTP_SECURE === 'true',
+    smtpUser: (process.env.SMTP_USER || '').trim(),
+    smtpPass: (process.env.SMTP_PASS || '').trim(),
   },
   databaseUrl:
     process.env.DATABASE_URL ||
