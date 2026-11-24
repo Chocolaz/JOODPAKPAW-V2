@@ -645,3 +645,27 @@ def test_rank_candidates_pet_profile_ids_and_tier_priority() -> None:
         "all_pets",
         "context_fallback",
     ]
+
+
+def test_sanitize_database_url_strips_prisma_params() -> None:
+    import psycopg
+    from app.config import sanitize_database_url
+
+    raw = (
+        "postgresql://postgres.ref:pass@aws-0-ap-southeast-1.pooler.supabase.com:6543/"
+        "postgres?pgbouncer=true&sslmode=require&connection_limit=5&pool_timeout=20"
+        "&statement_cache_size=0&schema=public&connect_timeout=30"
+    )
+    sanitized = sanitize_database_url(raw)
+    assert "pgbouncer" not in sanitized
+    assert "connection_limit" not in sanitized
+    assert "pool_timeout" not in sanitized
+    assert "statement_cache_size" not in sanitized
+    assert "schema=" not in sanitized
+    assert "sslmode=require" in sanitized
+    assert "connect_timeout=30" in sanitized
+
+    parsed = psycopg.conninfo.conninfo_to_dict(sanitized)
+    assert parsed["sslmode"] == "require"
+    assert parsed["connect_timeout"] == "30"
+
