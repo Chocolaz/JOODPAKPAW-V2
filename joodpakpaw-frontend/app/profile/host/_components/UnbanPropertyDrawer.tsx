@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
@@ -42,6 +42,14 @@ function AppealContent({
   const [previews, setPreviews] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const previewsRef = useRef<string[]>(previews)
+  previewsRef.current = previews
+
+  useEffect(() => {
+    return () => {
+      previewsRef.current.forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [])
 
   const isQuotaExceeded = quota !== undefined && quota >= 2
 
@@ -50,7 +58,10 @@ function AppealContent({
     if (!files.length) return
     const added = files.slice(0, 3 - images.length)
     setImages((prev) => [...prev, ...added])
-    setPreviews((prev) => [...prev, ...added.map((f) => URL.createObjectURL(f))])
+    setPreviews((prev) => [
+      ...prev,
+      ...added.map((f) => URL.createObjectURL(f)),
+    ])
     e.target.value = ''
   }
 
@@ -64,12 +75,21 @@ function AppealContent({
     if (!description.trim() || isQuotaExceeded) return
     setSubmitting(true)
     try {
-      await submitUnbanPropertyRequest(reportCategoryId, description.trim(), propertyId, images)
+      await submitUnbanPropertyRequest(
+        reportCategoryId,
+        description.trim(),
+        propertyId,
+        images
+      )
       toast.success('Appeal submitted. We will review it shortly.')
       onSuccess?.()
       onClose()
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to submit appeal. Please try again.')
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : 'Failed to submit appeal. Please try again.'
+      )
     } finally {
       setSubmitting(false)
     }
@@ -78,30 +98,35 @@ function AppealContent({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="shrink-0 px-5 pt-6 pb-4">
+      <div className="shrink-0 px-5 pt-6 pb-4 border-b border-border">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-[20px] font-bold text-gray-900 leading-snug">Submit Appeal</h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="font-bold text-deep-teal leading-snug">
+                Submit Appeal
+              </h2>
               {quota !== undefined && (
                 <span
-                  className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                  className={`text-xs font-semibold px-2.5 py-0.5 rounded-full tabular-nums ${
                     isQuotaExceeded
-                      ? 'bg-gray-800 text-white'
-                      : 'bg-red-50 text-red-600 border border-red-200'
+                      ? 'bg-neutral-900 text-white'
+                      : 'bg-red-50 text-red-700 border border-red-200'
                   }`}
                 >
                   {Math.max(0, 2 - quota)}/2 remaining
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-400 mt-1">
-              Request a review of your suspended {propertyId ? 'property' : 'account'}.
+            <p className="text-xs text-neutral-gray mt-1">
+              Request a review of your suspended{' '}
+              {propertyId ? 'property' : 'account'}.
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition cursor-pointer shrink-0"
+            className="w-7 h-7 flex items-center justify-center rounded-full bg-off-white text-neutral-gray hover:bg-gray-200 transition-colors cursor-pointer shrink-0"
+            aria-label="Close"
           >
             <X className="w-4 h-4" />
           </button>
@@ -109,42 +134,48 @@ function AppealContent({
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto scrollbar-modern px-5 pb-5 flex flex-col gap-4">
-        {/* Suspension Reason Card */}
+      <div className="flex-1 overflow-y-auto modern-scrollbar px-5 py-5 flex flex-col gap-4">
         {suspensionReason && (
           <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-            <p className="text-xs font-semibold text-red-800">Suspension Reason:</p>
-            <p className="text-xs text-red-700 mt-0.5 leading-relaxed">{suspensionReason}</p>
+            <p className="text-xs font-semibold text-red-800">
+              Suspension Reason
+            </p>
+            <p className="text-xs text-red-700 mt-0.5 leading-relaxed">
+              {suspensionReason}
+            </p>
           </div>
         )}
 
-        {/* Previous Appeal Note Card */}
         {lastAppealNote && (
-          <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
-            <p className="text-xs font-semibold text-gray-800">Previous Appeal Decision:</p>
-            <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">{lastAppealNote}</p>
+          <div className="bg-off-white border border-border rounded-xl px-4 py-3">
+            <p className="text-xs font-semibold text-foreground">
+              Previous Appeal Decision
+            </p>
+            <p className="text-xs text-neutral-gray mt-0.5 leading-relaxed">
+              {lastAppealNote}
+            </p>
           </div>
         )}
 
-        {/* Quota Exceeded Warning or Info */}
         {isQuotaExceeded ? (
-          <div className="bg-gray-100 border border-gray-300 rounded-xl px-4 py-3">
-            <p className="text-xs text-gray-700 leading-relaxed font-medium">
-              Maximum appeal limit (2/2) has been reached for this suspension. You cannot submit further appeals in this cycle.
+          <div className="bg-off-white border border-border rounded-xl px-4 py-3">
+            <p className="text-xs text-foreground leading-relaxed font-medium">
+              Maximum appeal limit (2/2) has been reached for this suspension.
+              You cannot submit further appeals in this cycle.
             </p>
           </div>
         ) : (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-            <p className="text-xs text-amber-700 leading-relaxed">
-              Explain why you believe your {propertyId ? 'property' : 'account'} should be reinstated. Provide as much detail as possible to help us review your appeal fairly.
+            <p className="text-xs text-amber-800 leading-relaxed">
+              Explain why your {propertyId ? 'property' : 'account'} should be
+              reinstated. Provide clear supporting detail to speed up review.
             </p>
           </div>
         )}
 
-        {/* Description */}
         <div>
-          <label className="text-sm font-medium text-gray-700 block mb-2">
-            Your explanation <span className="text-red-400">*</span>
+          <label className="text-sm font-medium text-foreground block mb-2">
+            Your explanation <span className="text-red-500">*</span>
           </label>
           <textarea
             value={description}
@@ -156,23 +187,33 @@ function AppealContent({
                 : 'Describe why your suspension should be reconsidered...'
             }
             rows={5}
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 bg-white resize-none focus:outline-none focus:ring-2 focus:ring-deep-teal/20 focus:border-deep-teal transition disabled:opacity-50 disabled:bg-gray-50"
+            className="w-full border border-border rounded-xl px-4 py-3 text-sm text-foreground bg-white resize-none focus:outline-none focus:ring-2 focus:ring-deep-teal/20 focus:border-deep-teal transition-colors disabled:opacity-50 disabled:bg-off-white"
           />
-          <p className="text-xs text-gray-400 mt-1 text-right">{description.length} characters</p>
+          <p className="text-xs text-neutral-gray mt-1 text-right tabular-nums">
+            {description.length} characters
+          </p>
         </div>
 
-        {/* Images */}
         <div>
-          <label className="text-sm font-medium text-gray-700 block mb-2">
-            Supporting images <span className="text-gray-400 font-normal">(optional, max 3)</span>
+          <label className="text-sm font-medium text-foreground block mb-2">
+            Supporting images{' '}
+            <span className="text-neutral-gray font-normal">
+              (optional, max 3)
+            </span>
           </label>
           <div className="flex gap-2 flex-wrap">
             {previews.map((src, idx) => (
-              <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200">
+              <div
+                key={idx}
+                className="relative w-20 h-20 rounded-xl overflow-hidden border border-border"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={src} alt="" className="w-full h-full object-cover" />
                 <button
+                  type="button"
                   onClick={() => removeImage(idx)}
-                  className="absolute top-1 right-1 w-5 h-5 bg-black/50 rounded-full flex items-center justify-center"
+                  className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center cursor-pointer"
+                  aria-label="Remove image"
                 >
                   <X className="w-3 h-3 text-white" />
                 </button>
@@ -180,11 +221,12 @@ function AppealContent({
             ))}
             {!isQuotaExceeded && images.length < 3 && (
               <button
+                type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-deep-teal hover:text-deep-teal transition-colors"
+                className="w-20 h-20 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center gap-1 text-neutral-gray hover:border-deep-teal hover:text-deep-teal transition-colors cursor-pointer"
               >
                 <ImagePlus className="w-5 h-5" />
-                <span className="text-[10px]">Add photo</span>
+                <span className="text-[11px]">Add photo</span>
               </button>
             )}
           </div>
@@ -200,14 +242,19 @@ function AppealContent({
       </div>
 
       {/* Footer */}
-      <div className="shrink-0 px-5 py-4 border-t border-gray-100">
+      <div className="shrink-0 px-5 py-4 border-t border-border">
         <button
+          type="button"
           onClick={handleSubmit}
           disabled={submitting || !description.trim() || isQuotaExceeded}
-          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-deep-teal text-white text-sm font-semibold transition hover:bg-deep-teal/90 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-deep-teal text-white text-sm font-semibold transition-colors hover:bg-deep-teal/90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
         >
-          {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-          {submitting ? 'Submitting...' : isQuotaExceeded ? 'Appeals Limit Reached' : 'Submit Appeal'}
+          {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+          {submitting
+            ? 'Submitting...'
+            : isQuotaExceeded
+            ? 'Appeals Limit Reached'
+            : 'Submit Appeal'}
         </button>
       </div>
     </div>
