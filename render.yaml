@@ -1,0 +1,76 @@
+services:
+  - type: web
+    name: joodpakpaw-ml
+    runtime: docker
+    region: singapore
+    plan: free
+    branch: main
+    rootDir: joodpakpaw-ml
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "5000"
+      - key: SNAPSHOT_TTL_SECONDS
+        value: "60"
+      - key: TIME_DECAY_LAMBDA
+        value: "0.05"
+      - key: DATABASE_URL
+        sync: false
+      - key: ML_INTERNAL_SECRET
+        sync: false
+
+  - type: web
+    name: joodpakpaw-api
+    runtime: docker
+    region: singapore
+    plan: free
+    branch: main
+    rootDir: joodpakpaw-api
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "8000"
+      - key: REDIS_URL
+        value: ""
+      - key: S3_BUCKET
+        value: joodpakpaw-media
+      - key: S3_FORCE_PATH_STYLE
+        value: "false"
+      - key: JWT_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+      - key: ML_TIMEOUT_MS
+        value: "1500"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: S3_PUBLIC_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: ML_SERVICE_URL
+        sync: false
+      - key: ML_INTERNAL_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: "JoodPakPaw <no-reply@joodpakpaw.com>"
