@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middlewares/auth.middleware';
 import { uploadMiddleware } from '../services/storage.service';
+import { attachNumericParamGuards } from '../middlewares/validateParams.middleware';
 import {
   createChatRoom,
   getChatRooms,
@@ -14,6 +15,7 @@ export const chatRouter = Router();
 
 // All chat routes require user authentication
 chatRouter.use(authenticateToken);
+attachNumericParamGuards(chatRouter, ['id', 'roomId']);
 
 chatRouter.post('/', uploadMiddleware.any(), createChatRoom);
 chatRouter.get('/', getChatRooms);

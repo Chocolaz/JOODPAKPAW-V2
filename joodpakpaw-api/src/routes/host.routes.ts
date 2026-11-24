@@ -28,8 +28,10 @@ import {
   optionalAuthenticateToken,
 } from '../middlewares/auth.middleware';
 import { uploadMiddleware } from '../services/storage.service';
+import { attachNumericParamGuards } from '../middlewares/validateParams.middleware';
 
 export const hostRouter = Router();
+attachNumericParamGuards(hostRouter, ['propertyId', 'roomId', 'roomCategoryId', 'bookingId']);
 
 // Master lookup under /api/v1/hosts/facilities/all
 hostRouter.get('/facilities/all', optionalAuthenticateToken, getAllFacilities);

@@ -19,11 +19,13 @@ import {
   searchAdminMlProperties,
 } from '../controllers/recommendation.controller';
 import { authenticateToken, requireRoles } from '../middlewares/auth.middleware';
+import { attachNumericParamGuards } from '../middlewares/validateParams.middleware';
 
 export const adminRouter = Router();
 
 // Enforce admin role on all admin routes (401 A-3005 if not authenticated, 403 A-3007 if not admin)
 adminRouter.use(authenticateToken, requireRoles('admin'));
+attachNumericParamGuards(adminRouter, ['id']);
 
 // Admin Dashboard
 adminRouter.get('/dashboard', getAdminDashboard);

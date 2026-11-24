@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middlewares/auth.middleware';
+import { attachNumericParamGuards } from '../middlewares/validateParams.middleware';
 import {
   getNotifications,
   markAllAsRead,
@@ -12,6 +13,7 @@ export const notificationRouter = Router();
 
 // All notification endpoints require authenticated user
 notificationRouter.use(authenticateToken);
+attachNumericParamGuards(notificationRouter, ['id']);
 
 notificationRouter.get('/', getNotifications);
 notificationRouter.patch('/read-all', markAllAsRead);

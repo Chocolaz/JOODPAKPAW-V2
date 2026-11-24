@@ -8,9 +8,12 @@ import {
   deleteFavoriteProperty,
 } from '../controllers/favorite.controller';
 import { authenticateToken } from '../middlewares/auth.middleware';
+import { attachNumericParamGuards } from '../middlewares/validateParams.middleware';
 
 export const favoriteFolderRouter = Router();
 export const favoritePropertyRouter = Router();
+attachNumericParamGuards(favoriteFolderRouter, ['folderId']);
+attachNumericParamGuards(favoritePropertyRouter, ['propertyId']);
 
 // Favorite Folders routes under /api/v1/favorite-folders
 favoriteFolderRouter.get('/all', authenticateToken, getFavoriteFolders);
