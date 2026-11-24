@@ -15,10 +15,10 @@ export function Step6({
 
   return (
     <>
-      <div className="w-full text-center mt-5">
+      <div className="w-full text-center mt-5 pb-24">
         <h3 className="text-deep-teal">Upload photos of your property</h3>
-        <p className="mb-4 text-neutral-gray text-sm">
-          Add clear photos that help pet parents understand your space
+        <p className="mb-5 text-neutral-gray text-sm mt-1">
+          Add clear photos that help pet parents visualize where their pets will stay
         </p>
 
         <ImageManager

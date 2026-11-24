@@ -8,8 +8,10 @@ import {
   getAllProvinces,
 } from '../controllers/lookup.controller';
 import { optionalAuthenticateToken } from '../middlewares/auth.middleware';
+import { attachNumericParamGuards } from '../middlewares/validateParams.middleware';
 
 export const lookupRouter = Router();
+attachNumericParamGuards(lookupRouter, ['petTypeId']);
 
 lookupRouter.get('/hosts/facilities/all', optionalAuthenticateToken, getAllFacilities);
 lookupRouter.get('/pets/all', optionalAuthenticateToken, getAllPets);

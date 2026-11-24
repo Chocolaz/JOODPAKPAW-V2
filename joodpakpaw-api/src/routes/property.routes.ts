@@ -12,8 +12,10 @@ import {
   getSimilarProperties,
 } from '../controllers/recommendation.controller';
 import { optionalAuthenticateToken } from '../middlewares/auth.middleware';
+import { attachNumericParamGuards } from '../middlewares/validateParams.middleware';
 
 export const propertyRouter = Router();
+attachNumericParamGuards(propertyRouter, ['propertyId', 'hostId']);
 
 // Public property discovery & search
 propertyRouter.get('/', optionalAuthenticateToken, getProperties);

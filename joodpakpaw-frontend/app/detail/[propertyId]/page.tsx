@@ -1,7 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { getPropertyById, trackPropertyView } from '@/lib/api'
+import {
+  getPropertyById,
+  trackPropertyView,
+  getFavoriteFolders,
+  addFavorite,
+  deleteFavoriteProperty,
+} from '@/lib/api'
+import { ApiError } from '@/lib/errorHandling'
 import { ErrorState } from '@/app/profile/_components/ErrorState'
 import { usePropertyLoader } from '@/app/_hooks/usePropertyLoader'
 import { useSimilarProperties } from '@/app/_hooks/useSimilarProperties'
@@ -17,136 +24,141 @@ import { PropertyHost } from '@/app/_components/property-detail/PropertyHost'
 import { normalizeRoomCategories } from '@/lib/utils'
 import { BookingDrawer } from '@/app/_components/property-detail/BookingDrawer'
 import { ReportPropertyDrawer } from '@/app/_components/property-detail/ReportPropertyDrawer'
+import { ReportReviewDrawer } from '@/app/_components/property-detail/ReportReviewDrawer'
+import { FavoriteDrawer } from '@/app/_components/FavoriteDrawer'
 import { useAuth } from '@/app/_components/AuthContext'
+import { useBooking } from '@/app/_context/BookingContext'
 import { useRecentlyViewed } from '@/app/_hooks/useRecentlyViewed'
 import { Skeleton } from '@/components/ui/skeleton'
-import { motion } from 'framer-motion'
 import { PropertyCard } from '@/app/_components/PropertyCard'
+import { InlinePanel } from '@/app/_components/property-detail/BookingSearchBar'
+import { ChevronLeft, Flag, Heart, Share2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 function PropertyDetailSkeleton() {
   return (
-    <div className="max-w-6xl mx-auto pb-32 lg:pb-10">
-      {/* Gallery skeleton */}
-      {/* Mobile */}
-      <div className="md:hidden">
-        <Skeleton className="w-full aspect-square rounded-none" />
+    <div className="max-w-[1200px] mx-auto px-4 md:px-8 lg:px-10 pb-28 lg:pb-12 lg:-mt-16 xl:-mt-[72px] lg:pt-6">
+      {/* Desktop Top Editorial Header Skeleton */}
+      <div className="hidden lg:block space-y-3 mb-5">
+        <Skeleton className="h-8 w-1/2 bg-neutral-200 motion-reduce:animate-none" />
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-5 w-64 bg-neutral-200 motion-reduce:animate-none" />
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-20 rounded-xl bg-neutral-200 motion-reduce:animate-none" />
+            <Skeleton className="h-9 w-20 rounded-xl bg-neutral-200 motion-reduce:animate-none" />
+          </div>
+        </div>
       </div>
-      {/* Tablet+ */}
-      <div
-        className="hidden md:grid grid-cols-2 gap-2 rounded-2xl overflow-hidden pb-4"
-        style={{ height: 480 }}
-      >
-        <Skeleton className="w-full h-full rounded-none" />
+
+      {/* Gallery Skeleton */}
+      <div className="md:hidden -mx-4">
+        <Skeleton className="w-full aspect-[4/3] rounded-none bg-neutral-200 motion-reduce:animate-none" />
+      </div>
+      <div className="hidden md:grid grid-cols-2 gap-2 rounded-2xl overflow-hidden h-[320px] lg:h-[360px] xl:h-[380px] mb-6">
+        <Skeleton className="w-full h-full rounded-none bg-neutral-200 motion-reduce:animate-none" />
         <div className="grid grid-rows-2 gap-2">
-          <Skeleton className="w-full h-full rounded-none" />
-          <Skeleton className="w-full h-full rounded-none" />
+          <Skeleton className="w-full h-full rounded-none bg-neutral-200 motion-reduce:animate-none" />
+          <Skeleton className="w-full h-full rounded-none bg-neutral-200 motion-reduce:animate-none" />
         </div>
       </div>
 
-      {/* Body */}
-      <div className="px-4 md:px-8 lg:px-2 lg:grid lg:grid-cols-[1fr_380px] lg:gap-10 lg:items-start lg:mt-2">
-        {/* Left content */}
-        <div className="space-y-4 mt-4">
-          {/* Header */}
-          <Skeleton className="h-8 w-3/4" />
-          <div className="flex justify-between">
-            <Skeleton className="h-4 w-1/3" />
-            <Skeleton className="h-6 w-24 rounded-full" />
+      {/* Body Split */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-12 lg:items-start mt-5 lg:mt-0">
+        <div className="space-y-8">
+          <div className="lg:hidden space-y-2.5">
+            <Skeleton className="h-7 w-3/4 bg-neutral-200 motion-reduce:animate-none" />
+            <Skeleton className="h-4 w-48 bg-neutral-200 motion-reduce:animate-none" />
           </div>
 
-          {/* Contact button */}
-          <Skeleton className="h-10 w-full rounded-full lg:hidden" />
-
-          {/* Facilities */}
-          <div className="border-t pt-8 space-y-3">
-            <Skeleton className="h-5 w-40" />
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="border-t border-border pt-8 space-y-3">
+            <Skeleton className="h-6 w-40 bg-neutral-200 motion-reduce:animate-none" />
+            <Skeleton className="h-4 w-full bg-neutral-200 motion-reduce:animate-none" />
+            <Skeleton className="h-4 w-5/6 bg-neutral-200 motion-reduce:animate-none" />
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 pt-2">
               {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-5 w-full" />
+                <Skeleton
+                  key={i}
+                  className="h-5 w-full bg-neutral-200 motion-reduce:animate-none"
+                />
               ))}
             </div>
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-5/6" />
           </div>
 
-          {/* Host card */}
-          <div className="border-t pt-8 mb-10">
-            <Skeleton className="h-5 w-36 mb-5" />
-            <div className="flex items-center gap-4 rounded-2xl p-5 border border-gray-100">
-              <Skeleton className="w-16 h-16 rounded-full shrink-0" />
-              <div className="flex-1 space-y-2">
-                <Skeleton className="h-5 w-32" />
-                <Skeleton className="h-4 w-24" />
-              </div>
-              <Skeleton className="h-9 w-24 rounded-lg shrink-0" />
-            </div>
-          </div>
-
-          {/* Room categories */}
-          <div className="border-t pt-8 space-y-3">
-            <Skeleton className="h-5 w-40" />
-            <div className="lg:grid lg:grid-cols-2 lg:gap-4 space-y-4 lg:space-y-0">
+          <div className="border-t border-border pt-8 space-y-4">
+            <Skeleton className="h-6 w-40 bg-neutral-200 motion-reduce:animate-none" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {Array.from({ length: 2 }).map((_, i) => (
-                <Skeleton key={i} className="h-32 w-full rounded-2xl" />
+                <Skeleton
+                  key={i}
+                  className="h-64 w-full rounded-2xl bg-neutral-200 motion-reduce:animate-none"
+                />
               ))}
             </div>
-          </div>
-
-          {/* Reviews */}
-          <div className="border-t pt-8 space-y-3">
-            <Skeleton className="h-5 w-24" />
-            <Skeleton className="h-28 w-full rounded-2xl" />
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-28 w-full rounded-xl" />
-              ))}
-            </div>
-          </div>
-
-          {/* Location */}
-          <div className="border-t pt-8 space-y-3">
-            <Skeleton className="h-5 w-24" />
-            <Skeleton className="h-4 w-40" />
-            <Skeleton className="h-52 w-full rounded-xl" />
           </div>
         </div>
 
-        {/* Right sidebar (desktop) */}
         <div className="hidden lg:block">
-          <div className="sticky top-6 flex flex-col gap-3">
-            <Skeleton className="h-96 w-full rounded-2xl" />
-            <Skeleton className="h-10 w-full rounded-full" />
-          </div>
+          <Skeleton className="h-96 w-full rounded-2xl bg-neutral-200 motion-reduce:animate-none" />
         </div>
       </div>
     </div>
   )
 }
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 8 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.25, delay: i * 0.03, ease: 'easeOut' as const },
-  }),
-}
-
 export default function PropertyDetailPage() {
-  const { property, loading, error, refreshProperty } =
-    usePropertyLoader(getPropertyById)
+  const { property, loading, error, accessDenied, unauthorized, refreshProperty } =
+    usePropertyLoader(getPropertyById, 'public-property')
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, requireAuth } = useAuth()
+  const {
+    date,
+    activePetCount,
+    stayNights,
+    loading: roomSearchLoading,
+    selectedPets,
+    petSizeId,
+    currentPropertyData,
+    handleSelectChange,
+    hydrateDatesFromQuery,
+  } = useBooking()
+
   const [reportOpen, setReportOpen] = useState(false)
+  const [reportReviewId, setReportReviewId] = useState<number | null>(null)
+  const [favoriteDrawerOpen, setFavoriteDrawerOpen] = useState(false)
+  const [favoriteOverride, setFavoriteOverride] = useState<{
+    propId: number
+    propVal: boolean
+    val: boolean
+  } | null>(null)
+  const [desktopSidebarPanel, setDesktopSidebarPanel] =
+    useState<InlinePanel>(null)
+
   const { track } = useRecentlyViewed()
+  const trackedRecentRef = useRef<number | null>(null)
   const trackedPropertyRef = useRef<number | null>(null)
+  const hydratedQueryRef = useRef<string | null>(null)
+
   const { properties: recommendations, isLoading: recommendationsLoading } =
-    useSimilarProperties(property?.id, 12)
+    useSimilarProperties(property?.id, 10)
+
+  const checkInQuery = searchParams.get('checkIn')
+  const checkOutQuery = searchParams.get('checkOut')
 
   useEffect(() => {
-    if (property?.id) track(property.id)
-  }, [property?.id])
+    if (!property?.id || trackedRecentRef.current === property.id) return
+    trackedRecentRef.current = property.id
+    track(property.id)
+  }, [property?.id, track])
+
+  // Hydrate ?checkIn & ?checkOut from Home/Browse cards once per route query
+  useEffect(() => {
+    if (!property?.id || !checkInQuery || !checkOutQuery) return
+    const key = `${property.id}:${checkInQuery}:${checkOutQuery}`
+    if (hydratedQueryRef.current === key) return
+    hydratedQueryRef.current = key
+    hydrateDatesFromQuery(checkInQuery, checkOutQuery)
+  }, [property?.id, checkInQuery, checkOutQuery, hydrateDatesFromQuery])
 
   useEffect(() => {
     if (!property?.id || !isAuthenticated || !user) return
@@ -157,17 +169,96 @@ export default function PropertyDetailPage() {
     trackPropertyView(property.id).catch(() => {})
   }, [property?.id, property?.hostId, isAuthenticated, user])
 
+  const isFavorite =
+    property &&
+    favoriteOverride &&
+    favoriteOverride.propId === property.id &&
+    favoriteOverride.propVal === property.isFavorite
+      ? favoriteOverride.val
+      : Boolean(property?.isFavorite)
+
+  const handleToggleFavorite = async () => {
+    if (!property) return
+    if (!requireAuth()) return
+
+    if (isFavorite) {
+      setFavoriteOverride({
+        propId: property.id,
+        propVal: property.isFavorite,
+        val: false,
+      })
+      try {
+        await deleteFavoriteProperty(property.id)
+        toast.success('Removed from favorites')
+      } catch (err: unknown) {
+        setFavoriteOverride({
+          propId: property.id,
+          propVal: property.isFavorite,
+          val: true,
+        })
+        const msg =
+          err instanceof ApiError ? err.message : 'Failed to remove favorite'
+        toast.error(msg)
+      }
+      return
+    }
+
+    setFavoriteOverride({
+      propId: property.id,
+      propVal: property.isFavorite,
+      val: true,
+    })
+    try {
+      const foldersRes = await getFavoriteFolders()
+      const defaultFolder = foldersRes.favoriteFolders[0]
+      if (!defaultFolder) {
+        setFavoriteOverride({
+          propId: property.id,
+          propVal: property.isFavorite,
+          val: false,
+        })
+        setFavoriteDrawerOpen(true)
+        return
+      }
+      await addFavorite({ propertyId: property.id, folderId: defaultFolder.id })
+      toast.success(`Saved to "${defaultFolder.name}"`, {
+        action: {
+          label: 'Change folder',
+          onClick: () => setFavoriteDrawerOpen(true),
+        },
+      })
+    } catch (err: unknown) {
+      setFavoriteOverride({
+        propId: property.id,
+        propVal: property.isFavorite,
+        val: false,
+      })
+      const msg =
+        err instanceof ApiError ? err.message : 'Failed to save to favorites'
+      toast.error(msg)
+    }
+  }
+
   const handleShare = async () => {
-    if (navigator.share && property) {
+    if (!property) return
+    const shareUrl = `${window.location.origin}${process.env.NEXT_PUBLIC_BASE_PATH || ''}/detail/${property.id}`
+    if (navigator.share) {
       try {
         await navigator.share({
           title: property.title,
-          text: `Check out this property: ${property.title}`,
-          url: `${window.location.origin}${process.env.NEXT_PUBLIC_BASE_PATH || ''}/detail/${property.id}`,
+          text: `Check out ${property.title} on JoodPakPaw`,
+          url: shareUrl,
         })
-      } catch (err) {
-        console.error('Error sharing:', err)
+        return
+      } catch {
+        // User cancelled or share failed; fall through to clipboard
       }
+    }
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      toast.success('Link copied to clipboard')
+    } catch {
+      toast.error('Could not copy link')
     }
   }
 
@@ -201,6 +292,21 @@ export default function PropertyDetailPage() {
     }
   }
 
+  const handlePromptSelectDates = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      const params = new URLSearchParams(searchParams.toString())
+      params.set('drawer', 'open')
+      router.replace(`?${params.toString()}`, { scroll: false })
+      return
+    }
+    setDesktopSidebarPanel(!date?.from || !date?.to ? 'checkin' : 'pets')
+    document.getElementById('booking-sidebar')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    })
+  }
+
+  if (accessDenied || unauthorized) return null
   if (loading) return <PropertyDetailSkeleton />
   if (error) return <ErrorState message={error} />
   if (!property) return <ErrorState message="Property not found." />
@@ -211,190 +317,233 @@ export default function PropertyDetailPage() {
       ? Math.min(...roomCategoriesArray.map((r) => r.basePrice))
       : undefined
 
-  return (
-    <div className="max-w-6xl mx-auto relative pb-32 lg:pb-10">
-      <PageHeaderButtons
-        onBackClick={handleBack}
-        onShareClick={handleShare}
-        onReportClick={
-          isAuthenticated && user?.id !== property.hostId
-            ? () => setReportOpen(true)
-            : undefined
-        }
-      />
+  const canReport = Boolean(isAuthenticated && user?.id !== property.hostId)
+  const hasSearchContext = Boolean(
+    date?.from && date?.to && stayNights > 0 && activePetCount > 0
+  )
 
-      {/* Gallery — full width, slides in from top */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25, ease: 'easeOut' }}
+  const desktopHeaderActions = (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={handleShare}
+        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-white text-xs font-semibold text-foreground hover:bg-off-white/70 transition-colors cursor-pointer"
       >
+        <Share2 className="w-4 h-4 text-deep-teal" />
+        <span>Share</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={handleToggleFavorite}
+        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-white text-xs font-semibold text-foreground hover:bg-off-white/70 transition-colors cursor-pointer"
+      >
+        <Heart
+          className={
+            isFavorite
+              ? 'w-4 h-4 fill-accent-orange text-accent-orange'
+              : 'w-4 h-4 text-deep-teal'
+          }
+        />
+        <span>{isFavorite ? 'Saved' : 'Save'}</span>
+      </button>
+
+      {canReport && (
+        <button
+          type="button"
+          onClick={() => setReportOpen(true)}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-white text-xs font-semibold text-neutral-gray hover:text-deep-teal hover:bg-off-white/70 transition-colors cursor-pointer"
+        >
+          <Flag className="w-4 h-4" />
+          <span>Report</span>
+        </button>
+      )}
+    </div>
+  )
+
+  return (
+    <div className="max-w-[1200px] mx-auto relative pb-28 lg:pb-12 lg:-mt-16 xl:-mt-[72px]">
+      {/* Mobile-only floating solid header buttons */}
+      <div className="lg:hidden">
+        <PageHeaderButtons
+          onBackClick={handleBack}
+          onShareClick={handleShare}
+          onSaveClick={handleToggleFavorite}
+          isFavorite={isFavorite}
+          onReportClick={canReport ? () => setReportOpen(true) : undefined}
+        />
+      </div>
+
+      {/* Desktop: Editorial Top Bar ABOVE Photo Mosaic */}
+      <div className="hidden lg:block px-8 xl:px-10 pt-4 pb-4 space-y-2.5">
+        <button
+          type="button"
+          onClick={handleBack}
+          className="inline-flex items-center gap-1 text-xs font-medium text-neutral-gray hover:text-deep-teal transition-colors cursor-pointer"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          <span>Back to stays</span>
+        </button>
+
+        <PropertyHeader property={property} actions={desktopHeaderActions} />
+      </div>
+
+      {/* Gallery */}
+      <div className="md:px-8 lg:px-8 xl:px-10">
         <PropertyImageGallery images={property.images} />
-      </motion.div>
+      </div>
 
-      {/* Body */}
-      <div className="px-4 md:px-8 lg:px-2 lg:grid lg:grid-cols-[1fr_380px] lg:gap-10 lg:items-start lg:mt-2">
-        {/* Left: content — each section staggers in */}
-        <div className="min-w-0">
-          <motion.div
-            custom={0}
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-          >
+      {/* Main Content Split */}
+      <div className="px-4 md:px-8 lg:px-8 xl:px-10 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-12 lg:items-start mt-5 lg:mt-6">
+        {/* Left: Editorial Content & Unified Room Selection */}
+        <div className="min-w-0 space-y-8">
+          {/* Mobile Header sits below gallery */}
+          <div className="lg:hidden">
             <PropertyHeader property={property} />
-          </motion.div>
+          </div>
 
-          <motion.div
-            custom={1}
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-          >
-            <PropertyFacilities
-              facilities={property.facilities}
-              description={property.description}
-            />
-          </motion.div>
+          <PropertyFacilities
+            facilities={property.facilities}
+            description={property.description}
+          />
+
+          <PropertyRoomCategories
+            propertyId={property.id}
+            roomCategories={roomCategoriesArray}
+            onDeleteSuccess={refreshProperty}
+            showDeleteButton={false}
+            fallbackImageUrl={property.images?.[0]?.filePath}
+            bookingMode
+            liveRoomCategories={currentPropertyData.roomCategories ?? []}
+            selectedRooms={currentPropertyData.selectedRooms ?? {}}
+            onSelectCountChange={(catId, nextCount) =>
+              handleSelectChange(catId, nextCount, property.id)
+            }
+            selectedPets={selectedPets}
+            petSizeId={petSizeId}
+            stayNights={stayNights}
+            hasSearchContext={hasSearchContext}
+            searchLoading={roomSearchLoading}
+            onPromptSelectDates={handlePromptSelectDates}
+          />
 
           {property.host && (
-            <motion.div
-              custom={3}
-              variants={fadeUp}
-              initial="hidden"
-              animate="visible"
-            >
-              <PropertyHost
-                host={property.host}
-                hostAvgRating={property.hostAvgRating}
-                chatRoomId={property.chatRoomId}
-                onChatSuccess={refreshProperty}
-                propertyId={property.id}
-                propertyTitle={property.title}
-                propertyThumbnail={property.images?.[0]?.filePath}
-                startingPrice={startingPrice}
-              />
-            </motion.div>
+            <PropertyHost
+              host={property.host}
+              hostAvgRating={property.hostAvgRating}
+              chatRoomId={property.chatRoomId}
+              onChatSuccess={refreshProperty}
+              propertyId={property.id}
+              propertyTitle={property.title}
+              propertyThumbnail={property.images?.[0]?.filePath}
+              startingPrice={startingPrice}
+            />
           )}
 
-          <motion.div
-            custom={4}
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-          >
-            <PropertyRoomCategories
-              propertyId={property.id}
-              roomCategories={roomCategoriesArray}
-              onDeleteSuccess={refreshProperty}
-              showDeleteButton={false}
-              fallbackImageUrl={property.images?.[0]?.filePath}
-            />
-          </motion.div>
+          <PropertyReviews
+            avgRating={property.avgRating}
+            reviewCount={property.reviewCount ?? 0}
+            reviews={property.reviews}
+            onReportReview={
+              isAuthenticated ? (id) => setReportReviewId(id) : undefined
+            }
+          />
 
-          <motion.div
-            custom={5}
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-          >
-            <PropertyReviews
-              avgRating={property.avgRating}
-              reviewCount={property.reviewCount ?? 0}
-              reviews={property.reviews}
-            />
-          </motion.div>
-
-          <motion.div
-            custom={6}
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-          >
-            <PropertyLocation property={property} />
-          </motion.div>
+          <PropertyLocation property={property} />
         </div>
 
-        {/* Right: sticky booking sidebar (desktop only) */}
-        <motion.div
-          className="hidden lg:block"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, ease: 'easeOut' }}
-        >
-          <div className="sticky top-6 flex flex-col gap-3">
-            <BookingDrawer
-              propertyId={property.id}
-              sidebarMode
-              startingPrice={startingPrice}
-              avgRating={property.avgRating}
-              reviewCount={property.reviewCount ?? 0}
-            />
-          </div>
-        </motion.div>
+        {/* Right: Sticky Booking Card (Desktop only) */}
+        <aside className="hidden lg:block sticky top-6">
+          <BookingDrawer
+            propertyId={property.id}
+            sidebarMode
+            startingPrice={startingPrice}
+            avgRating={property.avgRating}
+            reviewCount={property.reviewCount ?? 0}
+            inlinePanel={desktopSidebarPanel}
+            onInlinePanelChange={setDesktopSidebarPanel}
+          />
+        </aside>
       </div>
 
-      {/* Mobile fixed bottom booking bar */}
+      {/* Mobile fixed bottom conversion bar */}
       <div className="lg:hidden">
-        <BookingDrawer propertyId={property.id} />
+        <BookingDrawer
+          propertyId={property.id}
+          startingPrice={startingPrice}
+          avgRating={property.avgRating}
+          reviewCount={property.reviewCount ?? 0}
+        />
       </div>
 
-      {/* Recommendations Section */}
+      {/* Similar Properties (5-col desktop grid matching DESIGN.md) */}
       {recommendationsLoading ? (
-        <section className="mt-16 px-4 md:px-8 lg:px-2">
-          <div className="max-w-6xl mx-auto">
-            <h2 className="text-xl md:text-2xl font-baloo2 font-semibold text-deep-teal mb-6">
-              Similar Properties
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 lg:gap-6">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i}>
-                  <div className="aspect-square w-full rounded-2xl bg-gray-100" />
-                  <div className="mt-2 space-y-2">
-                    <div className="h-4 w-3/4 rounded bg-gray-100" />
-                    <div className="h-3 w-1/2 rounded bg-gray-100" />
-                    <div className="h-3 w-1/3 rounded bg-gray-100" />
-                  </div>
-                </div>
-              ))}
-            </div>
+        <section className="mt-14 px-4 md:px-8 lg:px-8 xl:px-10">
+          <h2 className="font-semibold text-deep-teal mb-5">
+            Similar Properties
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 lg:gap-5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <Skeleton className="aspect-square w-full rounded-2xl bg-neutral-200 motion-reduce:animate-none" />
+                <Skeleton className="h-4 w-3/4 bg-neutral-200 motion-reduce:animate-none" />
+                <Skeleton className="h-3 w-1/2 bg-neutral-200 motion-reduce:animate-none" />
+              </div>
+            ))}
           </div>
         </section>
       ) : recommendations.length > 0 ? (
-        <motion.section
-          initial={{ opacity: 0, y: 12 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: 'easeOut' }}
-          viewport={{ once: true }}
-          className="mt-16 px-4 md:px-8 lg:px-2"
-        >
-          <div className="max-w-6xl mx-auto">
-            <h2 className="text-xl md:text-2xl font-baloo2 font-semibold text-deep-teal mb-6">
-              Similar Properties
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 lg:gap-6">
-              {recommendations.map((rec) => {
-                const currentChain = searchParams.get('propertyChain') || ''
-                const newChain = currentChain ? `${currentChain},${property.id}` : String(property.id)
-                return (
-                  <PropertyCard
-                    key={rec.id}
-                    property={rec}
-                    href={`/detail/${rec.id}?propertyChain=${newChain}`}
-                    showHeartIcon={isAuthenticated}
-                    showMatchReason={true}
-                  />
-                )
-              })}
-            </div>
+        <section className="mt-14 px-4 md:px-8 lg:px-8 xl:px-10 border-t border-border pt-10">
+          <h2 className="font-semibold text-deep-teal mb-5">
+            Similar Properties
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 lg:gap-5">
+            {recommendations.slice(0, 10).map((rec) => {
+              const currentChain = searchParams.get('propertyChain') || ''
+              const newChain = currentChain
+                ? `${currentChain},${property.id}`
+                : String(property.id)
+              return (
+                <PropertyCard
+                  key={rec.id}
+                  property={rec}
+                  href={`/detail/${rec.id}?propertyChain=${newChain}`}
+                  showHeartIcon={isAuthenticated}
+                  showMatchReason
+                />
+              )
+            })}
           </div>
-        </motion.section>
+        </section>
       ) : null}
 
       <ReportPropertyDrawer
         propertyId={property.id}
         isOpen={reportOpen}
         onOpenChange={setReportOpen}
+      />
+
+      {reportReviewId !== null && (
+        <ReportReviewDrawer
+          bookingId={reportReviewId}
+          isOpen={reportReviewId !== null}
+          onOpenChange={(open) => {
+            if (!open) setReportReviewId(null)
+          }}
+        />
+      )}
+
+      <FavoriteDrawer
+        propertyId={property.id}
+        isOpen={favoriteDrawerOpen}
+        onOpenChange={setFavoriteDrawerOpen}
+        onSuccess={() =>
+          setFavoriteOverride({
+            propId: property.id,
+            propVal: property.isFavorite,
+            val: true,
+          })
+        }
       />
     </div>
   )

@@ -1,51 +1,78 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import useSWR from 'swr'
 import { Property } from '@/types'
-import { useParams, notFound } from 'next/navigation'
+import { useParams, useRouter, notFound } from 'next/navigation'
+import {
+  classifyNavigationError,
+  getSingleParam,
+  isPositiveIntParam,
+} from '@/lib/navigationGuard'
 
 type FetcherFunc = (id: string) => Promise<{ property: Property }>
+export type PropertyLoaderScope = 'public-property' | 'host-property'
 
-export function usePropertyLoader(fetcher: FetcherFunc) {
+export function usePropertyLoader(
+  fetcher: FetcherFunc,
+  cacheScope: PropertyLoaderScope = 'public-property'
+) {
   const params = useParams()
-  const rawId = params?.propertyId
-  const propertyId = Array.isArray(rawId) ? rawId[0] : (rawId as string | undefined)
+  const router = useRouter()
+  const propertyId = getSingleParam(params?.propertyId)
+  const isValidId = isPositiveIntParam(propertyId)
 
-  const isValidId = Boolean(propertyId && !isNaN(Number(propertyId)))
-
-  const { data, error: swrError, isLoading, isValidating, mutate } = useSWR(
-    isValidId && propertyId ? ['property', propertyId] : null,
+  const {
+    data,
+    error: swrError,
+    isLoading,
+    isValidating,
+    mutate,
+  } = useSWR(
+    isValidId && propertyId ? [cacheScope, propertyId] : null,
     () => fetcher(propertyId!),
     {
       revalidateOnFocus: false,
       dedupingInterval: 60000,
+      shouldRetryOnError: (err) => classifyNavigationError(err) === 'error',
     }
   )
 
-  const is404 =
-    !isValidId ||
-    Boolean(
-      swrError &&
-        (swrError.message === 'Resource not found.' ||
-          (swrError as any)?.status === 404 ||
-          (swrError as any)?.statusCode === 404)
-    )
-
-  if (is404) {
-    notFound()
-  }
-
-  const property = data?.property ?? null
-  const loading = isLoading && !property
-  const isRefreshing = isValidating && Boolean(property)
-  const error = swrError
-    ? 'Failed to fetch property details. Please try again later.'
-    : null
+  const errorKind = swrError ? classifyNavigationError(swrError) : null
+  const accessDenied = errorKind === 'forbidden'
+  const unauthorized = errorKind === 'unauthorized'
 
   const refreshProperty = useCallback(() => {
     mutate()
   }, [mutate])
 
-  return { property, loading, isRefreshing, error, refreshProperty }
+  useEffect(() => {
+    if (accessDenied) {
+      router.replace('/forbidden')
+    } else if (unauthorized) {
+      router.replace(cacheScope === 'host-property' ? '/profile' : '/authen')
+    }
+  }, [accessDenied, unauthorized, cacheScope, router])
+
+  if (!isValidId || errorKind === 'not_found') {
+    notFound()
+  }
+
+  const property = accessDenied || unauthorized ? null : data?.property ?? null
+  const loading = isLoading && !property && !accessDenied && !unauthorized
+  const isRefreshing = isValidating && Boolean(property)
+  const error =
+    swrError && errorKind === 'error'
+      ? 'Failed to fetch property details. Please try again later.'
+      : null
+
+  return {
+    property,
+    loading,
+    isRefreshing,
+    error,
+    accessDenied,
+    unauthorized,
+    refreshProperty,
+  }
 }

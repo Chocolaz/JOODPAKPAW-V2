@@ -48,7 +48,8 @@ export function DesktopNav() {
   if (
     !VISIBLE_PATHS.includes(normalizedPath) &&
     !normalizedPath.startsWith('/chat') &&
-    !normalizedPath.startsWith('/profile/')
+    !normalizedPath.startsWith('/profile/') &&
+    !normalizedPath.startsWith('/favorites/')
   ) {
     return null
   }
@@ -98,7 +99,10 @@ export function DesktopNav() {
               href === '/chat'
                 ? normalizedPath === '/chat' ||
                   normalizedPath.startsWith('/chat/')
-                : normalizedPath === href
+                : href === '/favorites'
+                  ? normalizedPath === '/favorites' ||
+                    normalizedPath.startsWith('/favorites/')
+                  : normalizedPath === href
             const badgeCount =
               href === '/notifications'
                 ? unreadCount

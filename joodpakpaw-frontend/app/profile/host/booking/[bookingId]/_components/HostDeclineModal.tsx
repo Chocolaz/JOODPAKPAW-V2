@@ -78,7 +78,7 @@ export function HostDeclineModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogOverlay className="bg-black/60 backdrop-blur-sm" />
+      <DialogOverlay className="bg-black/60" />
       <DialogContent className="max-w-md w-full bg-white rounded-2xl p-6 border border-border shadow-sm">
         <DialogHeader className="space-y-2 text-left">
           <div className="flex items-center gap-2 text-red-600">
@@ -95,7 +95,6 @@ export function HostDeclineModal({
         </DialogHeader>
 
         <div className="space-y-3 py-2">
-          {/* Quick preset chips */}
           <div className="space-y-1.5">
             <p className="text-xs font-medium text-neutral-gray">
               Quick reasons
@@ -108,7 +107,7 @@ export function HostDeclineModal({
                   onClick={() => handleChipClick(chip)}
                   disabled={isDeclining}
                   className={cn(
-                    'text-xs px-2.5 py-1 rounded-full border border-border transition-colors text-left',
+                    'text-xs px-2.5 py-1 rounded-full border border-border transition-colors text-left cursor-pointer',
                     reason.includes(chip)
                       ? 'bg-deep-teal/10 text-deep-teal border-deep-teal/30 font-medium'
                       : 'bg-off-white/80 hover:bg-off-white text-foreground'
@@ -120,7 +119,6 @@ export function HostDeclineModal({
             </div>
           </div>
 
-          {/* Decline explanation textarea */}
           <div className="space-y-1.5">
             <label
               htmlFor="decline-reason-input"
@@ -141,7 +139,7 @@ export function HostDeclineModal({
               rows={4}
               className="resize-none border-border focus-visible:ring-deep-teal text-xs text-foreground bg-white"
             />
-            <div className="flex items-center justify-between text-[11px] text-neutral-gray">
+            <div className="flex items-center justify-between text-xs text-neutral-gray">
               <span className="flex items-center gap-1">
                 <AlertCircle className="w-3 h-3 text-neutral-gray" />
                 Optional, up to 500 characters

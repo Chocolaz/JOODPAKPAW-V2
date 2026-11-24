@@ -9,8 +9,10 @@ import {
 } from '../controllers/booking.controller';
 import { authenticateToken } from '../middlewares/auth.middleware';
 import { uploadMiddleware } from '../services/storage.service';
+import { attachNumericParamGuards } from '../middlewares/validateParams.middleware';
 
 export const bookingRouter = Router();
+attachNumericParamGuards(bookingRouter, ['bookingId']);
 
 // Bookings CRUD & lifecycle under /api/v1/bookings
 bookingRouter.post('/', authenticateToken, createBooking);

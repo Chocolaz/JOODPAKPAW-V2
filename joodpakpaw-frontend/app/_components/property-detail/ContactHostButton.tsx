@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { MessageCircle, Send, Building } from 'lucide-react'
+import { MessageCircle, Send, Building, PawPrint, Clock, Camera } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -41,16 +41,19 @@ interface ContactHostButtonProps {
 
 const QUICK_CHIPS = [
   {
-    label: '🐾 Check pet compatibility',
+    icon: PawPrint,
+    label: 'Check pet compatibility',
     text: "Hi! I'd like to ask if your property can accommodate my pet.",
   },
   {
-    label: '⏰ Check-in & check-out times',
-    text: "Hi! What are the check-in and check-out times for this property?",
+    icon: Clock,
+    label: 'Check-in & check-out times',
+    text: 'Hi! What are the check-in and check-out times for this property?',
   },
   {
-    label: '📸 Daily photo updates',
-    text: "Hi! Do you provide daily photo or video updates during the stay?",
+    icon: Camera,
+    label: 'Daily photo updates',
+    text: 'Hi! Do you provide daily photo or video updates during the stay?',
   },
 ]
 
@@ -69,7 +72,9 @@ export function ContactHostButton({
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const fullPath = searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname
+  const fullPath = searchParams.toString()
+    ? `${pathname}?${searchParams.toString()}`
+    : pathname
   const [open, setOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [isSending, setIsSending] = useState(false)
@@ -98,7 +103,8 @@ export function ContactHostButton({
         description: 'Your message has been delivered.',
         action: {
           label: 'Open Chat',
-          onClick: () => router.push(`/chat/${room.id}?from=${encodeURIComponent(fullPath)}`),
+          onClick: () =>
+            router.push(`/chat/${room.id}?from=${encodeURIComponent(fullPath)}`),
         },
       })
       onSuccess?.(room.id)
@@ -110,23 +116,30 @@ export function ContactHostButton({
   }
 
   const listingCard = propertyTitle ? (
-    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 mb-3">
+    <div className="flex items-center gap-3 p-3 bg-off-white/60 rounded-xl border border-border mb-3">
       {propertyThumbnail ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
         <img
           src={propertyThumbnail}
           alt={propertyTitle}
           className="w-14 h-14 rounded-lg object-cover shrink-0"
         />
       ) : (
-        <div className="w-14 h-14 rounded-lg bg-gray-200 flex items-center justify-center shrink-0">
-          <Building className="w-6 h-6 text-gray-400" />
+        <div className="w-14 h-14 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0">
+          <Building className="w-6 h-6 text-neutral-400" />
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <h4 className="text-sm font-semibold text-deep-teal truncate">{propertyTitle}</h4>
+        <p className="text-sm font-semibold text-deep-teal truncate">
+          {propertyTitle}
+        </p>
         {startingPrice !== undefined && (
           <p className="text-xs text-neutral-gray mt-0.5">
-            From <span className="font-semibold text-accent-orange">฿{startingPrice.toLocaleString()}</span> / night
+            From{' '}
+            <span className="font-semibold text-accent-orange tabular-nums">
+              ฿{startingPrice.toLocaleString()}
+            </span>{' '}
+            / night
           </p>
         )}
       </div>
@@ -135,20 +148,26 @@ export function ContactHostButton({
 
   const quickChipsSection = (
     <div className="space-y-1.5 mb-3">
-      <p className="text-xs font-medium text-gray-500">Quick inquiries:</p>
+      <p className="text-xs font-medium text-neutral-gray">Quick inquiries:</p>
       <div className="flex flex-wrap gap-1.5">
-        {QUICK_CHIPS.map((chip, idx) => (
-          <button
-            key={idx}
-            type="button"
-            onClick={() => {
-              setMessage((prev) => (prev ? `${prev}\n${chip.text}` : chip.text))
-            }}
-            className="text-xs bg-gray-100 hover:bg-orange-50 hover:text-accent-orange hover:border-accent-orange/30 border border-transparent rounded-full px-3 py-1 text-gray-700 transition-colors text-left"
-          >
-            {chip.label}
-          </button>
-        ))}
+        {QUICK_CHIPS.map((chip, idx) => {
+          const Icon = chip.icon
+          return (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => {
+                setMessage((prev) =>
+                  prev ? `${prev}\n${chip.text}` : chip.text
+                )
+              }}
+              className="inline-flex items-center gap-1.5 text-xs bg-off-white/80 hover:bg-accent-orange/10 hover:text-accent-orange hover:border-accent-orange/30 border border-border rounded-full px-3 py-1.5 text-foreground transition-colors text-left cursor-pointer"
+            >
+              <Icon className="w-3.5 h-3.5 text-deep-teal shrink-0" />
+              <span>{chip.label}</span>
+            </button>
+          )
+        })}
       </div>
     </div>
   )
@@ -160,13 +179,13 @@ export function ContactHostButton({
       onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
       placeholder="Type your message..."
       rows={4}
-      className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-accent-orange transition-colors resize-none"
+      className="w-full rounded-2xl border border-border px-4 py-3 text-sm outline-none focus:border-deep-teal transition-colors resize-none"
     />
   )
 
   const sendButton = (
     <Button
-      className="bg-accent-orange gap-2"
+      className="bg-accent-orange hover:bg-accent-orange/90 text-white gap-2"
       onClick={handleSend}
       disabled={!message.trim() || isSending}
     >
@@ -179,9 +198,10 @@ export function ContactHostButton({
     <>
       <Button
         variant="outline"
-        className={compact
-          ? 'shrink-0 border-accent-orange text-accent-orange hover:bg-accent-orange/5 gap-2 px-4'
-          : 'w-full border-accent-orange text-accent-orange hover:bg-accent-orange/5 gap-2'
+        className={
+          compact
+            ? 'w-full sm:w-auto shrink-0 border-deep-teal/30 text-deep-teal hover:bg-deep-teal/5 gap-2 px-4 rounded-xl cursor-pointer'
+            : 'w-full border-deep-teal/30 text-deep-teal hover:bg-deep-teal/5 gap-2 rounded-xl cursor-pointer'
         }
         onClick={handleOpen}
       >
@@ -189,7 +209,6 @@ export function ContactHostButton({
         {chatRoomId ? 'View Chat' : compact ? 'Message' : 'Message Host'}
       </Button>
 
-      {/* Desktop: Dialog */}
       {isDesktop ? (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent className="sm:max-w-md">
@@ -213,7 +232,6 @@ export function ContactHostButton({
           </DialogContent>
         </Dialog>
       ) : (
-        /* Mobile: Drawer */
         <Drawer open={open} onOpenChange={setOpen}>
           <DrawerContent>
             <div className="mx-auto w-full max-w-2xl">

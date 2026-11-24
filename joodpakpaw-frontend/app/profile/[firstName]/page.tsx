@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { notFound, useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { assetPath, cn, getDisplayName } from '@/lib/utils'
+import { getSingleParam } from '@/lib/navigationGuard'
 import { CropModal } from '@/app/_components/CropModal'
 import { useUserProfile } from '@/app/profile/_hooks/useUserProfile'
 import { useProfileContext } from '@/app/profile/ProfileContext'
@@ -43,6 +45,9 @@ import {
 } from 'lucide-react'
 
 export default function UserProfilePage() {
+  const params = useParams()
+  const router = useRouter()
+  const rawFirstNameParam = getSingleParam(params?.firstName)
   const { profile, loading, error, refreshProfile } = useUserProfile()
   const { setMenu } = useProfileContext()
   const { refreshAuth } = useAuth()
@@ -142,6 +147,13 @@ export default function UserProfilePage() {
       formData.append('visibleName', visibleName.trim())
       if (avatarFile) formData.append('avatar', avatarFile)
       await updateUserProfile(profile.id.toString(), formData)
+      const trimmedFirst = firstName.trim()
+      if (
+        trimmedFirst &&
+        trimmedFirst.toLowerCase() !== (profile.firstName || '').trim().toLowerCase()
+      ) {
+        router.replace(`/profile/${encodeURIComponent(trimmedFirst.toLowerCase())}`)
+      }
       refreshProfile()
       refreshAuth()
       setAvatarFile(null)
@@ -153,6 +165,23 @@ export default function UserProfilePage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const decodedRouteFirstName = (() => {
+    if (!rawFirstNameParam) return null
+    try {
+      return decodeURIComponent(rawFirstNameParam).trim().toLowerCase()
+    } catch {
+      return null
+    }
+  })()
+
+  if (
+    !loading &&
+    profile &&
+    decodedRouteFirstName !== (profile.firstName || '').trim().toLowerCase()
+  ) {
+    notFound()
   }
 
   if (error) return <ErrorState message={error} />

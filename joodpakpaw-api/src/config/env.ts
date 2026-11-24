@@ -25,7 +25,7 @@ export const config = {
     'postgresql://joodpakpaw:joodpakpaw_password@localhost:5432/joodpakpaw_db?schema=public',
   redisUrl: process.env.REDIS_URL || '',
   supabase: {
-    url: process.env.SUPABASE_URL || 'https://axvgqarpeifqvyjfccxo.supabase.co',
+    url: process.env.SUPABASE_URL || '',
     anonKey: process.env.SUPABASE_ANON_KEY || '',
   },
   s3: {
@@ -34,9 +34,7 @@ export const config = {
     accessKey: process.env.S3_ACCESS_KEY || 'minioadmin',
     secretKey: process.env.S3_SECRET_KEY || 'minioadminpassword',
     bucket: process.env.S3_BUCKET || 'joodpakpaw-media',
-    publicUrl:
-      process.env.S3_PUBLIC_URL ||
-      'https://axvgqarpeifqvyjfccxo.supabase.co/storage/v1/object/public/joodpakpaw-media',
+    publicUrl: process.env.S3_PUBLIC_URL || '',
     forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true',
   },
   jwt: {

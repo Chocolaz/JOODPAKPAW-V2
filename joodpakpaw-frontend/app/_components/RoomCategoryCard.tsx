@@ -1,6 +1,19 @@
 'use client'
 
-import { BedDouble, PawPrint, Minus, Pencil, ImageOff, ChevronLeft, ChevronRight, Loader2, CalendarDays } from 'lucide-react'
+import {
+  BedDouble,
+  PawPrint,
+  Minus,
+  Plus,
+  Pencil,
+  ImageOff,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  CalendarDays,
+  AlertCircle,
+  CheckCircle2,
+} from 'lucide-react'
 import Image from 'next/image'
 import { RoomCategories } from '@/types'
 import { useState, useMemo, useRef } from 'react'
@@ -8,8 +21,7 @@ import { deleteRoomCategory } from '@/lib/api'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ConfirmationModal } from '@/app/_components/ConfirmationModal'
-import { cn } from '@/lib/utils'
-import { getPetPolicy } from '@/lib/utils'
+import { cn, getPetPolicy, formatPetSizeRange } from '@/lib/utils'
 import Lightbox from 'yet-another-react-lightbox'
 import 'yet-another-react-lightbox/styles.css'
 
@@ -23,6 +35,16 @@ interface RoomCategoryCardProps {
   fallbackImageUrl?: string
   onEdit?: (category: RoomCategories) => void
   onManageCalendar?: (category: RoomCategories) => void
+  // Unified booking flow props (property detail)
+  bookingMode?: boolean
+  liveCategory?: RoomCategories
+  selectedCount?: number
+  onSelectCountChange?: (categoryId: number, nextCount: number) => void
+  ineligibilityReason?: string | null
+  stayNights?: number
+  hasSearchContext?: boolean
+  searchLoading?: boolean
+  onPromptSelectDates?: () => void
 }
 
 export function RoomCategoryCard({
@@ -35,6 +57,15 @@ export function RoomCategoryCard({
   fallbackImageUrl,
   onEdit,
   onManageCalendar,
+  bookingMode = false,
+  liveCategory,
+  selectedCount = 0,
+  onSelectCountChange,
+  ineligibilityReason = null,
+  stayNights = 0,
+  hasSearchContext = false,
+  searchLoading = false,
+  onPromptSelectDates,
 }: RoomCategoryCardProps) {
   const [isDeleting, setIsDeleting] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -44,7 +75,8 @@ export function RoomCategoryCard({
   const [lightboxIndex, setLightboxIndex] = useState(0)
   const touchStartX = useRef(0)
 
-  const canDelete = showDeleteButton && propertyId !== undefined && onDeleteSuccess
+  const canDelete =
+    showDeleteButton && propertyId !== undefined && onDeleteSuccess
   const petPolicy = useMemo(() => getPetPolicy(category.pets), [category.pets])
   const images = category.images ?? []
   const hasMultiple = images.length > 1
@@ -91,33 +123,90 @@ export function RoomCategoryCard({
       toast.success('Room Category Deleted')
       onDeleteSuccess(category.id)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to delete room category')
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : 'Failed to delete room category'
+      )
     } finally {
       setIsDeleting(false)
     }
   }
 
+  // Booking calculations
+  const availability = liveCategory?.availability
+  const availableRooms = availability?.availableRooms ?? 0
+  const roomsNeeded = availability?.roomsNeeded ?? 1
+  const totalStayPrice = availability?.totalPrice ?? category.basePrice * stayNights
+  const avgNightlyRate =
+    stayNights > 0 && availability?.totalPrice
+      ? Math.round(availability.totalPrice / stayNights)
+      : category.basePrice
+
+  const isSelected = bookingMode && selectedCount > 0
+  const isDisabledInBooking =
+    bookingMode && hasSearchContext && Boolean(ineligibilityReason)
+
+  const handleIncrement = () => {
+    if (!onSelectCountChange || isDisabledInBooking) return
+    const nextCount =
+      selectedCount === 0 ? Math.max(1, roomsNeeded) : selectedCount + 1
+    if (nextCount <= availableRooms) {
+      onSelectCountChange(category.id, nextCount)
+    }
+  }
+
+  const handleDecrement = () => {
+    if (!onSelectCountChange || selectedCount <= 0) return
+    const minRequired = Math.max(1, roomsNeeded)
+    const nextCount =
+      selectedCount <= minRequired ? 0 : selectedCount - 1
+    onSelectCountChange(category.id, nextCount)
+  }
+
+  const canIncrement =
+    !isDisabledInBooking &&
+    (selectedCount === 0
+      ? availableRooms >= Math.max(1, roomsNeeded)
+      : selectedCount + 1 <= availableRooms)
+
   return (
     <>
-      <div className={cn('relative rounded-2xl border border-neutral-200 bg-white shadow-md/20 hover:shadow-lg/30 transition-all duration-300 overflow-hidden', className)}>
-
+      <div
+        className={cn(
+          'relative rounded-2xl border bg-white transition-colors overflow-hidden flex flex-col',
+          isSelected
+            ? 'border-deep-teal ring-1 ring-deep-teal/20'
+            : isDisabledInBooking
+              ? 'border-border bg-off-white/50 opacity-85'
+              : 'border-border hover:border-foreground/25',
+          className
+        )}
+      >
         {/* Cover image */}
         <div
-          className="relative w-full h-40 overflow-hidden rounded-t-2xl bg-neutral-100 group/img"
+          className="relative w-full h-40 overflow-hidden bg-off-white/60 group/img shrink-0"
           onTouchStart={hasMultiple ? handleTouchStart : undefined}
           onTouchEnd={hasMultiple ? handleTouchEnd : undefined}
         >
           {images.length > 0 || fallbackImageUrl ? (
             <>
               <div
-                className={cn('relative w-full h-full bg-neutral-100', images.length > 0 && 'cursor-zoom-in')}
+                className={cn(
+                  'relative w-full h-full bg-off-white/60',
+                  images.length > 0 && 'cursor-zoom-in'
+                )}
                 onClick={images.length > 0 ? openLightbox : undefined}
               >
                 {!isImageLoaded && (
-                  <Skeleton className="absolute inset-0 w-full h-full rounded-none bg-gray-200 animate-pulse z-0" />
+                  <Skeleton className="absolute inset-0 w-full h-full rounded-none bg-neutral-200 animate-pulse motion-reduce:animate-none z-0" />
                 )}
                 <Image
-                  src={images.length > 0 ? images[imgIndex].filePath : fallbackImageUrl!}
+                  src={
+                    images.length > 0
+                      ? images[imgIndex].filePath
+                      : fallbackImageUrl!
+                  }
                   alt={`${category.name} photo`}
                   fill
                   unoptimized
@@ -128,7 +217,7 @@ export function RoomCategoryCard({
                   )}
                 />
                 {images.length === 0 && fallbackImageUrl && (
-                  <span className="absolute bottom-2 left-2 text-[10px] font-medium bg-black/50 text-white px-1.5 py-0.5 rounded-md backdrop-blur-sm">
+                  <span className="absolute bottom-2 left-2 text-[11px] font-medium bg-foreground/75 text-white px-2 py-0.5 rounded-md">
                     Property photo
                   </span>
                 )}
@@ -139,25 +228,27 @@ export function RoomCategoryCard({
                   <button
                     type="button"
                     onClick={prev}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-sm flex items-center justify-center text-white opacity-0 group-hover/img:opacity-100 transition-opacity"
+                    aria-label="Previous room photo"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-foreground/60 hover:bg-foreground/80 flex items-center justify-center text-white opacity-0 group-hover/img:opacity-100 transition-opacity cursor-pointer"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
                   <button
                     type="button"
                     onClick={next}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-sm flex items-center justify-center text-white opacity-0 group-hover/img:opacity-100 transition-opacity"
+                    aria-label="Next room photo"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-foreground/60 hover:bg-foreground/80 flex items-center justify-center text-white opacity-0 group-hover/img:opacity-100 transition-opacity cursor-pointer"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
 
                   <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
                     {images.map((_, i) => (
-                      <div
+                      <span
                         key={i}
                         className={cn(
-                          'rounded-full transition-all duration-200',
-                          i === imgIndex ? 'w-3 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/50'
+                          'w-1.5 h-1.5 rounded-full transition-colors duration-200',
+                          i === imgIndex ? 'bg-white' : 'bg-white/50'
                         )}
                       />
                     ))}
@@ -171,57 +262,174 @@ export function RoomCategoryCard({
               <span className="text-xs">No photo</span>
             </div>
           )}
+
+          {isSelected && (
+            <span className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-deep-teal text-white px-2.5 py-1 text-xs font-semibold tabular-nums">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              {selectedCount} selected
+            </span>
+          )}
         </div>
 
         {/* Content */}
-        <div className="p-6 flex flex-col gap-4">
-          <div className="flex items-center justify-between gap-3 min-w-0">
-            <p className="font-semibold text-deep-teal text-lg leading-tight truncate">{category.name}</p>
-            <p className="shrink-0 text-right">
-              <span className="text-xl font-semibold text-neutral-900">{category.basePrice.toLocaleString()}</span>
-              <span className="text-neutral-500 ml-1 text-sm">THB / night</span>
-            </p>
-          </div>
+        <div className="p-5 flex-1 flex flex-col gap-3.5">
+          <div className="flex items-start justify-between gap-3 min-w-0">
+            <div className="min-w-0">
+              <p className="font-semibold text-deep-teal text-base leading-snug truncate capitalize">
+                {category.name}
+              </p>
+              {bookingMode && hasSearchContext && liveCategory ? (
+                <p className="text-xs text-neutral-gray mt-0.5 tabular-nums">
+                  {availableRooms} rooms available
+                </p>
+              ) : null}
+            </div>
 
-          <div className="flex items-start justify-between flex-wrap gap-3 text-sm text-neutral-700">
-            <div className="space-y-2">
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                  <BedDouble className="w-4 h-4 text-accent-orange/80" />
-                  <span>{category.totalRoom} {category.totalRoom === 1 ? 'room' : 'rooms'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <PawPrint className="w-4 h-4 text-accent-orange/80" />
-                  <span>{category.numberOfPets} pets max</span>
-                </div>
-              </div>
-              {category.petSizeCategory?.name && (
-                <div className="text-xs text-neutral-600 font-medium">
-                  Room size: {category.petSizeCategory.name.toLowerCase() === 'small' ? '< 12m²' : category.petSizeCategory.name.toLowerCase() === 'medium' ? '12–20m²' : '> 20m²'}
-                </div>
+            <div className="shrink-0 text-right">
+              {bookingMode && hasSearchContext && liveCategory && stayNights > 0 ? (
+                <>
+                  <p className="text-lg font-bold text-foreground tabular-nums leading-tight">
+                    ฿{totalStayPrice.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-neutral-gray tabular-nums">
+                    ฿{avgNightlyRate.toLocaleString()} / night
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-lg font-bold text-foreground tabular-nums leading-tight">
+                    ฿{category.basePrice.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-neutral-gray">/ night</p>
+                </>
               )}
             </div>
+          </div>
+
+          <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-foreground/80">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <BedDouble className="w-4 h-4 text-deep-teal shrink-0" />
+                <span className="tabular-nums">
+                  {category.totalRoom}{' '}
+                  {category.totalRoom === 1 ? 'room' : 'rooms'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <PawPrint className="w-4 h-4 text-deep-teal shrink-0" />
+                <span className="tabular-nums">
+                  Up to {category.numberOfPets} pets
+                </span>
+              </div>
+              {category.petSizeCategory?.name && (
+                <span className="capitalize text-neutral-gray">
+                  Max {category.petSizeCategory.name}
+                  {!category.petSizeCategory.name.includes('(') &&
+                    ` (${formatPetSizeRange(
+                      category.petSizeCategory.min,
+                      category.petSizeCategory.max
+                    )})`}
+                </span>
+              )}
+            </div>
+
             {petPolicy && (
-              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs bg-neutral-900 text-white font-medium shadow-sm">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-deep-teal/10 text-deep-teal font-medium">
                 {petPolicy}
               </span>
             )}
           </div>
 
           {(category.facilities || []).length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-1 min-w-0">
+            <div className="flex flex-wrap gap-1.5 min-w-0">
               {category.facilities?.map((facility) => (
-                <span key={facility.id} className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-neutral-100 text-neutral-700 border border-neutral-200 truncate">
+                <span
+                  key={facility.id}
+                  className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-off-white/80 text-neutral-gray border border-border truncate"
+                >
                   {facility.name}
                 </span>
               ))}
             </div>
           )}
+
+          {/* Ineligibility feedback */}
+          {bookingMode && hasSearchContext && ineligibilityReason && (
+            <div className="mt-auto flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>{ineligibilityReason}</span>
+            </div>
+          )}
         </div>
 
-        {/* Action bar */}
+        {/* Unified Booking Footer */}
+        {bookingMode && (
+          <div className="px-5 py-3.5 border-t border-border bg-off-white/40 flex items-center justify-between gap-3">
+            {!hasSearchContext ? (
+              <>
+                <span className="text-xs text-neutral-gray">
+                  Select dates &amp; pets to check availability
+                </span>
+                <button
+                  type="button"
+                  onClick={onPromptSelectDates}
+                  className="shrink-0 px-3.5 py-2 rounded-xl border border-deep-teal/30 bg-white text-xs font-semibold text-deep-teal hover:bg-deep-teal/5 transition-colors cursor-pointer"
+                >
+                  Check dates
+                </button>
+              </>
+            ) : searchLoading && !liveCategory ? (
+              <div className="w-full flex items-center justify-between">
+                <Skeleton className="h-4 w-32 bg-neutral-200 motion-reduce:animate-none" />
+                <Skeleton className="h-9 w-24 rounded-xl bg-neutral-200 motion-reduce:animate-none" />
+              </div>
+            ) : isDisabledInBooking ? (
+              <span className="text-xs font-medium text-neutral-gray">
+                Unavailable for selected stay
+              </span>
+            ) : (
+              <>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-foreground tabular-nums">
+                    {selectedCount > 0
+                      ? `฿${(totalStayPrice * selectedCount).toLocaleString()} for ${selectedCount} ${selectedCount === 1 ? 'room' : 'rooms'}`
+                      : roomsNeeded > 1
+                        ? `Requires at least ${roomsNeeded} rooms`
+                        : `${availableRooms} left for your dates`}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleDecrement}
+                    disabled={selectedCount <= 0}
+                    aria-label={`Remove ${category.name} room`}
+                    className="w-9 h-9 rounded-full border border-border bg-white flex items-center justify-center text-foreground hover:border-deep-teal disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="w-6 text-center text-sm font-semibold text-foreground tabular-nums">
+                    {selectedCount}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleIncrement}
+                    disabled={!canIncrement}
+                    aria-label={`Add ${category.name} room`}
+                    className="w-9 h-9 rounded-full border border-deep-teal bg-deep-teal text-white flex items-center justify-center hover:bg-deep-teal/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Host Dashboard Action Bar */}
         {(onEdit || canDelete || onManageCalendar) && (
-          <div className="flex border-t border-neutral-100 divide-x divide-neutral-100">
+          <div className="flex border-t border-border divide-x divide-border">
             {onManageCalendar && (
               <button
                 type="button"
@@ -229,18 +437,21 @@ export function RoomCategoryCard({
                   e.stopPropagation()
                   onManageCalendar(category)
                 }}
-                className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-medium text-warm-gold hover:bg-neutral-50 transition-colors"
+                className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-medium text-deep-teal hover:bg-off-white/60 transition-colors cursor-pointer"
                 title="Manage availability & daily pricing"
               >
-                <CalendarDays className="w-4 h-4 text-warm-gold" />
+                <CalendarDays className="w-4 h-4 text-deep-teal" />
                 <span>Calendar</span>
               </button>
             )}
             {onEdit && (
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); onEdit(category) }}
-                className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium text-deep-teal hover:bg-neutral-50 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onEdit(category)
+                }}
+                className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium text-deep-teal hover:bg-off-white/60 transition-colors cursor-pointer"
               >
                 <Pencil className="w-4 h-4" />
                 Edit
@@ -252,9 +463,13 @@ export function RoomCategoryCard({
                 type="button"
                 onClick={handleDeleteClick}
                 disabled={isOnlyRoom || isDeleting}
-                className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
-                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Minus className="w-4 h-4" />}
+                {isDeleting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Minus className="w-4 h-4" />
+                )}
                 {isDeleting ? 'Deleting…' : 'Delete'}
               </button>
             )}
@@ -270,7 +485,9 @@ export function RoomCategoryCard({
         on={{ view: ({ index }) => setLightboxIndex(index) }}
         carousel={{ finite: images.length <= 1, imageFit: 'contain' }}
         controller={{ closeOnBackdropClick: true }}
-        styles={{ root: { '--yarl__color_backdrop': 'rgba(0,0,0,0.85)' } as never }}
+        styles={{
+          root: { '--yarl__color_backdrop': 'rgba(0,0,0,0.85)' } as never,
+        }}
       />
 
       {canDelete && (

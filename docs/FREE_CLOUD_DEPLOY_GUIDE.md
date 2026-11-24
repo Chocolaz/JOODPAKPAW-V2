@@ -11,7 +11,7 @@ This guide describes how to deploy the **JoodPakPaw V2** monorepo (`joodpakpaw-f
 | **Frontend** | `joodpakpaw-frontend` (Next.js 16) | `http://localhost:3000` | **Vercel Hobby** | Root path `/` (`NEXT_PUBLIC_BASE_PATH=""`), `images.remotePatterns` pre-configured for R2 & Supabase Storage |
 | **Core API** | `joodpakpaw-api` (Express + Prisma + Socket.IO v4) | `http://localhost:8000` | **Render Free Web Service** or **Koyeb Free** | `/health` endpoint, 1.5s `AbortSignal.timeout` + In-Process Hybrid ML Fallback, In-Memory cache & cron fallback |
 | **ML Service** | `joodpakpaw-ml` (Python 3.12 FastAPI + Scikit-Learn) | `http://localhost:5000` | **Hugging Face Spaces (Docker, `PORT=7860`)** or **Render Free** | Non-root `mluser` container, 60s In-Memory Catalog/TF-IDF Snapshot, PgBouncer-safe `psycopg_pool` (`max_size=3`) |
-| **PostgreSQL 16** | Database (41 tables) | `joodpakpaw-postgres:5432` | **Supabase Free** (500 MB) or **Neon Serverless Postgres** | Pooled `DATABASE_URL` (`?pgbouncer=true&sslmode=require`) + `DIRECT_URL` for Prisma migrations |
+| **PostgreSQL 16** | Database (42 tables, 77 provinces) | `joodpakpaw-postgres:5432` | **Supabase Free** (500 MB) or **Neon Serverless Postgres** | Pooled `DATABASE_URL` (`?pgbouncer=true&sslmode=require&connection_limit=5&pool_timeout=20`) + `DIRECT_URL` for Prisma migrations |
 | **Object Storage** | Media `.webp` uploads & S3 GC | `joodpakpaw-minio:9000` | **Cloudflare R2 Free** (10 GB) or **Supabase Storage** | `@aws-sdk/client-s3` adapter + Supabase REST fallback (`S3_PUBLIC_URL` + S3 garbage collection) |
 | **Cache & Scheduler** | Response cache & booking lifecycle sweeps | `joodpakpaw-redis:6379` | **Upstash Free Redis** or **Auto In-Memory Fallback** | Leaving `REDIS_URL` empty activates zero-crash In-Memory `CacheService` + 15-min in-process scheduler |
 
@@ -34,8 +34,8 @@ Prisma requires two URLs on serverless/pooled PostgreSQL providers such as Supab
 
 - **`DATABASE_URL` (Runtime Pooled Connection — used by `joodpakpaw-api` & `joodpakpaw-ml`):**
   ```env
-  # Supabase Transaction/Session Pooler example
-  DATABASE_URL="postgresql://postgres.<PROJECT_REF>:<DB_PASSWORD>@aws-0-<REGION>.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require&connection_limit=10"
+  # Supabase Transaction Pooler (port 6543) example
+  DATABASE_URL="postgresql://postgres.<PROJECT_REF>:<DB_PASSWORD>@aws-0-<REGION>.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require&connection_limit=5&pool_timeout=20&connect_timeout=30"
   ```
 - **`DIRECT_URL` (Direct Connection — used ONLY by `prisma migrate deploy` / `prisma db push`):**
   ```env
@@ -44,8 +44,8 @@ Prisma requires two URLs on serverless/pooled PostgreSQL providers such as Supab
   ```
 
 ### 2.2 How `joodpakpaw-ml` Handles Prisma URLs & PgBouncer
-Prisma-specific query parameters (`schema`, `pgbouncer`, `connection_limit`) cause `psycopg` / `libpq` to fail if passed raw. `joodpakpaw-ml` handles this automatically:
-1. **`joodpakpaw-ml/app/config.py` (`sanitize_database_url`)**: Strips `schema`, `pgbouncer`, and `connection_limit` from `DATABASE_URL` while preserving `sslmode=require` and `connect_timeout`.
+Prisma-specific query parameters (`schema`, `pgbouncer`, `connection_limit`, `pool_timeout`, `statement_cache_size`) cause `psycopg` / `libpq` to fail if passed raw. `joodpakpaw-ml` handles this automatically:
+1. **`joodpakpaw-ml/app/config.py` (`sanitize_database_url`)**: Strips `schema`, `pgbouncer`, `connection_limit`, `pool_timeout`, and `statement_cache_size` from `DATABASE_URL` while preserving `sslmode=require` and `connect_timeout`.
 2. **`joodpakpaw-ml/app/database.py` (`DatabaseClient`)**: Opens a read-only `psycopg_pool.ConnectionPool` with `min_size=1`, `max_size=3`, `timeout=5.0`, and `kwargs={"prepare_threshold": None}` so prepared statements never collide behind Supabase/Neon PgBouncer pools.
 
 ### 2.3 Initial Schema & Seed Commands (Run Locally Against Cloud DB)

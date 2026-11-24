@@ -38,7 +38,12 @@ function StarRow({
       {[1, 2, 3, 4, 5].map((star) => (
         <Star
           key={star}
-          className={cn(starSize, star <= rating ? 'fill-yellow-400 text-yellow-400' : 'fill-gray-200 text-gray-200')}
+          className={cn(
+            starSize,
+            star <= rating
+              ? 'fill-yellow-400 text-yellow-400'
+              : 'fill-neutral-200 text-neutral-200'
+          )}
           strokeWidth={0}
         />
       ))}
@@ -60,12 +65,22 @@ function RatingBreakdown({ reviews }: { reviews: PropertyReview[] }) {
         const percentage = total > 0 ? (count / total) * 100 : 0
         return (
           <div key={star} className="flex items-center gap-2 text-xs">
-            <span className="w-3 text-right text-gray-500 font-medium">{star}</span>
-            <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" strokeWidth={0} />
-            <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-yellow-400 rounded-full transition-all duration-500" style={{ width: `${percentage}%` }} />
+            <span className="w-3 text-right text-neutral-gray font-medium tabular-nums">
+              {star}
+            </span>
+            <Star
+              className="w-3 h-3 fill-yellow-400 text-yellow-400"
+              strokeWidth={0}
+            />
+            <div className="flex-1 h-1.5 bg-neutral-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-yellow-400 rounded-full transition-[width] duration-300"
+                style={{ width: `${percentage}%` }}
+              />
             </div>
-            <span className="w-4 text-right text-gray-400">{count}</span>
+            <span className="w-5 text-right text-neutral-gray tabular-nums">
+              {count}
+            </span>
           </div>
         )
       })}
@@ -81,7 +96,12 @@ function RatingBadge({ rating }: { rating: number }) {
         ? 'bg-amber-50 text-amber-700 ring-amber-200'
         : 'bg-red-50 text-red-600 ring-red-200'
   return (
-    <span className={cn('shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ring-1', style)}>
+    <span
+      className={cn(
+        'shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ring-1 tabular-nums',
+        style
+      )}
+    >
       <Star className="w-3 h-3 fill-current" strokeWidth={0} />
       {rating}.0
     </span>
@@ -105,11 +125,17 @@ function ReviewImages({
           key={i}
           type="button"
           onClick={() => onOpen(i)}
-          className="relative w-16 h-16 rounded-xl overflow-hidden border border-gray-100 cursor-zoom-in shrink-0 hover:brightness-90 transition-all"
+          className="relative w-16 h-16 rounded-xl overflow-hidden border border-border cursor-zoom-in shrink-0 hover:opacity-85 transition-opacity"
         >
-          <Image src={img.filePath} alt={`Review photo ${i + 1}`} fill unoptimized className="object-cover" />
+          <Image
+            src={img.filePath}
+            alt={`Review photo ${i + 1}`}
+            fill
+            unoptimized
+            className="object-cover"
+          />
           {i === 3 && overflow > 0 && (
-            <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white text-xs font-semibold">
+            <div className="absolute inset-0 bg-foreground/60 flex items-center justify-center text-white text-xs font-semibold tabular-nums">
               +{overflow}
             </div>
           )}
@@ -138,12 +164,18 @@ function ReviewCard({
 
   return (
     <>
-      <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm hover:shadow-md hover:border-gray-200 transition-all duration-200 flex flex-col gap-3">
+      <div className="bg-white rounded-2xl border border-border p-4 hover:border-deep-teal/30 transition-colors flex flex-col gap-3">
         {/* Header: avatar + name/stars + rating badge + flag */}
         <div className="flex items-start gap-3">
           <div className="relative w-10 h-10 rounded-full overflow-hidden bg-deep-teal/10 shrink-0">
             {review.avatar ? (
-              <Image src={review.avatar} alt={guestName} fill unoptimized className="object-cover" />
+              <Image
+                src={review.avatar}
+                alt={guestName}
+                fill
+                unoptimized
+                className="object-cover"
+              />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-deep-teal font-semibold text-sm">
                 {initial}
@@ -151,16 +183,20 @@ function ReviewCard({
             )}
           </div>
           <div className="flex-1 min-w-0 pt-0.5">
-            <span className="text-sm font-semibold text-gray-900 truncate block leading-tight">{guestName}</span>
+            <span className="text-sm font-semibold text-foreground truncate block leading-tight">
+              {guestName}
+            </span>
             <StarRow rating={review.rating} />
           </div>
           <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
             <RatingBadge rating={review.rating} />
             {onReport && (
               <button
+                type="button"
                 onClick={() => onReport(review.bookingId)}
-                className="p-1 rounded-full text-gray-300 hover:text-red-400 hover:bg-red-50 transition cursor-pointer"
+                className="p-1.5 rounded-full text-neutral-gray hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                 title="Report this review"
+                aria-label="Report this review"
               >
                 <Flag className="w-3.5 h-3.5" />
               </button>
@@ -168,15 +204,19 @@ function ReviewCard({
           </div>
         </div>
 
-        {/* Comment — flex-1 pushes images to bottom */}
+        {/* Comment */}
         <div className="flex-1">
           {review.comment ? (
             <>
-              <p className="text-sm text-gray-600 leading-relaxed line-clamp-3" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+              <p
+                className="text-sm text-foreground/85 leading-relaxed line-clamp-3"
+                style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+              >
                 {review.comment}
               </p>
               {isLong && (
                 <button
+                  type="button"
                   onClick={() => setModalOpen(true)}
                   className="mt-1 text-xs font-medium text-accent-orange hover:underline underline-offset-2 cursor-pointer"
                 >
@@ -185,16 +225,22 @@ function ReviewCard({
               )}
             </>
           ) : (
-            <p className="text-sm text-gray-300 italic">No comment left.</p>
+            <p className="text-sm text-neutral-gray italic">
+              No comment left.
+            </p>
           )}
         </div>
 
-        {/* Images */}
         {reviewImages.length > 0 && (
-          <ReviewImages images={reviewImages} onOpen={(i) => { setLightboxIndex(i); setLightboxOpen(true) }} />
+          <ReviewImages
+            images={reviewImages}
+            onOpen={(i) => {
+              setLightboxIndex(i)
+              setLightboxOpen(true)
+            }}
+          />
         )}
 
-        {/* Host Reply */}
         <HostReplyBlock
           hostReply={review.hostReply}
           hostRepliedAt={review.hostRepliedAt}
@@ -203,15 +249,20 @@ function ReviewCard({
         />
       </div>
 
-      {/* Full review modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="max-w-md gap-0 p-0 overflow-hidden [&>button]:hidden">
-          <DialogHeader className="px-5 py-4 border-b border-gray-100">
+          <DialogHeader className="px-5 py-4 border-b border-border">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="relative w-10 h-10 rounded-full overflow-hidden bg-deep-teal/10 shrink-0">
                   {review.avatar ? (
-                    <Image src={review.avatar} alt={guestName} fill unoptimized className="object-cover" />
+                    <Image
+                      src={review.avatar}
+                      alt={guestName}
+                      fill
+                      unoptimized
+                      className="object-cover"
+                    />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-deep-teal font-semibold text-sm">
                       {initial}
@@ -219,24 +270,40 @@ function ReviewCard({
                   )}
                 </div>
                 <div className="min-w-0">
-                  <DialogTitle className="text-sm font-semibold text-gray-900 truncate">{guestName}</DialogTitle>
+                  <DialogTitle className="text-sm font-semibold text-foreground truncate">
+                    {guestName}
+                  </DialogTitle>
                   <div className="flex items-center gap-2 mt-0.5">
                     <StarRow rating={review.rating} />
                     <RatingBadge rating={review.rating} />
                   </div>
                 </div>
               </div>
-              <button onClick={() => setModalOpen(false)} className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition cursor-pointer">
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-neutral-100 text-neutral-gray hover:bg-neutral-200 transition-colors cursor-pointer"
+                aria-label="Close review modal"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
           </DialogHeader>
           <div className="px-5 py-4 space-y-4">
-            <p className="text-sm text-gray-700 leading-relaxed" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+            <p
+              className="text-sm text-foreground leading-relaxed"
+              style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+            >
               {review.comment}
             </p>
             {reviewImages.length > 0 && (
-              <ReviewImages images={reviewImages} onOpen={(i) => { setLightboxIndex(i); setLightboxOpen(true) }} />
+              <ReviewImages
+                images={reviewImages}
+                onOpen={(i) => {
+                  setLightboxIndex(i)
+                  setLightboxOpen(true)
+                }}
+              />
             )}
             <HostReplyBlock
               hostReply={review.hostReply}
@@ -254,7 +321,9 @@ function ReviewCard({
         on={{ view: ({ index }) => setLightboxIndex(index) }}
         carousel={{ finite: reviewImages.length <= 1, imageFit: 'contain' }}
         controller={{ closeOnBackdropClick: true }}
-        styles={{ root: { '--yarl__color_backdrop': 'rgba(0,0,0,0.85)' } as never }}
+        styles={{
+          root: { '--yarl__color_backdrop': 'rgba(0,0,0,0.85)' } as never,
+        }}
       />
     </>
   )
@@ -269,33 +338,42 @@ export function PropertyReviews({
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   const topReviews = useMemo(
-    () => [...reviews].sort((a, b) => b.rating - a.rating).slice(0, MAX_VISIBLE_REVIEWS),
+    () =>
+      [...reviews]
+        .sort((a, b) => b.rating - a.rating)
+        .slice(0, MAX_VISIBLE_REVIEWS),
     [reviews]
   )
 
   const hasMore = reviewCount > MAX_VISIBLE_REVIEWS
 
   return (
-    <div className="mt-10 border-t pt-8">
-      <h3 className="text-lg lg:text-xl font-semibold text-deep-teal mb-6">Reviews</h3>
+    <section id="reviews" className="scroll-mt-24 border-t border-border pt-8">
+      <h2 className="font-semibold text-deep-teal mb-5">Reviews</h2>
 
       {reviews.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 py-10 text-center">
+        <div className="flex flex-col items-center gap-2 py-10 text-center rounded-2xl border border-border bg-white">
           <div className="flex gap-1">
             {[1, 2, 3, 4, 5].map((s) => (
-              <Star key={s} className="w-5 h-5 fill-gray-200 text-gray-200" strokeWidth={0} />
+              <Star
+                key={s}
+                className="w-5 h-5 fill-neutral-200 text-neutral-200"
+                strokeWidth={0}
+              />
             ))}
           </div>
-          <p className="font-medium text-gray-700">No reviews yet</p>
-          <p className="text-sm text-neutral-gray">Be the first to stay and leave a review.</p>
+          <p className="font-medium text-foreground">No reviews yet</p>
+          <p className="text-sm text-neutral-gray">
+            Be the first to stay and leave a review.
+          </p>
         </div>
       ) : (
-        <div className="xl:grid xl:grid-cols-[260px_1fr] xl:gap-10 xl:items-start">
-          {/* Left: summary — sticky on desktop */}
-          <div className="xl:sticky xl:top-6 mb-6 xl:mb-0 min-w-0">
-            <div className="bg-off-white/80 rounded-2xl p-5 shadow-sm border border-gray-200 flex flex-row xl:flex-col gap-6 xl:gap-4">
+        <div className="xl:grid xl:grid-cols-[260px_minmax(0,1fr)] xl:gap-8 xl:items-start">
+          {/* Left: summary */}
+          <div className="xl:sticky xl:top-6 mb-5 xl:mb-0 min-w-0">
+            <div className="bg-off-white/70 rounded-2xl p-5 border border-border flex flex-row xl:flex-col gap-6 xl:gap-4">
               <div className="flex flex-col items-center gap-1 shrink-0">
-                <span className="text-4xl font-bold text-gray-900 leading-none">
+                <span className="text-4xl font-bold text-foreground leading-none tabular-nums">
                   {avgRating > 0 ? avgRating.toFixed(1) : '-'}
                 </span>
                 <StarRow rating={Math.round(avgRating)} size="md" />
@@ -304,7 +382,7 @@ export function PropertyReviews({
                     {RATING_LABELS[Math.round(avgRating)] || ''}
                   </span>
                 )}
-                <span className="text-xs text-neutral-gray">
+                <span className="text-xs text-neutral-gray tabular-nums">
                   {reviewCount} {reviewCount === 1 ? 'review' : 'reviews'}
                 </span>
               </div>
@@ -314,16 +392,21 @@ export function PropertyReviews({
             </div>
           </div>
 
-          {/* Right: review cards — single column */}
+          {/* Right: review cards */}
           <div className="space-y-3 min-w-0">
             {topReviews.map((review, index) => (
-              <ReviewCard key={index} review={review} onReport={onReportReview} />
+              <ReviewCard
+                key={review.bookingId ?? index}
+                review={review}
+                onReport={onReportReview}
+              />
             ))}
 
             {hasMore && (
               <button
+                type="button"
                 onClick={() => setIsModalOpen(true)}
-                className="w-full text-center text-sm font-medium text-deep-teal underline underline-offset-2 hover:text-deep-teal/80 transition-colors py-2"
+                className="w-full text-center text-sm font-medium text-deep-teal border border-border rounded-xl hover:bg-off-white/60 transition-colors py-2.5 cursor-pointer"
               >
                 Show all {reviewCount} reviews
               </button>
@@ -332,24 +415,33 @@ export function PropertyReviews({
         </div>
       )}
 
-      {/* All reviews modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-deep-teal">
-              <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" strokeWidth={0} />
-              {avgRating.toFixed(1)} · {reviewCount} {reviewCount === 1 ? 'review' : 'reviews'}
+              <Star
+                className="w-5 h-5 fill-yellow-400 text-yellow-400"
+                strokeWidth={0}
+              />
+              <span className="tabular-nums">{avgRating.toFixed(1)}</span>
+              <span className="text-sm font-normal text-neutral-gray tabular-nums">
+                ({reviewCount} {reviewCount === 1 ? 'review' : 'reviews'})
+              </span>
             </DialogTitle>
           </DialogHeader>
           <div className="overflow-y-auto space-y-3 pr-1 -mr-1">
             {[...reviews]
               .sort((a, b) => b.rating - a.rating)
               .map((review, index) => (
-                <ReviewCard key={index} review={review} onReport={onReportReview} />
+                <ReviewCard
+                  key={review.bookingId ?? index}
+                  review={review}
+                  onReport={onReportReview}
+                />
               ))}
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </section>
   )
 }

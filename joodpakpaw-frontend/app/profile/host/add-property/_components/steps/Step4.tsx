@@ -24,10 +24,10 @@ export function Step4({
 
   return (
     <>
-      <div className="w-full text-center mt-10">
-        <h3 className="text-deep-teal">What’s your property called?</h3>
-        <p className="mb-6 text-neutral-gray text-sm">
-          Make it easy for pet parents to recognize your space
+      <div className="w-full text-center mt-8 pb-24">
+        <h3 className="text-deep-teal">What is your property called?</h3>
+        <p className="mb-6 text-neutral-gray text-sm mt-1">
+          Make it warm and easy for pet parents to recognize your space
         </p>
 
         <TitleDescriptionForm

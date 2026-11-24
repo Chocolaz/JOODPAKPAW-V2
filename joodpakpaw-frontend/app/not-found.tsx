@@ -1,36 +1,34 @@
 import Link from 'next/link'
 import { PawPrint, Home } from 'lucide-react'
+import { GoBackButton } from '@/app/_components/GoBackButton'
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-gray-50 to-white text-gray-800 px-6 py-10">
-      <div className="relative mb-8">
-        <div className="absolute -inset-4 bg-accent-orange/10 rounded-full blur-xl" />
-        <div className="relative bg-white p-8 rounded-full shadow-md border border-gray-100">
-          <PawPrint className="w-16 h-16 text-accent-orange" />
+    <div className="min-h-screen flex flex-col items-center justify-center bg-off-white/40 px-4 py-12 text-foreground">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-white p-8 shadow-sm text-center">
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-off-white text-accent-orange">
+          <PawPrint className="h-8 w-8" strokeWidth={1.75} />
+        </div>
+
+        <p className="text-sm font-semibold text-accent-orange mb-1">404 Not Found</p>
+        <h1 className="font-bold text-deep-teal mb-2">Page Not Found</h1>
+
+        <p className="text-sm text-neutral-gray leading-relaxed mb-7">
+          We couldn&apos;t find the page or record you requested. The link may be
+          invalid, or the item may have been removed.
+        </p>
+
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <GoBackButton className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-border bg-white text-sm font-semibold text-deep-teal hover:bg-off-white transition-colors cursor-pointer" />
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-deep-teal text-white text-sm font-semibold hover:bg-deep-teal/90 transition-colors"
+          >
+            <Home className="w-4 h-4 shrink-0" />
+            <span>Back to Home</span>
+          </Link>
         </div>
       </div>
-
-      <h1 className="text-8xl font-extrabold text-deep-teal tracking-tight">
-        404
-      </h1>
-
-      <h2 className="text-xl font-semibold text-gray-700 mt-3 mb-2">
-        Oops! Page Not Found
-      </h2>
-
-      <p className="text-base text-center text-gray-500 mb-10 max-w-sm leading-relaxed">
-        We couldn&apos;t find the page you&apos;re looking for. It may have been
-        moved or no longer exists.
-      </p>
-
-      <Link
-        href="/"
-        className="flex items-center justify-center gap-2 px-8 py-3.5 bg-deep-teal text-white rounded-xl shadow-md hover:shadow-lg hover:bg-deep-teal/90 transition-all font-medium w-full max-w-xs"
-      >
-        <Home size={18} />
-        Back to Home
-      </Link>
     </div>
   )
 }

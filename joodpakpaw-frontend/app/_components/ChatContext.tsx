@@ -246,8 +246,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             : r
         )
       })
-    } catch {
-      // keep existing
+    } catch (err) {
+      throw err
     }
   }, [])
 

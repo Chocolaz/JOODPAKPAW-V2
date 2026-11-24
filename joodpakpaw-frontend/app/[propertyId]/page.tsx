@@ -1,4 +1,5 @@
-import { redirect } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
+import { isPositiveIntParam } from '@/lib/navigationGuard'
 
 export default async function LegacyPropertyRedirect({
   params,
@@ -6,5 +7,8 @@ export default async function LegacyPropertyRedirect({
   params: Promise<{ propertyId: string }>
 }) {
   const { propertyId } = await params
+  if (!isPositiveIntParam(propertyId)) {
+    notFound()
+  }
   redirect(`/detail/${propertyId}`)
 }

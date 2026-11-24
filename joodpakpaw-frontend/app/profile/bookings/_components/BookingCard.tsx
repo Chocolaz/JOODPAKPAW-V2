@@ -1,11 +1,13 @@
 'use client'
 
+import React from 'react'
 import { Booking, BookingOrder } from '@/types/booking'
 import {
   ArrowRight,
   BedDouble,
   Clock,
   PawPrint,
+  Receipt,
   Star,
 } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
@@ -17,35 +19,31 @@ interface BookingCardProps {
   onClick?: (bookingId: number) => void
   role?: 'guest' | 'host'
   isHost?: boolean
+  actions?: React.ReactNode
 }
 
 const STATUS_CONFIG: Record<
   string,
-  { label: string; dot: string; badge: string }
+  { label: string; badge: string }
 > = {
   CONFIRMED: {
     label: 'Confirmed',
-    dot: 'bg-deep-teal',
     badge: 'bg-deep-teal/10 text-deep-teal border-deep-teal/20',
   },
   SUCCESSFUL: {
     label: 'Completed',
-    dot: 'bg-positive-green',
     badge: 'bg-positive-green/10 text-positive-green border-positive-green/20',
   },
   PENDING: {
-    label: 'Pending payment',
-    dot: 'bg-amber-600',
+    label: 'Pending review',
     badge: 'bg-amber-50 text-amber-800 border-amber-200',
   },
   CANCELLED: {
     label: 'Cancelled',
-    dot: 'bg-red-600',
     badge: 'bg-red-50 text-red-700 border-red-200',
   },
   REJECTED: {
     label: 'Rejected',
-    dot: 'bg-red-600',
     badge: 'bg-red-50 text-red-700 border-red-200',
   },
 }
@@ -55,6 +53,7 @@ export function BookingCard({
   onClick,
   role,
   isHost,
+  actions,
 }: BookingCardProps) {
   const router = useRouter()
 
@@ -87,16 +86,22 @@ export function BookingCard({
 
   const propertyTitle = booking.property?.title || 'Unknown property'
   const statusKey = booking.bookingStatus.toUpperCase()
-  const cfg = STATUS_CONFIG[statusKey] ?? {
-    label: booking.bookingStatus,
-    dot: 'bg-neutral-gray',
-    badge: 'bg-off-white text-neutral-gray border-border',
-  }
+  const isHostView = role === 'host' || isHost
+  const isPending = statusKey === 'PENDING'
+
+  const cfg =
+    statusKey === 'PENDING' && !isHostView
+      ? {
+          label: 'Pending payment',
+          badge: 'bg-amber-50 text-amber-800 border-amber-200',
+        }
+      : STATUS_CONFIG[statusKey] ?? {
+          label: booking.bookingStatus,
+          badge: 'bg-off-white text-neutral-gray border-border',
+        }
 
   const isCancelled = statusKey === 'CANCELLED' || statusKey === 'REJECTED'
-  const isPending = statusKey === 'PENDING'
   const isSuccessful = statusKey === 'SUCCESSFUL'
-  const isHostView = role === 'host' || isHost
   const canReview = isSuccessful && !isHostView && !booking.rating
 
   const paymentDeadlineRaw = booking.paymentDeadlineAt || booking.paymentDeadline
@@ -125,7 +130,7 @@ export function BookingCard({
         'group cursor-pointer rounded-2xl bg-white border p-5 transition-colors duration-150',
         'hover:border-deep-teal/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-deep-teal/30',
         isPending ? 'border-amber-200' : 'border-border',
-        isCancelled && 'opacity-70 bg-off-white'
+        isCancelled && 'opacity-75 bg-off-white'
       )}
     >
       {/* Header: Booking reference + room summary + status */}
@@ -134,24 +139,22 @@ export function BookingCard({
           <div className="flex items-center gap-2 text-xs text-neutral-gray">
             <span className="font-mono tabular-nums">#{booking.id}</span>
             {roomSummary && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="truncate">{roomSummary}</span>
-              </>
+              <span className="truncate px-2 py-0.5 rounded-full bg-off-white text-foreground border border-border/60">
+                {roomSummary}
+              </span>
             )}
           </div>
-          <h3 className="text-base font-semibold text-foreground group-hover:text-deep-teal transition-colors truncate mt-1">
+          <h3 className="text-base font-semibold text-foreground group-hover:text-deep-teal transition-colors truncate mt-1.5">
             {propertyTitle}
           </h3>
         </div>
 
         <span
           className={cn(
-            'inline-flex items-center gap-2 text-xs font-medium px-3 py-1 rounded-full border shrink-0',
+            'inline-flex items-center text-xs font-medium px-3 py-1 rounded-full border shrink-0',
             cfg.badge
           )}
         >
-          <span className={cn('w-1.5 h-1.5 rounded-full', cfg.dot)} />
           {cfg.label}
         </span>
       </div>
@@ -164,7 +167,7 @@ export function BookingCard({
             {format(checkIn, 'MMM d, yyyy')}
           </p>
           <p className="text-xs text-neutral-gray tabular-nums">
-            {format(checkIn, 'EEE')} · 14:00
+            {format(checkIn, 'EEE')} 14:00 ICT
           </p>
         </div>
 
@@ -180,7 +183,7 @@ export function BookingCard({
             {format(checkOut, 'MMM d, yyyy')}
           </p>
           <p className="text-xs text-neutral-gray tabular-nums">
-            {format(checkOut, 'EEE')} · 12:00
+            {format(checkOut, 'EEE')} 12:00 ICT
           </p>
         </div>
       </div>
@@ -202,14 +205,24 @@ export function BookingCard({
             </span>
           )}
           {isPending && (
-            <span className="inline-flex items-center gap-1.5 text-amber-800 font-medium tabular-nums">
-              <Clock className="w-4 h-4 stroke-[1.5]" />
-              {isHostView
-                ? 'Awaiting guest'
-                : deadlineLabel
-                  ? `Pay by ${deadlineLabel}`
-                  : 'Pay now'}
-            </span>
+            isHostView ? (
+              booking.paymentSlipUrl ? (
+                <span className="inline-flex items-center gap-1.5 text-emerald-700 font-medium">
+                  <Receipt className="w-3.5 h-3.5" />
+                  Slip attached — ready to review
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-amber-800 font-medium">
+                  <Clock className="w-3.5 h-3.5" />
+                  Awaiting payment slip
+                </span>
+              )
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-amber-800 font-medium tabular-nums">
+                <Clock className="w-4 h-4 stroke-[1.5]" />
+                {deadlineLabel ? `Pay by ${deadlineLabel}` : 'Pay now'}
+              </span>
+            )
           )}
           {isSuccessful && booking.rating ? (
             <span className="inline-flex items-center gap-1.5 text-foreground font-medium tabular-nums">
@@ -231,6 +244,17 @@ export function BookingCard({
           <ArrowRight className="w-4 h-4 stroke-[1.5] text-neutral-gray group-hover:text-deep-teal transition-colors" />
         </div>
       </div>
+
+      {/* Optional inline Quick Actions slot */}
+      {actions && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          className="mt-3 pt-3 border-t border-border/80 flex flex-wrap items-center justify-end gap-2"
+        >
+          {actions}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 'use client'
 
-import { CheckCircle } from 'lucide-react'
+import { useState } from 'react'
+import { CheckCircle2 } from 'lucide-react'
 import { Property } from '@/types'
 
 interface PropertyFacilitiesProps {
@@ -8,34 +9,66 @@ interface PropertyFacilitiesProps {
   description: Property['description']
 }
 
+const INITIAL_FACILITY_LIMIT = 9
+
 export function PropertyFacilities({
   facilities,
   description,
 }: PropertyFacilitiesProps) {
-  if (!facilities || facilities.length === 0) {
+  const [expanded, setExpanded] = useState(false)
+  const hasFacilities = Boolean(facilities && facilities.length > 0)
+  const hasDescription = Boolean(description && description.trim().length > 0)
+
+  if (!hasFacilities && !hasDescription) {
     return null
   }
 
+  const visibleFacilities =
+    hasFacilities && !expanded
+      ? facilities!.slice(0, INITIAL_FACILITY_LIMIT)
+      : (facilities ?? [])
+  const hasMoreFacilities =
+    hasFacilities && facilities!.length > INITIAL_FACILITY_LIMIT
+
   return (
-    <div className="border-t pt-8 mb-10">
-      <h3 className="text-lg lg:text-xl font-semibold text-deep-teal mb-5">
-        What this place offers
-      </h3>
-
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2 mb-6">
-        {facilities.map((f) => (
-          <div key={f.id} className="flex items-center gap-2.5 py-1.5">
-            <CheckCircle className="w-4 h-4 lg:w-5 lg:h-5 text-accent-orange shrink-0" />
-            <span className="text-sm lg:text-base text-gray-700">{f.name}</span>
-          </div>
-        ))}
-      </div>
-
-      {description && (
-        <p className="text-sm lg:text-base text-neutral-gray leading-relaxed border-t pt-4">
-          {description}
-        </p>
+    <section className="border-t border-border pt-8 space-y-6">
+      {hasDescription && (
+        <div className="space-y-2.5">
+          <h2 className="font-semibold text-deep-teal">About this stay</h2>
+          <p className="text-sm lg:text-base text-foreground/85 leading-relaxed whitespace-pre-line">
+            {description}
+          </p>
+        </div>
       )}
-    </div>
+
+      {hasFacilities && (
+        <div className="space-y-4">
+          <h2 className="font-semibold text-deep-teal">
+            What this place offers
+          </h2>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-5 gap-y-2.5">
+            {visibleFacilities.map((f) => (
+              <div key={f.id} className="flex items-center gap-2.5 py-1 min-w-0">
+                <CheckCircle2 className="w-4 h-4 text-deep-teal shrink-0" />
+                <span className="text-sm text-foreground truncate">{f.name}</span>
+              </div>
+            ))}
+          </div>
+
+          {hasMoreFacilities && (
+            <button
+              type="button"
+              onClick={() => setExpanded((prev) => !prev)}
+              className="inline-flex items-center px-4 py-2 rounded-xl border border-border bg-white text-sm font-medium text-deep-teal hover:bg-off-white/70 transition-colors cursor-pointer"
+            >
+              {expanded
+                ? 'Show fewer amenities'
+                : `Show all ${facilities!.length} amenities`}
+            </button>
+          )}
+        </div>
+      )}
+    </section>
   )
 }

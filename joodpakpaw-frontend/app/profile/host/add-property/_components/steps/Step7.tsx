@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Pencil, CheckCircle2, AlertCircle } from 'lucide-react'
 import Image from 'next/image'
@@ -35,7 +35,9 @@ export function Step7({ onBack }: { onBack: () => void }) {
       toast.success('Listing created successfully!')
       router.push('/profile/host/add-property/8')
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to create property.')
+      setError(
+        err instanceof Error ? err.message : 'Failed to create property.'
+      )
     } finally {
       setIsSubmitting(false)
     }
@@ -52,7 +54,10 @@ export function Step7({ onBack }: { onBack: () => void }) {
     .join(', ')
 
   const selectedFacilityNames = useMemo(
-    () => facilities.filter((f) => formData.facilities.includes(f.id)).map((f) => f.name),
+    () =>
+      facilities
+        .filter((f) => formData.facilities.includes(f.id))
+        .map((f) => f.name),
     [facilities, formData.facilities]
   )
 
@@ -61,8 +66,23 @@ export function Step7({ onBack }: { onBack: () => void }) {
     [formData.images]
   )
 
-  const basicComplete = !!(formData.title && formData.description && formData.propertyTypeId)
-  const locationComplete = !!(formData.province && formData.district && formData.address && formData.zipcode)
+  useEffect(() => {
+    return () => {
+      thumbnails.forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [thumbnails])
+
+  const basicComplete = !!(
+    formData.title &&
+    formData.description &&
+    formData.propertyTypeId
+  )
+  const locationComplete = !!(
+    formData.province &&
+    formData.district &&
+    formData.address &&
+    formData.zipcode
+  )
   const photosComplete = formData.images.length > 0
   const allComplete = basicComplete && locationComplete && photosComplete
 
@@ -77,7 +97,9 @@ export function Step7({ onBack }: { onBack: () => void }) {
           <ReviewItem label="Description" value={formData.description} />
           <ReviewItem
             label="Property Type"
-            value={propertyTypes.find((p) => p.id === formData.propertyTypeId)?.name}
+            value={
+              propertyTypes.find((p) => p.id === formData.propertyTypeId)?.name
+            }
           />
         </div>
       ),
@@ -92,41 +114,51 @@ export function Step7({ onBack }: { onBack: () => void }) {
       title: 'Facilities',
       editStep: 5,
       isComplete: true,
-      content: selectedFacilityNames.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5">
-          {selectedFacilityNames.map((name) => (
-            <span
-              key={name}
-              className="text-xs bg-teal-50 text-deep-teal border border-teal-100 px-2 py-0.5 rounded-full"
-            >
-              {name}
-            </span>
-          ))}
-        </div>
-      ) : (
-        <p className="text-sm text-neutral-gray italic">None selected</p>
-      ),
+      content:
+        selectedFacilityNames.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {selectedFacilityNames.map((name) => (
+              <span
+                key={name}
+                className="text-xs bg-off-white text-deep-teal border border-border px-2.5 py-0.5 rounded-full font-medium"
+              >
+                {name}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-neutral-gray italic">None selected</p>
+        ),
     },
     {
       title: 'Photos',
       editStep: 6,
       isComplete: photosComplete,
-      content: formData.images.length > 0 ? (
-        <div className="flex gap-2 flex-wrap">
-          {thumbnails.map((src, i) => (
-            <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-neutral-200">
-              <Image src={src} alt={`Photo ${i + 1}`} fill className="object-cover" />
-            </div>
-          ))}
-          {formData.images.length > 4 && (
-            <div className="w-16 h-16 rounded-lg border border-neutral-200 bg-gray-50 flex items-center justify-center text-xs text-neutral-gray font-medium">
-              +{formData.images.length - 4}
-            </div>
-          )}
-        </div>
-      ) : (
-        <p className="text-sm text-amber-500 italic">No photos uploaded</p>
-      ),
+      content:
+        formData.images.length > 0 ? (
+          <div className="flex gap-2 flex-wrap">
+            {thumbnails.map((src, i) => (
+              <div
+                key={i}
+                className="relative w-16 h-16 rounded-xl overflow-hidden border border-border"
+              >
+                <Image
+                  src={src}
+                  alt={`Photo ${i + 1}`}
+                  fill
+                  className="object-cover"
+                />
+              </div>
+            ))}
+            {formData.images.length > 4 && (
+              <div className="w-16 h-16 rounded-xl border border-border bg-off-white flex items-center justify-center text-xs text-neutral-gray font-semibold tabular-nums">
+                +{formData.images.length - 4}
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-amber-700 italic">No photos uploaded</p>
+        ),
     },
   ]
 
@@ -134,25 +166,27 @@ export function Step7({ onBack }: { onBack: () => void }) {
     <>
       <div className="w-full text-left mt-6">
         <h3 className="font-bold mb-1 text-deep-teal">Review your listing</h3>
-        <p className="text-neutral-gray text-sm mb-6">
-          Click any section to make changes before submitting.
+        <p className="text-neutral-gray text-sm mb-5">
+          Click any section to make changes before saving your listing.
         </p>
       </div>
 
-      <div className="w-full overflow-y-auto scrollbar-modern max-h-[60vh] pb-14">
+      <div className="w-full overflow-y-auto modern-scrollbar max-h-[58vh] pb-24">
         <div className="space-y-4">
           {sections.map(({ title, editStep, isComplete, content }) => (
             <section
               key={title}
-              className="bg-white rounded-xl border border-neutral-200 px-5 py-4 cursor-pointer hover:bg-neutral-50 transition-colors group"
-              onClick={() => router.push(`/profile/host/add-property/${editStep}`)}
+              className="bg-white rounded-2xl border border-border px-5 py-4 cursor-pointer hover:border-deep-teal/40 transition-colors group"
+              onClick={() =>
+                router.push(`/profile/host/add-property/${editStep}`)
+              }
             >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   {isComplete ? (
                     <CheckCircle2 className="w-4 h-4 text-positive-green shrink-0" />
                   ) : (
-                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
                   )}
                   <h4 className="font-semibold text-deep-teal">{title}</h4>
                 </div>
@@ -165,14 +199,14 @@ export function Step7({ onBack }: { onBack: () => void }) {
       </div>
 
       {error && (
-        <div className="w-full mb-2 p-3 rounded-lg bg-red-50 text-red-600 border border-red-200 text-sm">
+        <div className="w-full mb-2 p-3 rounded-xl bg-red-50 text-red-700 border border-red-200 text-sm">
           {error}
         </div>
       )}
 
       {!allComplete && (
-        <p className="text-xs text-amber-500 text-center mb-2">
-          Complete all required sections before submitting.
+        <p className="text-xs text-amber-700 text-center mb-2">
+          Complete all required sections before continuing.
         </p>
       )}
 
@@ -181,17 +215,28 @@ export function Step7({ onBack }: { onBack: () => void }) {
         onNext={handleSubmit}
         isNextDisabled={!allComplete}
         isSubmitting={isSubmitting}
-        nextText="Submit"
+        nextText="Save & Continue"
       />
     </>
   )
 }
 
-function ReviewItem({ label, value }: { label: string; value: string | undefined }) {
+function ReviewItem({
+  label,
+  value,
+}: {
+  label: string
+  value: string | undefined
+}) {
   return (
     <div className="mb-2.5 last:mb-0">
-      <p className="text-xs text-neutral-gray uppercase tracking-wide mb-0.5">{label}</p>
-      <p className={cn('text-sm font-medium', value ? 'text-neutral-dark' : 'text-red-400 italic')}>
+      <p className="text-xs font-medium text-neutral-gray mb-0.5">{label}</p>
+      <p
+        className={cn(
+          'text-sm font-medium',
+          value ? 'text-foreground' : 'text-red-500 italic'
+        )}
+      >
         {value || 'Not set'}
       </p>
     </div>

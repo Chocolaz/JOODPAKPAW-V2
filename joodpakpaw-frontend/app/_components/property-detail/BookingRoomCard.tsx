@@ -12,7 +12,13 @@ import {
   SelectItem,
 } from '@/components/ui/select'
 
-const EXOTIC_SPECIES = new Set(['rabbit', 'hamster', 'bird', 'reptile', 'exotic'])
+const EXOTIC_SPECIES = new Set([
+  'rabbit',
+  'hamster',
+  'bird',
+  'reptile',
+  'exotic',
+])
 
 function normalizeSpecies(raw?: string | null): string {
   const value = (raw || '').trim().toLowerCase()
@@ -23,7 +29,8 @@ function normalizeSpecies(raw?: string | null): string {
     return parenMatch[1].trim().toLowerCase()
   }
 
-  if (value.includes('dog') || value.includes('สุนัข') || value.includes('หมา')) return 'dog'
+  if (value.includes('dog') || value.includes('สุนัข') || value.includes('หมา'))
+    return 'dog'
   if (value.includes('cat') || value.includes('แมว')) return 'cat'
   if (value.includes('rabbit') || value.includes('กระต่าย')) return 'rabbit'
   if (value.includes('hamster') || value.includes('แฮมสเตอร์')) return 'hamster'
@@ -64,11 +71,15 @@ export function getRoomIneligibilityReason(
         cat.pets && cat.pets.length > 0
           ? cat.pets.map((p) => p.name).join(', ')
           : 'no pet types configured'
-      return `Does not accept ${pet.name} (${pet.petTypeName || 'Unknown type'}) · Accepts: ${accepted}`
+      return `Does not accept ${pet.name} (${pet.petTypeName || 'Unknown type'}), accepts ${accepted}`
     }
 
     const maxSizeId = cat.petSizeCategory?.id
-    if (maxSizeId && pet.petSizeCategoryId && pet.petSizeCategoryId > maxSizeId) {
+    if (
+      maxSizeId &&
+      pet.petSizeCategoryId &&
+      pet.petSizeCategoryId > maxSizeId
+    ) {
       return `${pet.name} exceeds room max size (${cat.petSizeCategory?.name})`
     }
   }
@@ -104,10 +115,15 @@ export function BookingRoomCard({
 }: BookingRoomCardProps) {
   if (categories.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-10">
-        <Image src={assetPath("/graphics/search-room.png")} alt="Search Rooms" width={200} height={200} />{' '}
-        <p className="text-neutral-500">
-          Select dates & pets to see available rooms
+      <div className="flex flex-col items-center justify-center py-8 text-center">
+        <Image
+          src={assetPath('/graphics/search-room.png')}
+          alt="Search Rooms"
+          width={180}
+          height={180}
+        />
+        <p className="text-sm text-neutral-gray mt-2">
+          Select dates &amp; pets to see available rooms
         </p>
       </div>
     )
@@ -125,40 +141,53 @@ export function BookingRoomCard({
           ? null
           : getRoomIneligibilityReason(cat, selectedPets, petSizeId)
         const isRoomDisabled = Boolean(ineligibilityReason)
+        const count = selectedRooms[cat.id] ?? 0
 
         return (
           <div
             key={cat.id}
             className={cn(
-              'border rounded-2xl p-4 shadow-sm mb-4 transition-colors',
+              'border rounded-2xl p-4 transition-colors',
               isRoomDisabled
-                ? 'border-border/70 bg-off-white/70 opacity-80'
-                : 'border-border bg-white'
+                ? 'border-border bg-off-white/70 opacity-80'
+                : count > 0
+                  ? 'border-deep-teal bg-white ring-1 ring-deep-teal/15'
+                  : 'border-border bg-white'
             )}
           >
             <div className="flex gap-3">
               {/* Left: Details */}
-              <div className="flex-1 min-w-0">
-                <h4 className="capitalize font-semibold text-foreground">{cat.name}</h4>
-                <p className="text-xs text-neutral-gray mt-0.5">
-                  <span className="bg-deep-teal/10 text-deep-teal rounded-full px-2 py-0.5 text-xs font-semibold mr-2">
-                    {getPetPolicy(cat.pets)}
-                  </span>
-                  {cat.numberOfPets} pets max{' '}
-                  {cat.petSizeCategory && (
-                    <span className="ml-1 capitalize">
-                      · {cat.petSizeCategory.name} ({formatPetSizeRange(cat.petSizeCategory.min, cat.petSizeCategory.max)})
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <h4 className="capitalize font-semibold text-foreground truncate">
+                  {cat.name}
+                </h4>
+                <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-gray">
+                  {getPetPolicy(cat.pets) && (
+                    <span className="bg-deep-teal/10 text-deep-teal rounded-full px-2 py-0.5 text-xs font-semibold">
+                      {getPetPolicy(cat.pets)}
                     </span>
                   )}
-                </p>
+                  <span className="tabular-nums">
+                    {cat.numberOfPets} pets max
+                  </span>
+                  {cat.petSizeCategory && (
+                    <span className="capitalize">
+                      {cat.petSizeCategory.name}
+                      {!cat.petSizeCategory.name.includes('(') &&
+                        ` (${formatPetSizeRange(
+                          cat.petSizeCategory.min,
+                          cat.petSizeCategory.max
+                        )})`}
+                    </span>
+                  )}
+                </div>
 
-                {/* Facilities */}
                 {(cat.facilities || []).length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
+                  <div className="flex flex-wrap gap-1.5 pt-1">
                     {cat.facilities?.map((facility) => (
                       <span
                         key={facility.id}
-                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-off-white text-neutral-gray border border-border/50"
+                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-off-white text-neutral-gray border border-border"
                       >
                         {facility.name}
                       </span>
@@ -169,22 +198,20 @@ export function BookingRoomCard({
 
               {/* Right: Price & Select */}
               <div className="flex flex-col items-end gap-2 shrink-0">
-                {/* Price */}
                 <div className="text-right">
-                  <div className="text-lg font-semibold text-foreground tabular-nums">
+                  <div className="text-base font-bold text-foreground tabular-nums">
                     ฿{cat.availability.totalPrice.toLocaleString()}
                   </div>
                   {totalNights > 0 && (
                     <p className="text-xs text-neutral-gray tabular-nums">
-                      ฿{averagePricePerNight.toLocaleString()}/night
+                      ฿{averagePricePerNight.toLocaleString()} / night
                     </p>
                   )}
                 </div>
 
-                {/* Select */}
                 {isSummary ? (
                   <div className="text-center">
-                    <span className="text-lg font-semibold text-foreground tabular-nums">
+                    <span className="text-base font-semibold text-foreground tabular-nums">
                       {selectedRooms[cat.id]}
                     </span>
                     <p className="text-xs text-neutral-gray">rooms</p>
@@ -193,11 +220,11 @@ export function BookingRoomCard({
                   <>
                     <Select
                       disabled={isRoomDisabled}
-                      value={isRoomDisabled ? '0' : String(selectedRooms[cat.id] ?? 0)}
+                      value={isRoomDisabled ? '0' : String(count)}
                       onValueChange={(v) => onSelectChange(cat.id, Number(v))}
                     >
-                      <SelectTrigger className="w-20 h-10 text-sm font-medium hover:bg-off-white disabled:opacity-50 disabled:cursor-not-allowed">
-                        <SelectValue>{isRoomDisabled ? 0 : (selectedRooms[cat.id] ?? 0)}</SelectValue>
+                      <SelectTrigger className="w-20 h-10 text-sm font-medium hover:bg-off-white disabled:opacity-50 disabled:cursor-not-allowed tabular-nums">
+                        <SelectValue>{isRoomDisabled ? 0 : count}</SelectValue>
                       </SelectTrigger>
 
                       <SelectContent>
@@ -224,18 +251,12 @@ export function BookingRoomCard({
                       </SelectContent>
                     </Select>
 
-                    {/* Total Price or Available Count */}
-                    {!isRoomDisabled &&
-                    selectedRooms[cat.id] &&
-                    selectedRooms[cat.id] > 0 ? (
-                      <span className="text-sm font-medium text-foreground tabular-nums">
-                        ฿
-                        {(
-                          cat.availability.totalPrice * selectedRooms[cat.id]
-                        ).toLocaleString()}
+                    {!isRoomDisabled && count > 0 ? (
+                      <span className="text-xs font-semibold text-deep-teal tabular-nums">
+                        ฿{(cat.availability.totalPrice * count).toLocaleString()}
                       </span>
                     ) : (
-                      <span className="text-sm text-neutral-gray">
+                      <span className="text-xs text-neutral-gray tabular-nums">
                         {cat.availability.availableRooms} available
                       </span>
                     )}
@@ -245,7 +266,7 @@ export function BookingRoomCard({
             </div>
 
             {ineligibilityReason && (
-              <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-200/80 bg-red-50 px-3 py-2 text-xs text-red-700">
+              <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                 <span>{ineligibilityReason}</span>
               </div>

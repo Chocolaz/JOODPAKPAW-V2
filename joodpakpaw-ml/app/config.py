@@ -13,7 +13,9 @@ _DEFAULT_ENV_PATH = _SERVICE_ROOT / ".env"
 if _DEFAULT_ENV_PATH.exists():
     load_dotenv(dotenv_path=_DEFAULT_ENV_PATH, override=False)
 
-PRISMA_UNSUPPORTED_QUERY_PARAMS = frozenset({"schema", "pgbouncer", "connection_limit"})
+PRISMA_UNSUPPORTED_QUERY_PARAMS = frozenset(
+    {"schema", "pgbouncer", "connection_limit", "pool_timeout", "statement_cache_size"}
+)
 
 
 def sanitize_database_url(raw_url: str | None) -> str:

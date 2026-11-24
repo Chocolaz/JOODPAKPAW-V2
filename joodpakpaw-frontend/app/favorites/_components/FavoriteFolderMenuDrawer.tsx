@@ -7,213 +7,268 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from '@/components/ui/drawer'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  deleteFavoriteFolder,
-  renameFavoriteFolder,
-} from '@/lib/api'
+import { deleteFavoriteFolder, renameFavoriteFolder } from '@/lib/api'
 import { FavoriteFolderDetail } from '@/types/favorite'
-import {
-  Edit,
-  Trash2,
-  ChevronRight,
-  ChevronLeft,
-} from 'lucide-react'
+import { useMediaQuery } from '@/app/_hooks/useMediaQuery'
+import { Edit, Trash2, ChevronRight, ChevronLeft } from 'lucide-react'
 import { toast } from 'sonner'
+
+export type FolderMenuView = 'options' | 'confirmDelete' | 'renameFolder'
 
 interface FavoriteFolderMenuDrawerProps {
   folder: FavoriteFolderDetail
   isOpen: boolean
+  initialView?: FolderMenuView
   onOpenChange: (isOpen: boolean) => void
   onFolderDeleted: () => void
   onFolderRenamed: (newName: string) => void
 }
 
-export function FavoriteFolderMenuDrawer({
+function FolderMenuBody({
   folder,
-  isOpen,
-  onOpenChange,
+  view,
+  onViewChange,
+  onClose,
   onFolderDeleted,
   onFolderRenamed,
-}: FavoriteFolderMenuDrawerProps) {
-  const [drawerContent, setDrawerContent] = useState<
-    'options' | 'confirmDelete' | 'renameFolder'
-  >('options')
+}: {
+  folder: FavoriteFolderDetail
+  view: FolderMenuView
+  onViewChange: (v: FolderMenuView) => void
+  onClose: () => void
+  onFolderDeleted: () => void
+  onFolderRenamed: (newName: string) => void
+}) {
   const [newFolderName, setNewFolderName] = useState(folder.name)
-
-  const handleDrawerOpenChange = (open: boolean) => {
-    onOpenChange(open)
-    if (!open) {
-      // Reset to default view when drawer is closed
-      setTimeout(() => {
-        setDrawerContent('options')
-        setNewFolderName(folder.name)
-      }, 300)
-    }
-  }
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleDeleteFolder = async () => {
+    setIsSubmitting(true)
     try {
       await deleteFavoriteFolder(folder.id.toString())
-      toast.success(`The folder "${folder.name}" has been removed.`)
+      toast.success(`Wishlist "${folder.name}" has been removed.`)
       onFolderDeleted()
-    } catch (err) {
-      toast.error('Failed to delete folder. Please try again later.')
-      console.error('Failed to delete folder:', err)
-      onOpenChange(false)
+    } catch {
+      toast.error('Failed to delete wishlist. Please try again.')
+      onClose()
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   const handleRenameFolder = async () => {
-    if (!newFolderName || newFolderName === folder.name) return
+    const trimmed = newFolderName.trim()
+    if (!trimmed || trimmed === folder.name) return
 
+    setIsSubmitting(true)
     try {
-      await renameFavoriteFolder(folder.id.toString(), newFolderName)
-      toast.success('Folder renamed successfully!')
-      onFolderRenamed(newFolderName)
-      onOpenChange(false)
-    } catch (err) {
-      toast.error('Failed to rename folder. Please try again later.')
-      console.error('Failed to rename folder:', err)
-      onOpenChange(false)
+      await renameFavoriteFolder(folder.id.toString(), trimmed)
+      toast.success('Wishlist renamed!')
+      onFolderRenamed(trimmed)
+      onClose()
+    } catch {
+      toast.error('Failed to rename wishlist. Please try again.')
+      onClose()
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
-  const renderDrawerContent = () => {
-    if (drawerContent === 'confirmDelete') {
-      return (
-        <>
-          <DrawerHeader className="flex items-center">
-            <button
-              onClick={() => setDrawerContent('options')}
-              className="rounded-full hover:bg-gray-100 mr-2"
-            >
-              <ChevronLeft className="w-6 h-6" />
-            </button>
-            <DrawerTitle>Remove Folder?</DrawerTitle>
-          </DrawerHeader>
-          <div className="px-4 pb-4 space-y-4 min-h-[130px]">
-            <p>
-              The folder “{folder.name}” and all its shared links will be
-              removed from your Favorites.
-            </p>
-            <div className="flex justify-between w-full">
-              <Button
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                className="border-none shadow-none"
-              >
-                No, keep it
-              </Button>
-              <Button
-                variant="outline"
-                className="border-red-500  text-red-500"
-                onClick={handleDeleteFolder}
-              >
-                Yes, remove
-              </Button>
-            </div>
-          </div>
-        </>
-      )
-    }
-
-    if (drawerContent === 'renameFolder') {
-      return (
-        <>
-          <DrawerHeader className="flex items-center">
-            <button
-              onClick={() => {
-                setNewFolderName(folder.name)
-                setDrawerContent('options')
-              }}
-              className="rounded-full hover:bg-gray-100 mr-2"
-            >
-              <ChevronLeft className="w-6 h-6" />
-            </button>
-            <DrawerTitle>Rename Folder</DrawerTitle>
-          </DrawerHeader>
-          <div className="px-4 pb-4 space-y-4 min-h-[130px]">
-            <div className="space-y-2">
-              <Input
-                value={newFolderName}
-                onChange={(e) => {
-                  if (e.target.value.length <= 20) {
-                    setNewFolderName(e.target.value)
-                  }
-                }}
-                placeholder="New folder name"
-                maxLength={20}
-              />
-              <p className="text-right text-sm text-gray-500">
-                {newFolderName.length}/20
-              </p>
-            </div>
-            <div className="flex justify-between w-full">
-              <Button
-                variant="outline"
-                className="border-none shadow-none"
-                onClick={() => {
-                  setNewFolderName(folder.name)
-                  setDrawerContent('options')
-                  onOpenChange(false)
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleRenameFolder}
-                className="bg-deep-teal px-4"
-                disabled={
-                  newFolderName.length === 0 ||
-                  newFolderName === folder.name
-                }
-              >
-                Confirm
-              </Button>
-            </div>
-          </div>
-        </>
-      )
-    }
-
-    // Default 'options' view
+  if (view === 'confirmDelete') {
     return (
-      <>
-        <DrawerHeader>
-          <DrawerTitle>Menu</DrawerTitle>
-        </DrawerHeader>
-        <div className="px-4 pb-4 min-h-[130px]">
-          <div
-            className="flex items-center justify-between py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-200"
-            onClick={() => setDrawerContent('renameFolder')}
+      <div className="space-y-4">
+        <p className="text-sm text-foreground/85 leading-relaxed">
+          The wishlist &ldquo;{folder.name}&rdquo; and its saved stays list
+          will be removed from your Wishlists.
+        </p>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="rounded-xl cursor-pointer"
           >
-            <div className="flex items-center">
-              <Edit className="mr-2 h-4 w-4" />
-              Rename
-            </div>
-            <ChevronRight className="h-4 w-4 text-gray-400" />
-          </div>
-          <div
-            className="flex items-center justify-between py-3 hover:bg-gray-50 cursor-pointer"
-            onClick={() => setDrawerContent('confirmDelete')}
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={handleDeleteFolder}
+            disabled={isSubmitting}
+            className="rounded-xl bg-red-600 hover:bg-red-700 text-white cursor-pointer"
           >
-            <div className="flex items-center text-red-600">
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete folder
-            </div>
-            <ChevronRight className="h-4 w-4 text-gray-400" />
-          </div>
+            {isSubmitting ? 'Removing...' : 'Delete wishlist'}
+          </Button>
         </div>
-      </>
+      </div>
+    )
+  }
+
+  if (view === 'renameFolder') {
+    return (
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <Input
+            value={newFolderName}
+            onChange={(e) => {
+              if (e.target.value.length <= 20) {
+                setNewFolderName(e.target.value)
+              }
+            }}
+            placeholder="Wishlist name"
+            maxLength={20}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newFolderName.trim() && !isSubmitting) {
+                handleRenameFolder()
+              }
+            }}
+          />
+          <p className="text-right text-xs text-neutral-gray tabular-nums">
+            {newFolderName.length} / 20
+          </p>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-xl cursor-pointer"
+            onClick={onClose}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={handleRenameFolder}
+            className="rounded-xl bg-deep-teal hover:bg-deep-teal/90 text-white px-5 cursor-pointer"
+            disabled={
+              isSubmitting ||
+              newFolderName.trim().length === 0 ||
+              newFolderName.trim() === folder.name
+            }
+          >
+            {isSubmitting ? 'Saving...' : 'Save name'}
+          </Button>
+        </div>
+      </div>
     )
   }
 
   return (
-    <Drawer open={isOpen} onOpenChange={handleDrawerOpenChange}>
+    <div className="divide-y divide-border">
+      <button
+        type="button"
+        className="w-full flex items-center justify-between py-3.5 px-1 hover:bg-off-white/60 transition-colors cursor-pointer text-left"
+        onClick={() => onViewChange('renameFolder')}
+      >
+        <div className="flex items-center text-sm font-medium text-foreground">
+          <Edit className="mr-2.5 h-4 w-4 text-deep-teal" />
+          Rename wishlist
+        </div>
+        <ChevronRight className="h-4 w-4 text-neutral-gray" />
+      </button>
+      <button
+        type="button"
+        className="w-full flex items-center justify-between py-3.5 px-1 hover:bg-red-50/60 transition-colors cursor-pointer text-left"
+        onClick={() => onViewChange('confirmDelete')}
+      >
+        <div className="flex items-center text-sm font-medium text-red-600">
+          <Trash2 className="mr-2.5 h-4 w-4" />
+          Delete wishlist
+        </div>
+        <ChevronRight className="h-4 w-4 text-neutral-gray" />
+      </button>
+    </div>
+  )
+}
+
+export function FavoriteFolderMenuDrawer({
+  folder,
+  isOpen,
+  initialView = 'options',
+  onOpenChange,
+  onFolderDeleted,
+  onFolderRenamed,
+}: FavoriteFolderMenuDrawerProps) {
+  const isDesktop = useMediaQuery('(min-width: 1024px)')
+  const [activeView, setActiveView] = useState<FolderMenuView>(initialView)
+
+  const handleOpenChange = (open: boolean) => {
+    onOpenChange(open)
+    if (open) {
+      setActiveView(initialView)
+    }
+  }
+
+  const title =
+    (isDesktop ? initialView : activeView) === 'confirmDelete'
+      ? 'Delete wishlist?'
+      : (isDesktop ? initialView : activeView) === 'renameFolder'
+        ? 'Rename wishlist'
+        : 'Wishlist options'
+
+  if (isDesktop) {
+    return (
+      <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-deep-teal">{title}</DialogTitle>
+          </DialogHeader>
+          {isOpen && (
+            <FolderMenuBody
+              key={`${folder.id}-${initialView}-desktop`}
+              folder={folder}
+              view={activeView}
+              onViewChange={setActiveView}
+              onClose={() => onOpenChange(false)}
+              onFolderDeleted={onFolderDeleted}
+              onFolderRenamed={onFolderRenamed}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
+  return (
+    <Drawer open={isOpen} onOpenChange={handleOpenChange}>
       <DrawerContent>
-        <div className="mx-auto w-full max-w-sm">{renderDrawerContent()}</div>
+        <div className="mx-auto w-full max-w-sm pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <DrawerHeader className="flex flex-row items-center gap-2">
+            {activeView !== 'options' && (
+              <button
+                type="button"
+                aria-label="Back to options"
+                onClick={() => setActiveView('options')}
+                className="w-8 h-8 rounded-full hover:bg-off-white flex items-center justify-center text-foreground cursor-pointer"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+            )}
+            <DrawerTitle className="text-deep-teal">{title}</DrawerTitle>
+          </DrawerHeader>
+          <div className="px-4">
+            {isOpen && (
+              <FolderMenuBody
+                key={`${folder.id}-${initialView}-mobile`}
+                folder={folder}
+                view={activeView}
+                onViewChange={setActiveView}
+                onClose={() => onOpenChange(false)}
+                onFolderDeleted={onFolderDeleted}
+                onFolderRenamed={onFolderRenamed}
+              />
+            )}
+          </div>
+        </div>
       </DrawerContent>
     </Drawer>
   )

@@ -1,12 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import Image from 'next/image'
+import { notFound, useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { Flag, Home, Star, FileText, User, NotebookText, Clock, CheckCircle2, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getMyReportById } from '@/lib/api'
+import {
+  classifyNavigationError,
+  parsePositiveIntParam,
+} from '@/lib/navigationGuard'
 import type { ReporterReportDetail } from '@/types/report'
 
 const STATUS_CONFIG = {
@@ -47,16 +52,55 @@ function InfoRow({ icon: Icon, label, value }: { icon: React.ElementType; label:
 
 export default function ReportDetailPage() {
   const { reportId } = useParams()
+  const router = useRouter()
+  const validReportId = parsePositiveIntParam(reportId)
   const [report, setReport] = useState<ReporterReportDetail | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(validReportId !== null)
+  const [guardState, setGuardState] = useState<
+    'ok' | 'forbidden' | 'unauthorized' | 'not_found'
+  >('ok')
 
   useEffect(() => {
-    if (!reportId) return
-    getMyReportById(Number(reportId))
-      .then(setReport)
-      .catch(() => toast.error('Failed to load report.'))
-      .finally(() => setLoading(false))
-  }, [reportId])
+    if (validReportId === null) return
+    let active = true
+    getMyReportById(validReportId)
+      .then((data) => {
+        if (active) setReport(data)
+      })
+      .catch((err) => {
+        if (!active) return
+        const kind = classifyNavigationError(err)
+        if (kind === 'forbidden') {
+          setGuardState('forbidden')
+          router.replace('/forbidden')
+          return
+        }
+        if (kind === 'unauthorized') {
+          setGuardState('unauthorized')
+          router.replace('/profile')
+          return
+        }
+        if (kind === 'not_found') {
+          setGuardState('not_found')
+          return
+        }
+        toast.error('Failed to load report.')
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [validReportId, router])
+
+  if (validReportId === null || guardState === 'not_found') {
+    notFound()
+  }
+
+  if (guardState === 'forbidden' || guardState === 'unauthorized') {
+    return null
+  }
 
   if (loading) {
     return (
@@ -171,9 +215,12 @@ export default function ReportDetailPage() {
           <div className="grid grid-cols-3 gap-2">
             {report.images.map((img) => (
               <a key={img.id} href={img.filePath} target="_blank" rel="noopener noreferrer">
-                <img
+                <Image
                   src={img.filePath}
                   alt={img.fileName}
+                  width={200}
+                  height={200}
+                  unoptimized
                   className="w-full aspect-square object-cover rounded-xl border border-gray-100"
                 />
               </a>

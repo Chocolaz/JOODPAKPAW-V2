@@ -3,8 +3,6 @@
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
-import { ChevronLeft } from 'lucide-react'
 import { assetPath } from '@/lib/utils'
 
 const steps = [
@@ -32,8 +30,6 @@ const steps = [
 ]
 
 export default function AddPropertyPage() {
-  const router = useRouter()
-
   return (
     <div className="flex flex-col min-h-full px-5 lg:px-12 max-w-[500px] lg:max-w-[1440px] mx-auto">
       {/* Mobile layout */}
@@ -86,10 +82,10 @@ export default function AddPropertyPage() {
       {/* Desktop layout */}
       <div className="hidden lg:flex flex-col items-center py-16 xl:py-20">
         <div className="text-center mb-14 xl:mb-16">
-          <p className="text-accent-orange font-semibold text-sm uppercase tracking-widest mb-3">
-            Host with Joodpakpaw
+          <p className="text-accent-orange font-semibold text-sm mb-3">
+            Host with JoodPakPaw
           </p>
-          <h1 className="text-4xl xl:text-5xl font-bold text-deep-teal mb-4">
+          <h1 className="text-deep-teal mb-4">
             Become a Host
           </h1>
           <p className="text-neutral-gray text-base xl:text-lg max-w-lg mx-auto leading-relaxed">
@@ -101,7 +97,7 @@ export default function AddPropertyPage() {
           {steps.map((step, index) => (
             <div
               key={step.title}
-              className="flex flex-col items-center text-center bg-white rounded-[20px] border border-gray-100 shadow-sm px-8 py-10 xl:px-10 xl:py-12 hover:shadow-md hover:-translate-y-1 transition-all duration-300"
+              className="flex flex-col items-center text-center bg-white rounded-2xl border border-border px-8 py-10 xl:px-10 xl:py-12 transition-shadow duration-200 hover:shadow-md"
             >
               <div className="relative mb-6">
                 <Image

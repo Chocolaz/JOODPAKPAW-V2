@@ -131,7 +131,7 @@ function LayoutContent({ children }: { children: ReactNode }) {
   const isAddPetFlow = normalizedPath.startsWith('/profile/pets/add')
 
   return (
-    <main className="flex justify-center">
+    <div className="flex justify-center">
       <div className="w-full">
         {headerProps && (
           <div className="lg:hidden">
@@ -154,7 +154,7 @@ function LayoutContent({ children }: { children: ReactNode }) {
           {(() => {
             if (normalizedPath.startsWith('/profile/host/add-property')) {
               const stepId = parseInt(normalizedPath.split('/').pop() || '', 10)
-              if (!isNaN(stepId) && stepId >= 1 && stepId <= 7) {
+              if (!isNaN(stepId) && stepId >= 1 && stepId <= 9) {
                 return (
                   <div className="hidden lg:block">
                     <DesktopStepper stepId={stepId} />
@@ -185,7 +185,7 @@ function LayoutContent({ children }: { children: ReactNode }) {
           </div>
         </div>
       </div>
-    </main>
+    </div>
   )
 }
 

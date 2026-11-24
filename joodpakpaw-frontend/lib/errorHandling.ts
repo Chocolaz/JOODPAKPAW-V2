@@ -3,30 +3,42 @@
 export class ApiError extends Error {
   code: string
   errors?: { field: string; tag: string; value: string }[]
+  status?: number
 
   constructor(
     message: string,
     code: string,
-    errors?: { field: string; tag: string; value: string }[]
+    errors?: { field: string; tag: string; value: string }[],
+    status?: number
   ) {
     super(message)
     this.name = 'ApiError'
     this.code = code
     this.errors = errors
+    this.status = status
   }
 }
 
 const errorMessages: { [key: string]: string } = {
   'A-3001': 'Invalid email or password.',
+  'A-3002': 'Your account has been suspended. Please contact support.',
   'A-3003': 'Email is already in used.',
   'DB-1002': 'This email is not registered.',
+  'A-3005': 'Please sign in to continue.',
   'A-3006': 'Email not verified. Please verify your email with OTP.',
+  'A-3007': 'You do not have permission to perform this action.',
   'A-3008': 'Email is already verified. Please sign in instead.',
   'A-3010': 'Reset password token already used.',
   'A-3011': 'Wrong password.',
   'A-3012': 'New password cannot be the same as your current password.',
   'A-3004': 'Phone number already exists.',
   'P-5001': 'Cannot publish property without at least one room category.',
+  'FF-4101': 'A favorite folder with this name already exists.',
+  'B-4001': 'This action conflicts with an existing booking or record state.',
+  'B-4002': 'Hosts cannot book their own property.',
+  'B-4003': 'Invalid dates selected or this booking cannot be modified in its current status.',
+  'B-4004': 'Selected room cannot accommodate your pet requirements or capacity.',
+  RATE_LIMIT_EXCEEDED: 'Too many requests. Please wait a moment and try again.',
 }
 
 export function getApiErrorMessages(

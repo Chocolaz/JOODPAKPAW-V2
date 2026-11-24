@@ -72,7 +72,7 @@ export function EditPropertyForm({ property, onSuccess, variant = 'mobile' }: Ed
   if (variant === 'desktop') {
     return (
       <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-        <div className="flex-1 overflow-y-auto scrollbar-modern px-6 py-5">
+        <div className="flex-1 overflow-y-auto modern-scrollbar px-6 py-5">
           <div className="grid grid-cols-[1fr_260px] gap-8">
 
             {/* Left: title + description + facilities */}
@@ -116,7 +116,7 @@ export function EditPropertyForm({ property, onSuccess, variant = 'mobile' }: Ed
                   <div className="space-y-5">
                     {Object.entries(groupedFacilities).map(([category, facilities]) => (
                       <div key={category}>
-                        <h6 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">
+                        <h6 className="text-xs font-semibold text-neutral-gray capitalize mb-2">
                           {category}
                         </h6>
                         <div className="grid grid-cols-2 gap-2">

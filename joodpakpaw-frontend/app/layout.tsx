@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
+import { useNormalizedPathname } from './_hooks/useNormalizedPathname'
 import { useEffect } from 'react'
 import { useAuth } from '@/app/_components/AuthContext'
 import './globals.css'
@@ -51,9 +52,12 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  const pathname = usePathname()
-  const isAdmin = pathname.startsWith('/admin')
-  const showBottomNav = !pathname.startsWith('/authen') && !isAdmin && !pathname.startsWith('/chat/')
+  const normalizedPath = useNormalizedPathname()
+  const isAdmin = normalizedPath.startsWith('/admin')
+  const showBottomNav =
+    !normalizedPath.startsWith('/authen') &&
+    !isAdmin &&
+    !normalizedPath.startsWith('/chat/')
 
   return (
     <html lang="en">
@@ -73,7 +77,7 @@ export default function RootLayout({
               <ChatProvider>
               <BookingProvider>
                 <DesktopNav />
-                <div className={`flex flex-col min-h-screen w-full${isAdmin ? '' : ` max-w-[1440px] mx-auto${pathname.startsWith('/authen') || pathname.startsWith('/booking') ? '' : ' lg:pt-16 xl:pt-[72px]'}`}`}>
+                <div className={`flex flex-col min-h-screen w-full${isAdmin ? '' : ` max-w-[1440px] mx-auto${normalizedPath.startsWith('/authen') || normalizedPath.startsWith('/booking') ? '' : ' lg:pt-16 xl:pt-[72px]'}`}`}>
                   <main className="flex-1">{children}</main>
                   {showBottomNav && <BottomNav />}
                 </div>

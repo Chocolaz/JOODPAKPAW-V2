@@ -1,13 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { notFound, useParams, useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ChevronLeft, Eye, Pencil } from 'lucide-react'
 import { getHostProfile, getHostReviews } from '@/lib/api'
 import { HostProfile, HostReview } from '@/types/hostProfile'
 import { ErrorState } from '@/app/profile/_components/ErrorState'
 import { useAuth } from '@/app/_components/AuthContext'
+import {
+  classifyNavigationError,
+  parsePositiveIntParam,
+} from '@/lib/navigationGuard'
 import { HostProfileSkeleton } from './_components/HostProfileSkeleton'
 import { HostProfileHero } from './_components/HostProfileHero'
 import { HostPropertiesSection } from './_components/HostPropertiesSection'
@@ -25,39 +29,50 @@ const fadeUp = {
 
 export default function HostProfilePage() {
   const { hostId } = useParams<{ hostId: string }>()
+  const validHostId = parsePositiveIntParam(hostId)
   const router = useRouter()
   const searchParams = useSearchParams()
   const from = searchParams.get('from')
   const { user } = useAuth()
-  const isOwner = !!user && String(user.id) === hostId
+  const isOwner = !!user && validHostId !== null && user.id === validHostId
 
   const [host, setHost] = useState<HostProfile | null>(null)
   const [chatRoomId, setChatRoomId] = useState<number | null>(null)
-  const [profileLoading, setProfileLoading] = useState(true)
+  const [profileLoading, setProfileLoading] = useState(validHostId !== null)
   const [profileError, setProfileError] = useState<string | null>(null)
+  const [guardState, setGuardState] = useState<'ok' | 'forbidden' | 'not_found'>(
+    'ok'
+  )
 
   const [reportReviewId, setReportReviewId] = useState<number | null>(null)
   const [reviews, setReviews] = useState<HostReview[]>([])
   const [reviewPage, setReviewPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalRows, setTotalRows] = useState(0)
-  const [reviewsLoading, setReviewsLoading] = useState(true)
+  const [reviewsLoading, setReviewsLoading] = useState(validHostId !== null)
 
   // Initial parallel fetch
   useEffect(() => {
-    if (!hostId) return
-    setProfileLoading(true)
-    setReviewsLoading(true)
+    if (validHostId === null) return
+    const idStr = String(validHostId)
 
     Promise.allSettled([
-      getHostProfile(hostId),
-      getHostReviews(hostId, 1, 6),
+      getHostProfile(idStr),
+      getHostReviews(idStr, 1, 6),
     ]).then(([profileResult, reviewsResult]) => {
       if (profileResult.status === 'fulfilled') {
         setHost(profileResult.value.host)
         setChatRoomId(profileResult.value.host.chatRoomId ?? null)
       } else {
-        setProfileError('Failed to load host profile.')
+        const kind = classifyNavigationError(profileResult.reason)
+        if (kind === 'forbidden') {
+          setGuardState('forbidden')
+          router.replace('/forbidden')
+        } else if (kind === 'not_found') {
+          setGuardState('not_found')
+        } else {
+          setProfileError('Failed to load host profile.')
+        }
       }
       setProfileLoading(false)
 
@@ -68,7 +83,7 @@ export default function HostProfilePage() {
       }
       setReviewsLoading(false)
     })
-  }, [hostId])
+  }, [validHostId, router])
 
   // Paginated review fetch
   const handlePageChange = (page: number) => {
@@ -98,6 +113,8 @@ export default function HostProfilePage() {
       .finally(() => setReviewsLoading(false))
   }
 
+  if (validHostId === null || guardState === 'not_found') notFound()
+  if (guardState === 'forbidden') return null
   if (profileLoading) return <HostProfileSkeleton />
   if (profileError || !host) return <ErrorState message={profileError ?? 'Host not found.'} />
 

@@ -9,6 +9,7 @@ import {
 } from '../controllers/verification.controller';
 import { authenticateToken, requireRoles } from '../middlewares/auth.middleware';
 import { uploadMiddleware } from '../services/storage.service';
+import { attachNumericParamGuards } from '../middlewares/validateParams.middleware';
 
 export const verificationRouter = Router();
 
@@ -19,6 +20,7 @@ verificationRouter.post('/', authenticateToken, uploadMiddleware.any(), submitVe
 // Admin-facing verification router (to be mounted under /admin/user-verifications or directly)
 export const adminVerificationRouter = Router();
 adminVerificationRouter.use(authenticateToken, requireRoles('admin'));
+attachNumericParamGuards(adminVerificationRouter, ['id']);
 
 adminVerificationRouter.get('/paginate', getAdminVerifications);
 adminVerificationRouter.get('/:id', getAdminVerificationById);

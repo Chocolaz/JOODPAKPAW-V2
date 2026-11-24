@@ -2,6 +2,7 @@ export interface ChatUser {
   id: number
   firstName: string
   lastName: string
+  visibleName?: string | null
   avatar: string
   isHost?: boolean
   isVerifiedHost?: boolean

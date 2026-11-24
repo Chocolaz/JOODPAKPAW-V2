@@ -1,41 +1,33 @@
 import Link from 'next/link'
-import { Ban, Home } from 'lucide-react'
+import { Home, ShieldAlert } from 'lucide-react'
+import { GoBackButton } from '@/app/_components/GoBackButton'
 
 export default function ForbiddenPage() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-gray-800 px-4 py-10">
-      {/* Icon */}
-      <div className="mb-6 bg-white p-6 rounded-full shadow-sm">
-        <Ban className="w-20 h-20 text-accent-orange" />
+    <div className="min-h-screen flex flex-col items-center justify-center bg-off-white/40 px-4 py-12 text-foreground">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-white p-8 shadow-sm text-center">
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 text-accent-orange">
+          <ShieldAlert className="h-8 w-8" strokeWidth={1.75} />
+        </div>
+
+        <p className="text-sm font-semibold text-accent-orange mb-1">403 Forbidden</p>
+        <h1 className="font-bold text-deep-teal mb-2">Access Denied</h1>
+
+        <p className="text-sm text-neutral-gray leading-relaxed mb-7">
+          You do not have permission to view or modify this resource.
+        </p>
+
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <GoBackButton className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-border bg-white text-sm font-semibold text-deep-teal hover:bg-off-white transition-colors cursor-pointer" />
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-deep-teal text-white text-sm font-semibold hover:bg-deep-teal/90 transition-colors"
+          >
+            <Home className="w-4 h-4 shrink-0" />
+            <span>Back to Home</span>
+          </Link>
+        </div>
       </div>
-
-      {/* Error Code */}
-      <h1 className="text-6xl font-bold text-deep-teal mb-3">403</h1>
-
-      {/* Message */}
-      <h2 className="text-2xl font-semibold text-gray-700 mb-3">
-        Access Denied
-      </h2>
-
-      <p className="text-lg text-center text-gray-600 mb-8 max-w-md">
-        You do not have permission to access this page.
-      </p>
-
-      {/* Action Buttons */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-10">
-        <Link
-          href="/"
-          className="flex items-center gap-2 px-6 py-3 bg-deep-teal text-white rounded-lg shadow hover:bg-accent-orange transition-colors"
-        >
-          <Home size={20} />
-          Back to Home
-        </Link>
-      </div>
-
-      {/* Footer */}
-      <p className="mt-8 text-xs text-gray-400">
-        🐾 Every pet deserves a perfect stay
-      </p>
     </div>
   )
 }
