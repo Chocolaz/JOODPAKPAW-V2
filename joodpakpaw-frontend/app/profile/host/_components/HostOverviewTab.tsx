@@ -103,14 +103,14 @@ export function HostOverviewTab({
   )
 
   const avgRating = useMemo(() => {
+    if (reviews.length > 0) {
+      const total = reviews.reduce((sum, r) => sum + r.rating, 0)
+      return (total / reviews.length).toFixed(1)
+    }
     const rated = properties.filter((p) => p.avgRating > 0)
     if (rated.length > 0) {
       const total = rated.reduce((sum, p) => sum + p.avgRating, 0)
       return (total / rated.length).toFixed(1)
-    }
-    if (reviews.length > 0) {
-      const total = reviews.reduce((sum, r) => sum + r.rating, 0)
-      return (total / reviews.length).toFixed(1)
     }
     return null
   }, [properties, reviews])

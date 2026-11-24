@@ -566,7 +566,7 @@ export default function HostPropertyDetailPage() {
 
         {/* Right: Laptop-Safe Sticky Control Rail (desktop lg+) */}
         <aside className="hidden lg:block">
-          <div className="sticky top-6 max-h-[calc(100dvh-3rem)] overflow-y-auto modern-scrollbar flex flex-col gap-3">
+          <div className="sticky top-24 max-h-[calc(100dvh-7.5rem)] overflow-y-auto modern-scrollbar flex flex-col gap-3">
             <div className="rounded-2xl border border-border bg-white p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-foreground">

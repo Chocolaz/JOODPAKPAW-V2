@@ -131,7 +131,7 @@ function LayoutContent({ children }: { children: ReactNode }) {
   const isAddPetFlow = normalizedPath.startsWith('/profile/pets/add')
 
   return (
-    <main className="flex justify-center">
+    <div className="flex justify-center">
       <div className="w-full">
         {headerProps && (
           <div className="lg:hidden">
@@ -185,7 +185,7 @@ function LayoutContent({ children }: { children: ReactNode }) {
           </div>
         </div>
       </div>
-    </main>
+    </div>
   )
 }
 

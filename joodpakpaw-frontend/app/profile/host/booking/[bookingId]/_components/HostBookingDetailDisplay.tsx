@@ -835,7 +835,7 @@ export default function HostBookingDetailDisplay({
           </div>
 
           {/* RIGHT STICKY RAIL: Payment Slip, Pricing Breakdown, Action CTAs */}
-          <aside className="lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto modern-scrollbar space-y-4">
+          <aside className="lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7.5rem)] lg:overflow-y-auto modern-scrollbar space-y-4">
             {/* Rooms & Pricing Summary */}
             <div className="bg-white rounded-2xl border border-border overflow-hidden">
               <div className="px-4 py-3 border-b border-border bg-off-white/50 flex items-center justify-between">
