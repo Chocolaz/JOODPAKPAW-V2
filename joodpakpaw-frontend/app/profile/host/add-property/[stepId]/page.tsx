@@ -1,8 +1,9 @@
 'use client'
 
-import { useParams, useRouter } from 'next/navigation'
+import { notFound, useParams, useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { useAddProperty } from '../_context/AddPropertyContext'
+import { parsePositiveIntParam } from '@/lib/navigationGuard'
 import { Step1 } from '../_components/steps/Step1'
 import { Step2 } from '../_components/steps/Step2'
 import { Step3 } from '../_components/steps/Step3'
@@ -19,7 +20,9 @@ export default function AddPropertyDynamicStepsPage() {
   const params = useParams()
   const router = useRouter()
   const { isAuthenticated, loading: authLoading, logout } = useAuth()
-  const stepId = parseInt(params.stepId as string, 10)
+  const parsedStepId = parsePositiveIntParam(params.stepId)
+  const isOutOfRangeStep = parsedStepId === null || parsedStepId > 9
+  const stepId = parsedStepId ?? 1
   const { highestStepReached, setHighestStepReached, isLoading, formData } =
     useAddProperty()
 
@@ -36,10 +39,14 @@ export default function AddPropertyDynamicStepsPage() {
   }, [authLoading, isAuthenticated, router, logout])
 
   useEffect(() => {
-    if (!isLoading && stepId > maxStep) {
+    if (!isLoading && !isOutOfRangeStep && stepId > maxStep) {
       router.push('/profile/host/add-property/1')
     }
-  }, [stepId, maxStep, isLoading, router])
+  }, [stepId, maxStep, isLoading, isOutOfRangeStep, router])
+
+  if (isOutOfRangeStep) {
+    notFound()
+  }
 
   if (!authLoading && !isAuthenticated) {
     return (

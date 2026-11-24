@@ -20,7 +20,7 @@ import Image from 'next/image'
 import { useMediaQuery } from '@/app/_hooks/useMediaQuery'
 import { PageHeaderButtons } from '@/app/_components/property-detail/PageHeaderButtons'
 import { toast } from 'sonner'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ConfirmationModal } from '@/app/_components/ConfirmationModal'
 import {
   assetPath,
@@ -71,11 +71,18 @@ import { RoomCalendarDrawer } from '../_components/RoomCalendarDrawer'
 type PropertyHubTab = 'rooms' | 'bookings' | 'preview'
 
 export default function HostPropertyDetailPage() {
-  const { property, loading, error, refreshProperty } =
-    usePropertyLoader(getHostPropertyById)
+  const { property, loading, error, accessDenied, unauthorized, refreshProperty } =
+    usePropertyLoader(getHostPropertyById, 'host-property')
   const { user } = useAuth()
   const { profile } = useUserProfile()
   const router = useRouter()
+  const isForeignProperty = Boolean(property && user && property.hostId !== user.id)
+
+  useEffect(() => {
+    if (isForeignProperty) {
+      router.replace('/forbidden')
+    }
+  }, [isForeignProperty, router])
 
   const [activeSubTab, setActiveSubTab] = useState<PropertyHubTab>('rooms')
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
@@ -167,6 +174,7 @@ export default function HostPropertyDetailPage() {
 
   const handleBack = () => router.push('/profile/host?tab=properties')
 
+  if (accessDenied || unauthorized || isForeignProperty) return null
   if (loading || isUpdatingStatus || isDeleting) {
     return (
       <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-10 pt-6 pb-16 space-y-5">

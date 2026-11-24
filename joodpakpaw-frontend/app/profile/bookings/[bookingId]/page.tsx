@@ -1,9 +1,13 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { notFound, useParams, useRouter } from 'next/navigation'
 import { getBookingById, cancelBooking } from '@/lib/api'
 import { ApiError } from '@/lib/errorHandling'
+import {
+  classifyNavigationError,
+  parsePositiveIntParam,
+} from '@/lib/navigationGuard'
 import { FullBookingDetail } from '@/types'
 import { Spinner } from '@/components/ui/spinner'
 import { toast } from 'sonner'
@@ -102,10 +106,15 @@ function BookingDetailSkeleton() {
 
 export default function BookingDetailPage() {
   const { bookingId } = useParams()
+  const router = useRouter()
+  const validBookingId = parsePositiveIntParam(bookingId)
   const [bookingDetails, setBookingDetails] =
     useState<FullBookingDetail | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(validBookingId !== null)
   const [error, setError] = useState<string | null>(null)
+  const [guardState, setGuardState] = useState<
+    'ok' | 'forbidden' | 'unauthorized' | 'not_found'
+  >('ok')
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
@@ -138,25 +147,40 @@ export default function BookingDetailPage() {
   }
 
   const fetchBookingDetails = useCallback(async () => {
-    if (!bookingId) return
+    if (validBookingId === null) return
     try {
       setIsLoading(true)
-      const data = await getBookingById(bookingId as string)
+      const data = await getBookingById(String(validBookingId))
       setBookingDetails(data)
     } catch (err) {
+      const kind = classifyNavigationError(err)
+      if (kind === 'forbidden') {
+        setGuardState('forbidden')
+        router.replace('/forbidden')
+        return
+      }
+      if (kind === 'unauthorized') {
+        setGuardState('unauthorized')
+        router.replace('/profile')
+        return
+      }
+      if (kind === 'not_found') {
+        setGuardState('not_found')
+        return
+      }
       console.error('Failed to fetch booking details:', err)
       setError('Failed to load booking details.')
       toast.error('Failed to load booking details.')
     } finally {
       setIsLoading(false)
     }
-  }, [bookingId])
+  }, [validBookingId, router])
 
   useEffect(() => {
-    if (bookingId) {
+    if (validBookingId !== null) {
       fetchBookingDetails()
     }
-  }, [bookingId, fetchBookingDetails])
+  }, [validBookingId, fetchBookingDetails])
 
   const status = bookingDetails?.bookingStatus.toUpperCase()
   const isPending = status === 'PENDING'
@@ -174,6 +198,14 @@ export default function BookingDetailPage() {
 
   const showCancelButton = isPending || (isConfirmed && canCancelConfirmed)
   const isConfirmedPastCutoff = isConfirmed && !canCancelConfirmed
+
+  if (validBookingId === null || guardState === 'not_found') {
+    notFound()
+  }
+
+  if (guardState === 'forbidden' || guardState === 'unauthorized') {
+    return null
+  }
 
   return (
     <AnimatePresence mode="wait">

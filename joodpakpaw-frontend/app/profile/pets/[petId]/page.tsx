@@ -1,14 +1,17 @@
 'use client'
 
 import React, { useEffect, useState, useCallback } from 'react'
-import { useParams } from 'next/navigation'
+import { notFound, useParams, useRouter } from 'next/navigation'
 import { getPetProfileById } from '@/lib/api'
 import { PetProfile } from '@/types'
 import { toast } from 'sonner'
 import PetDetailDisplay from './_components/PetDetailDisplay'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronLeft } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import {
+  classifyNavigationError,
+  parsePositiveIntParam,
+} from '@/lib/navigationGuard'
 
 function PetDetailSkeleton() {
   const router = useRouter()
@@ -105,31 +108,61 @@ function PetDetailSkeleton() {
 
 export default function PetDetailPage() {
   const { petId } = useParams()
+  const router = useRouter()
+  const validPetId = parsePositiveIntParam(petId)
   const [petProfile, setPetProfile] = useState<PetProfile | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(validPetId !== null)
   const [error, setError] = useState<string | null>(null)
+  const [guardState, setGuardState] = useState<
+    'ok' | 'forbidden' | 'unauthorized' | 'not_found'
+  >('ok')
 
   const fetchPetProfile = useCallback(async () => {
-    if (!petId) return;
+    if (validPetId === null) return
     try {
       setIsLoading(true)
-      const data = await getPetProfileById(petId as string)
+      const data = await getPetProfileById(String(validPetId))
       setPetProfile(data)
     } catch (err) {
+      const kind = classifyNavigationError(err)
+      if (kind === 'forbidden') {
+        setGuardState('forbidden')
+        router.replace('/forbidden')
+        return
+      }
+      if (kind === 'unauthorized') {
+        setGuardState('unauthorized')
+        router.replace('/profile')
+        return
+      }
+      if (kind === 'not_found') {
+        setGuardState('not_found')
+        return
+      }
       console.error('Failed to fetch pet profile:', err)
       setError('Failed to load pet profile.')
       toast.error('Failed to load pet profile.')
     } finally {
       setIsLoading(false)
     }
-  }, [petId])
+  }, [validPetId, router])
 
   useEffect(() => {
-    fetchPetProfile()
-  }, [fetchPetProfile])
+    if (validPetId !== null) {
+      fetchPetProfile()
+    }
+  }, [validPetId, fetchPetProfile])
 
   const handlePetUpdate = () => {
     fetchPetProfile()
+  }
+
+  if (validPetId === null || guardState === 'not_found') {
+    notFound()
+  }
+
+  if (guardState === 'forbidden' || guardState === 'unauthorized') {
+    return null
   }
 
   return (

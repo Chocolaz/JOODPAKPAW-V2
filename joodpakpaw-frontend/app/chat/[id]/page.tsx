@@ -3,8 +3,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Lightbox from 'yet-another-react-lightbox'
 import 'yet-another-react-lightbox/styles.css'
-import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { notFound, useParams, useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
+import {
+  classifyNavigationError,
+  parsePositiveIntParam,
+} from '@/lib/navigationGuard'
 import {
   Send,
   Check,
@@ -259,7 +263,8 @@ function MessageSkeleton() {
 
 export default function ChatRoomPage() {
   const { id } = useParams<{ id: string }>()
-  const roomId = Number(id)
+  const validRoomId = parsePositiveIntParam(id)
+  const roomId = validRoomId ?? 0
   const { roomMessages, loadRoom, sendMessage, markAsRead, deleteRoom, rooms } =
     useChat()
   const { user, requireAuth, isAuthenticated, loading: authLoading } = useAuth()
@@ -268,7 +273,10 @@ export default function ChatRoomPage() {
   const from = searchParams.get('from')
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(validRoomId !== null)
+  const [guardState, setGuardState] = useState<
+    'ok' | 'forbidden' | 'unauthorized' | 'not_found'
+  >('ok')
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [pendingImages, setPendingImages] = useState<File[]>([])
   const [fileSizeError, setFileSizeError] = useState('')
@@ -285,7 +293,7 @@ export default function ChatRoomPage() {
     : 'Conversation'
 
   useEffect(() => {
-    if (authLoading) return
+    if (validRoomId === null || authLoading) return
     if (!requireAuth()) return
     let active = true
     initialScrollDone.current = false
@@ -293,15 +301,37 @@ export default function ChatRoomPage() {
     Promise.resolve().then(() => {
       if (active) setIsLoading(true)
     })
-    loadRoom(roomId).finally(() => {
-      if (active) setIsLoading(false)
-    })
-    markAsRead(roomId)
+    loadRoom(validRoomId)
+      .then(() => {
+        if (active) {
+          markAsRead(validRoomId)
+        }
+      })
+      .catch((err) => {
+        if (!active) return
+        const kind = classifyNavigationError(err)
+        if (kind === 'forbidden') {
+          setGuardState('forbidden')
+          router.replace('/forbidden')
+          return
+        }
+        if (kind === 'unauthorized') {
+          setGuardState('unauthorized')
+          router.replace('/chat')
+          return
+        }
+        if (kind === 'not_found') {
+          setGuardState('not_found')
+        }
+      })
+      .finally(() => {
+        if (active) setIsLoading(false)
+      })
     return () => {
       active = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId, isAuthenticated, authLoading])
+  }, [validRoomId, isAuthenticated, authLoading])
 
   useEffect(() => {
     if (isLoading || messages.length === 0) return
@@ -394,6 +424,18 @@ export default function ChatRoomPage() {
 
   const canSend =
     (input.trim().length > 0 || pendingImages.length > 0) && !isSending
+
+  if (validRoomId === null || guardState === 'not_found') {
+    notFound()
+  }
+
+  if (
+    guardState === 'forbidden' ||
+    guardState === 'unauthorized' ||
+    (!authLoading && !isAuthenticated)
+  ) {
+    return null
+  }
 
   return (
     <div className="flex flex-col h-[100dvh] lg:h-full bg-white">

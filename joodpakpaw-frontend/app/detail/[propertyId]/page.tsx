@@ -106,8 +106,8 @@ function PropertyDetailSkeleton() {
 }
 
 export default function PropertyDetailPage() {
-  const { property, loading, error, refreshProperty } =
-    usePropertyLoader(getPropertyById)
+  const { property, loading, error, accessDenied, unauthorized, refreshProperty } =
+    usePropertyLoader(getPropertyById, 'public-property')
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, isAuthenticated, requireAuth } = useAuth()
@@ -306,6 +306,7 @@ export default function PropertyDetailPage() {
     })
   }
 
+  if (accessDenied || unauthorized) return null
   if (loading) return <PropertyDetailSkeleton />
   if (error) return <ErrorState message={error} />
   if (!property) return <ErrorState message="Property not found." />

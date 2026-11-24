@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { notFound, useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -10,6 +10,11 @@ import {
   getPropertyById,
 } from '@/lib/api'
 import { useAuth } from '@/app/_components/AuthContext'
+import {
+  classifyNavigationError,
+  isPositiveIntParam,
+  parsePositiveIntParam,
+} from '@/lib/navigationGuard'
 import {
   RoomCategories,
   BookingDetail,
@@ -42,7 +47,7 @@ function CheckoutSkeleton() {
 export default function ConfirmBookingDataLoader() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { isAuthenticated, loading: authLoading } = useAuth()
+  const { user, isAuthenticated, loading: authLoading } = useAuth()
 
   const [bookingDetails, setBookingDetails] = useState<BookingDetail | null>(
     null
@@ -54,6 +59,9 @@ export default function ConfirmBookingDataLoader() {
   const [petProfiles, setPetProfiles] = useState<PetProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [isBookingLoading, setIsBookingLoading] = useState(false)
+  const [guardState, setGuardState] = useState<
+    'ok' | 'forbidden' | 'not_found'
+  >('ok')
 
   useEffect(() => {
     if (authLoading) return
@@ -66,6 +74,7 @@ export default function ConfirmBookingDataLoader() {
       }
 
       const propertyId = searchParams.get('propertyId')
+      const validPropertyId = parsePositiveIntParam(propertyId)
       const start = searchParams.get('start')
       const end = searchParams.get('end')
       const petIdsParam = searchParams.get('petIds')
@@ -74,31 +83,50 @@ export default function ConfirmBookingDataLoader() {
       const roomNames = searchParams.get('roomNames')
 
       if (
-        !propertyId ||
+        validPropertyId === null ||
         !start ||
         !end ||
         (!petIdsParam && !petsParam) ||
         !rooms ||
         !roomNames
       ) {
-        toast.error('Missing booking details')
+        toast.error('Missing or invalid booking details')
         router.push('/')
         return
       }
 
+      const startMs = Date.parse(start)
+      const endMs = Date.parse(end)
+      if (Number.isNaN(startMs) || Number.isNaN(endMs) || startMs >= endMs) {
+        toast.error('Invalid check-in or check-out date range')
+        router.replace(`/detail/${validPropertyId}`)
+        return
+      }
+
+      const petIdTokens = petIdsParam
+        ? petIdsParam
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : []
+      if (
+        petIdsParam &&
+        (petIdTokens.length === 0 ||
+          petIdTokens.some((token) => !isPositiveIntParam(token)))
+      ) {
+        toast.error('Invalid pet selection')
+        router.replace(`/detail/${validPropertyId}`)
+        return
+      }
+
       try {
-        const petProfileIds = petIdsParam
-          ? petIdsParam
-              .split(',')
-              .map(Number)
-              .filter((n) => !isNaN(n) && n > 0)
-          : []
+        const petProfileIds = petIdTokens.map((token) => Number(token))
         const petCount =
           petProfileIds.length > 0
             ? petProfileIds.length
             : Number(petsParam) || 0
 
-        if (petCount === 0) {
+        if (petCount <= 0) {
           toast.error('No pets selected')
           router.push('/')
           return
@@ -106,10 +134,9 @@ export default function ConfirmBookingDataLoader() {
 
         const parsedRooms = JSON.parse(decodeURIComponent(rooms))
         const parsedRoomNames = JSON.parse(decodeURIComponent(roomNames))
-        const propertyIdNum = Number(propertyId)
 
         setBookingDetails({
-          propertyId: propertyIdNum,
+          propertyId: validPropertyId,
           checkInDate: start,
           checkOutDate: end,
           petProfileIds,
@@ -120,15 +147,39 @@ export default function ConfirmBookingDataLoader() {
 
         const [roomResponse, petProfilesResponse, propertyResponse] =
           await Promise.all([
-            searchRoomCategories(propertyIdNum, start, end, petCount),
+            searchRoomCategories(validPropertyId, start, end, petCount),
             getAllPetProfiles(),
-            getPropertyById(String(propertyIdNum)).catch(() => null),
+            getPropertyById(String(validPropertyId)),
           ])
+
+        if (
+          user?.id &&
+          propertyResponse?.property?.hostId &&
+          propertyResponse.property.hostId === user.id
+        ) {
+          toast.error('Hosts cannot book their own property.')
+          router.replace(`/detail/${validPropertyId}`)
+          return
+        }
 
         setFetchedRoomCategories(roomResponse.roomCategories)
         setPetProfiles(petProfilesResponse.petProfiles)
         setFetchedProperty(propertyResponse?.property ?? null)
       } catch (err) {
+        const kind = classifyNavigationError(err)
+        if (kind === 'forbidden') {
+          setGuardState('forbidden')
+          router.replace('/forbidden')
+          return
+        }
+        if (kind === 'not_found') {
+          setGuardState('not_found')
+          return
+        }
+        if (kind === 'unauthorized') {
+          router.replace('/authen')
+          return
+        }
         console.error('Error fetching booking data or parsing params:', err)
         toast.error('Invalid booking data or failed to fetch details.')
         router.push('/')
@@ -138,7 +189,15 @@ export default function ConfirmBookingDataLoader() {
     }
 
     fetchBookingData()
-  }, [authLoading, isAuthenticated, searchParams, router])
+  }, [authLoading, isAuthenticated, user?.id, searchParams, router])
+
+  if (guardState === 'not_found') {
+    notFound()
+  }
+
+  if (guardState === 'forbidden') {
+    return null
+  }
 
   if (authLoading || loading) return <CheckoutSkeleton />
 

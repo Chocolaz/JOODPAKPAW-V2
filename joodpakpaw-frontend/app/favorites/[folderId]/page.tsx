@@ -1,8 +1,13 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { notFound, useParams, useRouter } from 'next/navigation'
 import { getFavoriteFolderById } from '@/lib/api'
+import { useAuth } from '@/app/_components/AuthContext'
+import {
+  classifyNavigationError,
+  parsePositiveIntParam,
+} from '@/lib/navigationGuard'
 import { FavoriteFolderDetail } from '@/types/favorite'
 import { PropertyCard } from '@/app/_components/PropertyCard'
 import { AppHeader } from '@/app/_components/AppHeader'
@@ -36,33 +41,69 @@ function FolderDetailSkeletonGrid() {
 
 export default function FavoriteFolderDetailPage() {
   const params = useParams()
-  const folderId = params.folderId as string
+  const validFolderId = parsePositiveIntParam(params.folderId)
   const router = useRouter()
+  const { isAuthenticated, loading: authLoading } = useAuth()
 
   const [folder, setFolder] = useState<FavoriteFolderDetail | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(validFolderId !== null)
   const [error, setError] = useState<string | null>(null)
+  const [guardState, setGuardState] = useState<
+    'ok' | 'forbidden' | 'unauthorized' | 'not_found'
+  >('ok')
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [menuInitialView, setMenuInitialView] =
     useState<FolderMenuView>('options')
 
   const fetchFolder = useCallback(async () => {
-    if (!folderId) return
+    if (validFolderId === null) return
     setIsLoading(true)
     setError(null)
     try {
-      const response = await getFavoriteFolderById(folderId)
+      const response = await getFavoriteFolderById(String(validFolderId))
       setFolder(response)
-    } catch {
+    } catch (err) {
+      const kind = classifyNavigationError(err)
+      if (kind === 'forbidden') {
+        setGuardState('forbidden')
+        router.replace('/forbidden')
+        return
+      }
+      if (kind === 'unauthorized') {
+        setGuardState('unauthorized')
+        router.replace('/favorites')
+        return
+      }
+      if (kind === 'not_found') {
+        setGuardState('not_found')
+        return
+      }
       setError('Failed to fetch wishlist details.')
     } finally {
       setIsLoading(false)
     }
-  }, [folderId])
+  }, [validFolderId, router])
 
   useEffect(() => {
+    if (validFolderId === null || authLoading) return
+    if (!isAuthenticated) {
+      router.replace('/favorites')
+      return
+    }
     fetchFolder()
-  }, [fetchFolder])
+  }, [validFolderId, authLoading, isAuthenticated, fetchFolder, router])
+
+  if (validFolderId === null || guardState === 'not_found') {
+    notFound()
+  }
+
+  if (
+    guardState === 'forbidden' ||
+    guardState === 'unauthorized' ||
+    (!authLoading && !isAuthenticated)
+  ) {
+    return null
+  }
 
   const openMenu = (view: FolderMenuView) => {
     setMenuInitialView(view)
@@ -138,8 +179,8 @@ export default function FavoriteFolderDetailPage() {
             key={property.id}
             property={property}
             showHeartIcon
-            favoriteFolderId={Number(folderId)}
-            href={`/detail/${property.id}?fromFavorites=true&folderId=${folderId}`}
+            favoriteFolderId={validFolderId}
+            href={`/detail/${property.id}?fromFavorites=true&folderId=${validFolderId}`}
           />
         ))}
       </div>

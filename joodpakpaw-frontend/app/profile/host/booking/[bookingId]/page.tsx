@@ -1,37 +1,71 @@
 'use client'
 
 import React, { useEffect, useState, useCallback } from 'react'
-import { useParams } from 'next/navigation'
+import { notFound, useParams, useRouter } from 'next/navigation'
 import { getHostBookingById } from '@/lib/api'
 import { HostBookingDetail } from '@/types'
 import { toast } from 'sonner'
 import { ErrorState } from '@/app/profile/_components/ErrorState'
+import {
+  classifyNavigationError,
+  parsePositiveIntParam,
+} from '@/lib/navigationGuard'
 import HostBookingDetailDisplay from './_components/HostBookingDetailDisplay'
 
 export default function HostBookingDetailPage() {
   const { bookingId } = useParams()
+  const router = useRouter()
+  const validBookingId = parsePositiveIntParam(bookingId)
   const [bookingDetails, setBookingDetails] =
     useState<HostBookingDetail | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(validBookingId !== null)
   const [error, setError] = useState<string | null>(null)
+  const [guardState, setGuardState] = useState<
+    'ok' | 'forbidden' | 'unauthorized' | 'not_found'
+  >('ok')
 
   const fetchBookingDetails = useCallback(async () => {
-    if (!bookingId) return
+    if (validBookingId === null) return
     try {
-      const data = await getHostBookingById(bookingId as string)
+      const data = await getHostBookingById(String(validBookingId))
       setBookingDetails(data)
       setError(null)
-    } catch {
+    } catch (err) {
+      const kind = classifyNavigationError(err)
+      if (kind === 'forbidden') {
+        setGuardState('forbidden')
+        router.replace('/forbidden')
+        return
+      }
+      if (kind === 'unauthorized') {
+        setGuardState('unauthorized')
+        router.replace('/profile')
+        return
+      }
+      if (kind === 'not_found') {
+        setGuardState('not_found')
+        return
+      }
       setError('Failed to load booking details.')
       toast.error('Failed to load booking details.')
     } finally {
       setIsLoading(false)
     }
-  }, [bookingId])
+  }, [validBookingId, router])
 
   useEffect(() => {
-    void fetchBookingDetails()
-  }, [fetchBookingDetails])
+    if (validBookingId !== null) {
+      void fetchBookingDetails()
+    }
+  }, [validBookingId, fetchBookingDetails])
+
+  if (validBookingId === null || guardState === 'not_found') {
+    notFound()
+  }
+
+  if (guardState === 'forbidden' || guardState === 'unauthorized') {
+    return null
+  }
 
   if (isLoading) {
     return (
