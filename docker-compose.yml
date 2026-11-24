@@ -88,6 +88,7 @@ services:
       DATABASE_URL: postgresql://joodpakpaw:joodpakpaw_password@joodpakpaw-postgres:5432/joodpakpaw_db?schema=public
       SNAPSHOT_TTL_SECONDS: 60
       TIME_DECAY_LAMBDA: 0.05
+      ML_INTERNAL_SECRET: ${ML_INTERNAL_SECRET:-}
     depends_on:
       joodpakpaw-postgres:
         condition: service_healthy
@@ -124,6 +125,7 @@ services:
       FRONTEND_URL: http://localhost:3000
       ML_SERVICE_URL: http://joodpakpaw-ml:5000
       ML_TIMEOUT_MS: 1500
+      ML_INTERNAL_SECRET: ${ML_INTERNAL_SECRET:-}
     depends_on:
       joodpakpaw-postgres:
         condition: service_healthy
