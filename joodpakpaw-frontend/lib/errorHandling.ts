@@ -32,8 +32,8 @@ const errorMessages: { [key: string]: string } = {
   'P-5001': 'Cannot publish property without at least one room category.',
   'FF-4101': 'A favorite folder with this name already exists.',
   'B-4001': 'This action conflicts with an existing booking or record state.',
-  'B-4002': 'Selected dates are invalid or outside the allowed booking window.',
-  'B-4003': 'This booking cannot be modified in its current status.',
+  'B-4002': 'Hosts cannot book their own property.',
+  'B-4003': 'Invalid dates selected or this booking cannot be modified in its current status.',
   'B-4004': 'Selected room cannot accommodate your pet requirements or capacity.',
   RATE_LIMIT_EXCEEDED: 'Too many requests. Please wait a moment and try again.',
 }
