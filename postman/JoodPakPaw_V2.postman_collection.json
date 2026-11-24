@@ -796,7 +796,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -860,7 +860,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -2015,7 +2015,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -2073,7 +2073,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -2131,7 +2131,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -2190,7 +2190,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -2251,7 +2251,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -2300,7 +2300,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -2639,7 +2639,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -2687,7 +2687,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -4762,7 +4762,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -4811,7 +4811,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -4865,7 +4865,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -4929,7 +4929,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -4987,7 +4987,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -5041,7 +5041,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -5089,7 +5089,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -5142,7 +5142,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -5205,7 +5205,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -5262,7 +5262,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
@@ -5310,7 +5310,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{accessToken}}",
+                  "value": "{{jwt_token}}",
                   "type": "string"
                 }
               ]
