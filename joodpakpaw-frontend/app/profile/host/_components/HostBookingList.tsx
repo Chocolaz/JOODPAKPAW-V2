@@ -1,8 +1,12 @@
 'use client'
 
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { getHostBookingsPaginated } from '@/lib/api'
+import {
+  completeBooking,
+  getHostBookingsPaginated,
+  hostAcceptBooking,
+} from '@/lib/api'
+import { ApiError } from '@/lib/errorHandling'
 import { Booking } from '@/types/booking'
 import { ErrorState } from '@/app/profile/_components/ErrorState'
 import { useRouter } from 'next/navigation'
@@ -15,81 +19,146 @@ import {
   isSameMonth,
   parseISO,
 } from 'date-fns'
+import { toast } from 'sonner'
 import { BookingCard } from '@/app/profile/bookings/_components/BookingCard'
 import { cn } from '@/lib/utils'
-import { CalendarX2, AlertCircle, Loader2 } from 'lucide-react'
+import {
+  CalendarX2,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  Receipt,
+  XCircle,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { ConfirmationModal } from '@/app/_components/ConfirmationModal'
+import { HostDeclineModal } from '../booking/[bookingId]/_components/HostDeclineModal'
+import { PaymentSlipModal } from './PaymentSlipModal'
 import { PropertyFilterDropdown } from './PropertyFilterDropdown'
-
-// { 'yyyy-MM': bookingCount } — how many bookings the user last saw for that month
-const SEEN_KEY = 'host-bookings-seen'
-
-function loadSeen(): Record<string, number> {
-  try {
-    const raw = localStorage.getItem(SEEN_KEY)
-    if (raw) return JSON.parse(raw)
-  } catch {}
-  return {}
-}
-
-function saveSeen(seen: Record<string, number>) {
-  try {
-    localStorage.setItem(SEEN_KEY, JSON.stringify(seen))
-  } catch {}
-}
 
 const STATUS_FILTERS = [
   { value: 'ALL', label: 'All' },
-  { value: 'CONFIRMED', label: 'Confirmed', color: 'bg-deep-teal/10 text-deep-teal border-deep-teal/30' },
-  { value: 'PENDING', label: 'Pending', color: 'bg-amber-50 text-amber-800 border-amber-200' },
-  { value: 'CANCELLED', label: 'Cancelled', color: 'bg-red-50 text-red-700 border-red-200' },
+  {
+    value: 'PENDING',
+    label: 'Pending',
+    color: 'bg-amber-50 text-amber-800 border-amber-300',
+  },
+  {
+    value: 'CONFIRMED',
+    label: 'Confirmed',
+    color: 'bg-deep-teal/10 text-deep-teal border-deep-teal/30',
+  },
+  {
+    value: 'CANCELLED',
+    label: 'Cancelled',
+    color: 'bg-red-50 text-red-700 border-red-200',
+  },
 ] as const
 
 const EMPTY_MESSAGES: Record<string, { title: string; description: string }> = {
-  ALL: { title: 'No bookings this month', description: 'Bookings for this month will appear here.' },
-  CONFIRMED: { title: 'No confirmed bookings', description: 'Confirmed bookings for this month will appear here.' },
-  PENDING: { title: 'No pending bookings', description: "You're all caught up! No bookings waiting for action." },
-  CANCELLED: { title: 'No cancellations', description: 'No cancelled bookings for this month.' },
+  ALL: {
+    title: 'No active bookings found',
+    description: 'Upcoming, pending, and recent cancelled reservations will appear here.',
+  },
+  CONFIRMED: {
+    title: 'No confirmed bookings',
+    description: 'Confirmed bookings will appear here.',
+  },
+  PENDING: {
+    title: 'No pending bookings',
+    description: 'You are all caught up! No reservations awaiting action.',
+  },
+  CANCELLED: {
+    title: 'No cancellations',
+    description: 'No cancelled reservations match your current filter.',
+  },
 }
 
 type MonthItem = { type: 'month'; date: Date } | { type: 'year'; year: number }
 
-export function HostBookingList() {
+interface HostBookingListProps {
+  initialStatusFilter?: string
+  onDataMutated?: () => Promise<void> | void
+}
+
+function isBookingCompletable(booking: Booking): boolean {
+  if (booking.bookingStatus.toUpperCase() !== 'CONFIRMED') return false
+  const cutoff = booking.canCompleteAt
+    ? new Date(booking.canCompleteAt)
+    : new Date(`${booking.checkOutDate.slice(0, 10)}T12:00:00+07:00`)
+  return new Date() >= cutoff
+}
+
+export function HostBookingList({
+  initialStatusFilter = 'ALL',
+  onDataMutated,
+}: HostBookingListProps) {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [error, setError] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'queue' | 'month'>('queue')
   const [selectedMonth, setSelectedMonth] = useState(new Date())
-  const [seen, setSeen] = useState<Record<string, number>>(loadSeen)
-  const [statusFilter, setStatusFilter] = useState('ALL')
+  const [statusFilter, setStatusFilter] = useState(initialStatusFilter)
   const [propertyFilter, setPropertyFilter] = useState('ALL')
+
+  const [slipBooking, setSlipBooking] = useState<Booking | null>(null)
+  const [acceptTarget, setAcceptTarget] = useState<Booking | null>(null)
+  const [completeTarget, setCompleteTarget] = useState<Booking | null>(null)
+  const [declineBookingId, setDeclineBookingId] = useState<number | null>(null)
+  const [submittingId, setSubmittingId] = useState<number | null>(null)
+
   const monthScrollRef = useRef<HTMLDivElement>(null)
   const monthButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const router = useRouter()
 
+  const reloadBookings = useCallback(async () => {
+    try {
+      const res = await getHostBookingsPaginated(1, 30)
+      setBookings(res.data)
+      setTotalPages(res.totalPages)
+      setPage(1)
+      setError(null)
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to fetch host bookings'
+      )
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
-    const fetchBookings = async () => {
-      try {
-        setLoading(true)
-        const res = await getHostBookingsPaginated(1, 20)
+    let cancelled = false
+    getHostBookingsPaginated(1, 30)
+      .then((res) => {
+        if (cancelled) return
         setBookings(res.data)
         setTotalPages(res.totalPages)
         setPage(1)
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch host bookings')
-      } finally {
-        setLoading(false)
-      }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : 'Failed to fetch host bookings'
+          )
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
     }
-    fetchBookings()
   }, [])
 
   const handleLoadMore = async () => {
     const nextPage = page + 1
     setLoadingMore(true)
     try {
-      const res = await getHostBookingsPaginated(nextPage, 20)
+      const res = await getHostBookingsPaginated(nextPage, 30)
       setBookings((prev) => [...prev, ...res.data])
       setPage(nextPage)
       setTotalPages(res.totalPages)
@@ -105,18 +174,19 @@ export function HostBookingList() {
     const button = monthButtonRefs.current.get(key)
     if (button && monthScrollRef.current) {
       const container = monthScrollRef.current
-      const scrollLeft = button.offsetLeft - container.offsetWidth / 2 + button.offsetWidth / 2
+      const scrollLeft =
+        button.offsetLeft - container.offsetWidth / 2 + button.offsetWidth / 2
       container.scrollTo({ left: scrollLeft, behavior: 'smooth' })
     }
   }, [])
 
   useEffect(() => {
-    if (!loading) {
-      setTimeout(() => scrollToMonth(selectedMonth), 100)
+    if (!loading && viewMode === 'month') {
+      const id = setTimeout(() => scrollToMonth(selectedMonth), 80)
+      return () => clearTimeout(id)
     }
-  }, [loading, scrollToMonth, selectedMonth])
+  }, [loading, viewMode, scrollToMonth, selectedMonth])
 
-  // Derive month range from actual booking check-in dates so past/future years are reachable
   const months = useMemo(() => {
     const now = new Date()
     const activeDates = bookings
@@ -131,9 +201,10 @@ export function HostBookingList() {
     })
   }, [bookings])
 
-  // Flat list with year-label separators when bookings span multiple years
   const monthItems = useMemo((): MonthItem[] => {
-    const spansYears = months.length > 0 && getYear(months[0]) !== getYear(months[months.length - 1])
+    const spansYears =
+      months.length > 0 &&
+      getYear(months[0]) !== getYear(months[months.length - 1])
     if (!spansYears) return months.map((date) => ({ type: 'month', date }))
 
     const items: MonthItem[] = []
@@ -149,7 +220,6 @@ export function HostBookingList() {
     return items
   }, [months])
 
-  // Map of 'yyyy-MM' → booking count (active only) for dot + unread logic
   const monthBookingCounts = useMemo(() => {
     const map = new Map<string, number>()
     bookings.forEach((b) => {
@@ -170,58 +240,103 @@ export function HostBookingList() {
     return Array.from(names).sort() as string[]
   }, [bookings])
 
+  const activeBookingsScope = useMemo(() => {
+    return bookings.filter((booking) => {
+      const status = booking.bookingStatus.toUpperCase()
+      if (status === 'SUCCESSFUL') return false
+      if (
+        viewMode === 'month' &&
+        !isSameMonth(parseISO(booking.checkInDate), selectedMonth)
+      ) {
+        return false
+      }
+      return true
+    })
+  }, [bookings, viewMode, selectedMonth])
+
   const filteredBookings = useMemo(() => {
-    const statusOrder = ['CONFIRMED', 'PENDING', 'SUCCESSFUL', 'CANCELLED']
-    return bookings
+    const statusOrder = ['PENDING', 'CONFIRMED', 'CANCELLED']
+    return activeBookingsScope
       .filter((booking) => {
         const status = booking.bookingStatus.toUpperCase()
-        const inMonth = isSameMonth(parseISO(booking.checkInDate), selectedMonth)
-        const notSuccessful = status !== 'SUCCESSFUL'
         const matchesFilter = statusFilter === 'ALL' || status === statusFilter
-        const matchesProperty = propertyFilter === 'ALL' || booking.property?.title === propertyFilter
-        return inMonth && notSuccessful && matchesFilter && matchesProperty
+        const matchesProperty =
+          propertyFilter === 'ALL' ||
+          booking.property?.title === propertyFilter
+        return matchesFilter && matchesProperty
       })
       .sort((a, b) => {
-        const orderA = statusOrder.indexOf(a.bookingStatus.toUpperCase())
-        const orderB = statusOrder.indexOf(b.bookingStatus.toUpperCase())
+        const statusA = a.bookingStatus.toUpperCase()
+        const statusB = b.bookingStatus.toUpperCase()
+        const orderA = statusOrder.indexOf(statusA)
+        const orderB = statusOrder.indexOf(statusB)
         if (orderA !== orderB) return orderA - orderB
-        return new Date(a.checkInDate).getTime() - new Date(b.checkInDate).getTime()
+        if (statusA === 'PENDING') {
+          const slipA = a.paymentSlipUrl ? 0 : 1
+          const slipB = b.paymentSlipUrl ? 0 : 1
+          if (slipA !== slipB) return slipA - slipB
+        }
+        return (
+          new Date(a.checkInDate).getTime() - new Date(b.checkInDate).getTime()
+        )
       })
-  }, [bookings, selectedMonth, statusFilter, propertyFilter])
+  }, [activeBookingsScope, statusFilter, propertyFilter])
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { ALL: 0 }
-    bookings.forEach((booking) => {
+    activeBookingsScope.forEach((booking) => {
       const status = booking.bookingStatus.toUpperCase()
-      if (status === 'SUCCESSFUL') return
-      if (!isSameMonth(parseISO(booking.checkInDate), selectedMonth)) return
       counts.ALL = (counts.ALL || 0) + 1
       counts[status] = (counts[status] || 0) + 1
     })
     return counts
-  }, [bookings, selectedMonth])
+  }, [activeBookingsScope])
 
-  const markMonthSeen = useCallback((month: Date) => {
-    const key = format(month, 'yyyy-MM')
-    const count = monthBookingCounts.get(key) ?? 0
-    setSeen((prev) => {
-      if (prev[key] === count) return prev
-      const updated = { ...prev, [key]: count }
-      saveSeen(updated)
-      return updated
-    })
-  }, [monthBookingCounts])
+  const handleConfirmAccept = async () => {
+    if (!acceptTarget) return
+    const id = acceptTarget.id
+    setSubmittingId(id)
+    try {
+      await hostAcceptBooking(id)
+      toast.success(`Booking #${id} accepted successfully.`)
+      setAcceptTarget(null)
+      setSlipBooking(null)
+      await reloadBookings()
+      await onDataMutated?.()
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+          ? err.message
+          : 'Failed to accept booking.'
+      )
+    } finally {
+      setSubmittingId(null)
+    }
+  }
 
-  // Auto-mark the currently viewed month as seen whenever bookings load/change
-  useEffect(() => {
-    if (!loading) markMonthSeen(selectedMonth)
-  }, [loading, selectedMonth, markMonthSeen])
-
-  const handleMonthSelect = (month: Date) => {
-    setSelectedMonth(month)
-    setStatusFilter('ALL')
-    setPropertyFilter('ALL')
-    markMonthSeen(month)
+  const handleConfirmComplete = async () => {
+    if (!completeTarget) return
+    const id = completeTarget.id
+    setSubmittingId(id)
+    try {
+      await completeBooking(id)
+      toast.success(`Booking #${id} marked as completed.`)
+      setCompleteTarget(null)
+      await reloadBookings()
+      await onDataMutated?.()
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+          ? err.message
+          : 'Failed to complete booking.'
+      )
+    } finally {
+      setSubmittingId(null)
+    }
   }
 
   if (error) return <ErrorState message={error} />
@@ -230,147 +345,150 @@ export function HostBookingList() {
   const emptyMsg = EMPTY_MESSAGES[statusFilter] || EMPTY_MESSAGES.ALL
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
+    <div className="space-y-5">
+      {/* Header + View Mode Switcher */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-deep-teal">Bookings Operations</h1>
+          <p className="text-xs text-neutral-gray mt-0.5">
+            {viewMode === 'queue'
+              ? 'Showing all active and pending reservations across all months.'
+              : `Filtering stays checking in during ${format(selectedMonth, 'MMMM yyyy')}.`}
+          </p>
+        </div>
+
+        <div className="inline-flex rounded-xl border border-border p-1 bg-off-white">
+          <button
+            type="button"
+            onClick={() => setViewMode('queue')}
+            className={cn(
+              'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+              viewMode === 'queue'
+                ? 'bg-white text-deep-teal shadow-xs'
+                : 'text-neutral-gray hover:text-deep-teal'
+            )}
+          >
+            Active Queue
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('month')}
+            className={cn(
+              'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+              viewMode === 'month'
+                ? 'bg-white text-deep-teal shadow-xs'
+                : 'text-neutral-gray hover:text-deep-teal'
+            )}
+          >
+            By Month
+          </button>
+        </div>
+      </div>
+
       {loading ? (
-        <motion.div
-          key="skeleton"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          className="flex flex-col h-full"
-        >
-          <div className="flex gap-4 p-3 sm:p-4 border-b overflow-hidden">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="animate-pulse">
-                <div className="h-4 w-8 bg-gray-200 rounded" />
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="animate-pulse motion-reduce:animate-none rounded-2xl border border-border p-5 space-y-3"
+            >
+              <div className="flex justify-between">
+                <div className="h-4 bg-gray-200 rounded w-1/2" />
+                <div className="h-5 bg-gray-200 rounded-full w-20" />
               </div>
-            ))}
-          </div>
-          <div className="flex gap-2 px-3 sm:px-4 py-2 border-b border-gray-100">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="animate-pulse">
-                <div className="h-8 rounded-full bg-gray-200" style={{ width: `${60 + i * 16}px` }} />
+              <div className="h-20 bg-gray-100 rounded-xl" />
+              <div className="flex justify-between pt-2">
+                <div className="h-4 bg-gray-200 rounded w-24" />
+                <div className="h-5 bg-gray-200 rounded w-16" />
               </div>
-            ))}
-          </div>
-          <div className="p-3 sm:p-4 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="animate-pulse rounded-xl border border-gray-100 p-4 sm:p-5 space-y-3">
-                <div className="flex justify-between">
-                  <div className="h-4 bg-gray-200 rounded w-1/2" />
-                  <div className="h-5 bg-gray-200 rounded-full w-16" />
-                </div>
-                <div className="flex gap-3">
-                  <div className="h-3 bg-gray-200 rounded w-16" />
-                  <div className="h-3 bg-gray-200 rounded w-16" />
-                  <div className="h-3 bg-gray-200 rounded w-14" />
-                </div>
-                <div className="grid grid-cols-2 gap-3 bg-gray-100 rounded-lg p-3">
-                  <div className="space-y-1.5">
-                    <div className="h-2.5 bg-gray-200 rounded w-12" />
-                    <div className="h-3.5 bg-gray-200 rounded w-20" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="h-2.5 bg-gray-200 rounded w-14" />
-                    <div className="h-3.5 bg-gray-200 rounded w-20" />
-                  </div>
-                </div>
-                <div className="flex justify-between border-t pt-3">
-                  <div className="h-3 bg-gray-200 rounded w-24" />
-                  <div className="h-5 bg-gray-200 rounded w-16" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </motion.div>
+            </div>
+          ))}
+        </div>
       ) : (
-        <motion.div
-          key="content"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, ease: 'easeOut' }}
-          className="flex flex-col h-full"
-        >
-          {/* Pending alert */}
+        <>
+          {/* Pending action banner */}
           {pendingCount > 0 && statusFilter === 'ALL' && (
-            <div className="flex items-center gap-2 mx-3 sm:mx-4 mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl shrink-0">
-              <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500 shrink-0" />
-              <p className="text-xs sm:text-sm text-amber-800 min-w-0">
-                <span className="font-semibold">{pendingCount}</span> booking{pendingCount > 1 ? 's' : ''} awaiting response
+            <div className="flex items-center gap-3 p-3.5 bg-amber-50 border border-amber-200 rounded-2xl">
+              <AlertCircle className="w-5 h-5 text-amber-700 shrink-0" />
+              <p className="text-xs sm:text-sm text-amber-900 min-w-0">
+                <span className="font-semibold tabular-nums">{pendingCount}</span>{' '}
+                {pendingCount === 1 ? 'reservation is' : 'reservations are'} waiting for your approval
               </p>
               <button
+                type="button"
                 onClick={() => setStatusFilter('PENDING')}
-                className="ml-auto text-xs sm:text-sm font-semibold text-amber-700 hover:text-amber-900 whitespace-nowrap"
+                className="ml-auto px-3 py-1 rounded-xl bg-white border border-amber-300 text-xs font-semibold text-amber-900 hover:bg-amber-100 transition-colors shrink-0 cursor-pointer"
               >
-                View
+                Filter Pending
               </button>
             </div>
           )}
 
-          {/* Month selector */}
-          <div
-            ref={monthScrollRef}
-            className="overflow-x-auto whitespace-nowrap hide-scrollbar border-b shrink-0"
-          >
-            <div className="inline-flex items-end gap-1 px-3 sm:px-4 pt-2 pb-0 md:justify-center md:w-full">
-              {monthItems.map((item) => {
-                if (item.type === 'year') {
+          {/* Optional Month Selector */}
+          {viewMode === 'month' && (
+            <div
+              ref={monthScrollRef}
+              className="overflow-x-auto whitespace-nowrap hide-scrollbar border-b border-border"
+            >
+              <div className="inline-flex items-end gap-1 pb-0">
+                {monthItems.map((item) => {
+                  if (item.type === 'year') {
+                    return (
+                      <span
+                        key={`year-${item.year}`}
+                        className="text-xs font-semibold text-neutral-gray px-2 pb-3"
+                      >
+                        {item.year}
+                      </span>
+                    )
+                  }
+                  const monthStr = format(item.date, 'yyyy-MM')
+                  const count = monthBookingCounts.get(monthStr) ?? 0
+                  const isSelected = isSameMonth(item.date, selectedMonth)
                   return (
-                    <span
-                      key={`year-${item.year}`}
-                      className="text-[10px] font-semibold text-neutral-gray/40 px-2 pb-3 self-end"
+                    <button
+                      key={monthStr}
+                      type="button"
+                      ref={(el) => {
+                        if (el) monthButtonRefs.current.set(monthStr, el)
+                      }}
+                      onClick={() => setSelectedMonth(item.date)}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 px-3 pt-1 pb-3 text-xs sm:text-sm font-medium transition-colors cursor-pointer',
+                        isSelected
+                          ? 'text-deep-teal border-b-2 border-deep-teal font-semibold'
+                          : 'text-neutral-gray hover:text-deep-teal'
+                      )}
                     >
-                      {item.year}
-                    </span>
+                      <span>{format(item.date, 'MMM')}</span>
+                      {count > 0 && (
+                        <span className="px-1.5 py-0.2 rounded-full text-[11px] bg-off-white border border-border text-deep-teal tabular-nums">
+                          {count}
+                        </span>
+                      )}
+                    </button>
                   )
-                }
-
-                const monthStr = format(item.date, 'yyyy-MM')
-                const count = monthBookingCounts.get(monthStr) ?? 0
-                const hasBooking = count > 0
-                const isUnread = hasBooking && (seen[monthStr] ?? -1) < count
-                const isSelected = isSameMonth(item.date, selectedMonth)
-
-                return (
-                  <button
-                    key={monthStr}
-                    ref={(el) => { if (el) monthButtonRefs.current.set(monthStr, el) }}
-                    onClick={() => handleMonthSelect(item.date)}
-                    className={cn(
-                      'relative px-3 pt-1 pb-3 text-sm font-medium transition-colors duration-200',
-                      isSelected
-                        ? 'text-deep-teal border-b-2 border-deep-teal'
-                        : hasBooking
-                        ? 'text-foreground hover:text-deep-teal'
-                        : 'text-neutral-gray hover:text-foreground'
-                    )}
-                  >
-                    {format(item.date, 'MMM')}
-                    {isUnread && !isSelected && (
-                      <span className="absolute top-0.5 right-0 h-1.5 w-1.5 rounded-full bg-accent-orange" />
-                    )}
-                  </button>
-                )
-              })}
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Filter bar — chips + property dropdown in one row */}
-          <div className="flex items-center gap-2 px-3 sm:px-4 py-2 overflow-x-auto hide-scrollbar shrink-0 border-b border-border">
+          {/* Filter bar */}
+          <div className="flex flex-wrap items-center gap-2">
             {STATUS_FILTERS.map((filter) => {
               const count = statusCounts[filter.value] || 0
               const isActive = statusFilter === filter.value
               return (
                 <button
                   key={filter.value}
+                  type="button"
                   onClick={() => setStatusFilter(filter.value)}
                   className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border whitespace-nowrap transition-colors duration-150 cursor-pointer',
+                    'flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border whitespace-nowrap transition-colors cursor-pointer',
                     isActive
                       ? filter.value === 'ALL'
-                        ? 'bg-deep-teal text-white border-deep-teal shadow-sm'
-                        : filter.color + ' shadow-sm'
+                        ? 'bg-deep-teal text-white border-deep-teal'
+                        : filter.color
                       : 'bg-white text-neutral-gray border-border hover:border-deep-teal/40 hover:text-foreground'
                   )}
                 >
@@ -378,9 +496,11 @@ export function HostBookingList() {
                   {count > 0 && (
                     <span
                       className={cn(
-                        'text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5',
+                        'text-[11px] rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 tabular-nums',
                         isActive
-                          ? filter.value === 'ALL' ? 'bg-white/20' : 'bg-black/10'
+                          ? filter.value === 'ALL'
+                            ? 'bg-white/20 text-white'
+                            : 'bg-black/10'
                           : 'bg-off-white text-neutral-gray'
                       )}
                     >
@@ -398,43 +518,162 @@ export function HostBookingList() {
             />
           </div>
 
-          {/* Scrollable card area */}
-          <div className="grow min-h-0 overflow-y-auto scrollbar-modern p-3 sm:p-4 md:p-6">
-            {filteredBookings.length > 0 ? (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                  {filteredBookings.map((booking) => (
+          {/* Booking Cards Grid */}
+          {filteredBookings.length > 0 ? (
+            <>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                {filteredBookings.map((booking) => {
+                  const status = booking.bookingStatus.toUpperCase()
+                  const completable = isBookingCompletable(booking)
+                  const hasActions =
+                    status === 'PENDING' ||
+                    (status === 'CONFIRMED' && completable)
+
+                  return (
                     <BookingCard
                       key={booking.id}
                       booking={booking}
                       role="host"
                       onClick={(id) => router.push(`/profile/host/booking/${id}`)}
+                      actions={
+                        hasActions ? (
+                          <>
+                            {booking.paymentSlipUrl && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSlipBooking(booking)}
+                                className="h-8 rounded-xl text-xs border-border text-deep-teal hover:bg-off-white"
+                              >
+                                <Receipt className="w-3.5 h-3.5 mr-1" />
+                                Inspect Slip
+                              </Button>
+                            )}
+                            {status === 'PENDING' && (
+                              <>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={submittingId === booking.id}
+                                  onClick={() => setDeclineBookingId(booking.id)}
+                                  className="h-8 rounded-xl text-xs border-red-200 text-red-700 hover:bg-red-50"
+                                >
+                                  <XCircle className="w-3.5 h-3.5 mr-1" />
+                                  Decline
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  disabled={submittingId === booking.id}
+                                  onClick={() => setAcceptTarget(booking)}
+                                  className="h-8 rounded-xl text-xs bg-deep-teal hover:bg-deep-teal/90 text-white font-semibold"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                                  Accept
+                                </Button>
+                              </>
+                            )}
+                            {status === 'CONFIRMED' && completable && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={submittingId === booking.id}
+                                onClick={() => setCompleteTarget(booking)}
+                                className="h-8 rounded-xl text-xs bg-accent-orange hover:bg-accent-orange/90 text-white font-semibold"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                                Mark Completed
+                              </Button>
+                            )}
+                          </>
+                        ) : undefined
+                      }
                     />
-                  ))}
-                </div>
-                {page < totalPages && (
-                  <div className="flex justify-center mt-5">
-                    <button
-                      onClick={handleLoadMore}
-                      disabled={loadingMore}
-                      className="flex items-center gap-2 px-5 py-2 rounded-full border border-gray-200 text-sm font-medium text-gray-600 hover:border-deep-teal/40 hover:text-deep-teal transition disabled:opacity-50"
-                    >
-                      {loadingMore && <Loader2 className="w-4 h-4 animate-spin" />}
-                      {loadingMore ? 'Loading…' : 'Load more'}
-                    </button>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center px-6">
-                <CalendarX2 className="w-12 h-12 text-gray-300 mb-3" />
-                <h4 className="text-base font-semibold text-gray-600">{emptyMsg.title}</h4>
-                <p className="text-sm text-gray-400 mt-1 max-w-[240px]">{emptyMsg.description}</p>
+                  )
+                })}
               </div>
-            )}
-          </div>
-        </motion.div>
+
+              {page < totalPages && (
+                <div className="flex justify-center pt-2">
+                  <button
+                    type="button"
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="flex items-center gap-2 px-5 py-2 rounded-full border border-border text-xs font-medium text-neutral-gray hover:border-deep-teal hover:text-deep-teal transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    {loadingMore && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {loadingMore ? 'Loading...' : 'Load more'}
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-14 text-center px-6 rounded-2xl border border-border bg-off-white/40">
+              <CalendarX2 className="w-10 h-10 text-neutral-gray/50 mb-3" />
+              <h4 className="text-foreground">{emptyMsg.title}</h4>
+              <p className="text-xs text-neutral-gray mt-1 max-w-[260px]">
+                {emptyMsg.description}
+              </p>
+            </div>
+          )}
+        </>
       )}
-    </AnimatePresence>
+
+      <PaymentSlipModal
+        isOpen={!!slipBooking}
+        onClose={() => setSlipBooking(null)}
+        slipUrl={slipBooking?.paymentSlipUrl}
+        bookingId={slipBooking?.id ?? 0}
+        expectedTotal={Number(slipBooking?.totalPrice ?? 0)}
+        isPending={slipBooking?.bookingStatus.toUpperCase() === 'PENDING'}
+        onAcceptBooking={() => {
+          if (slipBooking) setAcceptTarget(slipBooking)
+        }}
+        isAccepting={submittingId === slipBooking?.id}
+      />
+
+      <ConfirmationModal
+        isOpen={!!acceptTarget}
+        onClose={() => setAcceptTarget(null)}
+        onConfirm={handleConfirmAccept}
+        title="Accept Booking Request"
+        message={
+          acceptTarget
+            ? `Are you sure you want to confirm Booking #${acceptTarget.id} at "${acceptTarget.property?.title}"?`
+            : ''
+        }
+        titleClassName="text-deep-teal"
+        confirmButtonClassName="bg-deep-teal hover:bg-deep-teal/90 text-white"
+      />
+
+      <ConfirmationModal
+        isOpen={!!completeTarget}
+        onClose={() => setCompleteTarget(null)}
+        onConfirm={handleConfirmComplete}
+        title="Mark Stay as Completed"
+        message={
+          completeTarget
+            ? `Confirm that Booking #${completeTarget.id} checked out successfully? This opens the guest review window.`
+            : ''
+        }
+        titleClassName="text-accent-orange"
+        confirmButtonClassName="bg-accent-orange hover:bg-accent-orange/90 text-white"
+      />
+
+      {declineBookingId !== null && (
+        <HostDeclineModal
+          bookingId={declineBookingId}
+          isOpen={declineBookingId !== null}
+          onClose={() => setDeclineBookingId(null)}
+          onSuccess={() => {
+            setDeclineBookingId(null)
+            void reloadBookings()
+            void onDataMutated?.()
+          }}
+        />
+      )}
+    </div>
   )
 }

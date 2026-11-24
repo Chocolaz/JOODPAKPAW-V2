@@ -183,7 +183,10 @@ export default function HostPage() {
 
         {isHost && activeTab === 'bookings' && (
           <div key={bookingFilterOverride ?? 'default'}>
-            <HostBookingList />
+            <HostBookingList
+              initialStatusFilter={bookingFilterOverride ?? 'ALL'}
+              onDataMutated={loadWorkspaceData}
+            />
           </div>
         )}
 

@@ -23,16 +23,19 @@ export function PropertyFilterDropdown({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        aria-label="Filter by property"
         className={cn(
-          'appearance-none pl-3 pr-8 py-1.5 rounded-full text-sm font-medium border cursor-pointer outline-none transition-all duration-150',
+          'appearance-none pl-3.5 pr-8 py-1.5 rounded-full text-xs font-medium border cursor-pointer outline-none transition-colors duration-150',
           isFiltered
             ? 'bg-deep-teal text-white border-deep-teal'
-            : 'bg-white text-neutral-gray border-gray-300 hover:border-deep-teal'
+            : 'bg-white text-neutral-gray border-border hover:border-deep-teal'
         )}
       >
         <option value="ALL">All Properties</option>
         {propertyNames.map((name) => (
-          <option key={name} value={name}>{name}</option>
+          <option key={name} value={name}>
+            {name}
+          </option>
         ))}
       </select>
       <ChevronDown

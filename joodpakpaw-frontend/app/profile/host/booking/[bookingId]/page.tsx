@@ -4,8 +4,8 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { getHostBookingById } from '@/lib/api'
 import { HostBookingDetail } from '@/types'
-import { Spinner } from '@/components/ui/spinner'
 import { toast } from 'sonner'
+import { ErrorState } from '@/app/profile/_components/ErrorState'
 import HostBookingDetailDisplay from './_components/HostBookingDetailDisplay'
 
 export default function HostBookingDetailPage() {
@@ -18,11 +18,10 @@ export default function HostBookingDetailPage() {
   const fetchBookingDetails = useCallback(async () => {
     if (!bookingId) return
     try {
-      setIsLoading(true)
       const data = await getHostBookingById(bookingId as string)
       setBookingDetails(data)
-    } catch (err) {
-      console.error('Failed to fetch booking details:', err)
+      setError(null)
+    } catch {
       setError('Failed to load booking details.')
       toast.error('Failed to load booking details.')
     } finally {
@@ -31,39 +30,37 @@ export default function HostBookingDetailPage() {
   }, [bookingId])
 
   useEffect(() => {
-    fetchBookingDetails()
+    void fetchBookingDetails()
   }, [fetchBookingDetails])
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <Spinner className="size-8" />
+      <div className="max-w-[1120px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-16 space-y-5">
+        <div className="h-8 w-52 bg-gray-200 rounded-lg animate-pulse motion-reduce:animate-none" />
+        <div className="lg:grid lg:grid-cols-[1fr_360px] lg:gap-8 space-y-4 lg:space-y-0">
+          <div className="space-y-4">
+            <div className="h-24 rounded-2xl bg-gray-100 animate-pulse motion-reduce:animate-none" />
+            <div className="h-36 rounded-2xl bg-gray-100 animate-pulse motion-reduce:animate-none" />
+            <div className="h-48 rounded-2xl bg-gray-100 animate-pulse motion-reduce:animate-none" />
+          </div>
+          <div className="h-72 rounded-2xl bg-gray-100 animate-pulse motion-reduce:animate-none" />
+        </div>
       </div>
     )
   }
 
   if (error) {
-    return (
-      <div className="text-center text-red-500 mt-10">
-        <p>{error}</p>
-      </div>
-    )
+    return <ErrorState message={error} />
   }
 
   if (!bookingDetails) {
-    return (
-      <div className="text-center text-gray-500 mt-10">
-        <p>No booking details found.</p>
-      </div>
-    )
+    return <ErrorState message="No booking details found." />
   }
 
   return (
-    <>
-      <HostBookingDetailDisplay
-        bookingDetails={bookingDetails}
-        refreshBooking={fetchBookingDetails}
-      />
-    </>
+    <HostBookingDetailDisplay
+      bookingDetails={bookingDetails}
+      refreshBooking={fetchBookingDetails}
+    />
   )
 }
