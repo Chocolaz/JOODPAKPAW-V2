@@ -1,7 +1,9 @@
+import nodemailer from 'nodemailer';
 import { config } from '../config/env';
 
 const RESEND_API_ENDPOINT = 'https://api.resend.com/emails';
 const EMAIL_REQUEST_TIMEOUT_MS = 5000;
+const DEFAULT_FROM_ADDRESS = 'JoodPakPaw <no-reply@joodpakpaw.com>';
 
 interface EmailPayload {
   to: string;
@@ -15,20 +17,62 @@ function isProductionRuntime(): boolean {
   return process.env.NODE_ENV === 'production' || config.env === 'production';
 }
 
+async function dispatchViaSmtp(payload: EmailPayload): Promise<void> {
+  const { smtpHost, smtpPort, smtpSecure, smtpUser, smtpPass, from } = config.email;
+  const host = smtpHost || 'smtp.gmail.com';
+  const sender =
+    from && from !== DEFAULT_FROM_ADDRESS ? from : `JoodPakPaw <${smtpUser}>`;
+
+  const transporter = nodemailer.createTransport({
+    host,
+    port: Number.isFinite(smtpPort) ? smtpPort : 587,
+    secure: smtpSecure || smtpPort === 465,
+    auth: {
+      user: smtpUser,
+      pass: smtpPass,
+    },
+    connectionTimeout: EMAIL_REQUEST_TIMEOUT_MS,
+    greetingTimeout: EMAIL_REQUEST_TIMEOUT_MS,
+    socketTimeout: EMAIL_REQUEST_TIMEOUT_MS,
+  });
+
+  await transporter.sendMail({
+    from: sender,
+    to: payload.to,
+    subject: payload.subject,
+    html: payload.html,
+    text: payload.text,
+  });
+}
+
 async function dispatchEmail(payload: EmailPayload): Promise<void> {
   const apiKey = config.email.resendApiKey;
   const from = config.email.from;
+  const { smtpUser, smtpPass } = config.email;
+  const hasSmtp = Boolean(smtpUser && smtpPass);
   const isProd = isProductionRuntime();
+
+  if (hasSmtp) {
+    try {
+      await dispatchViaSmtp(payload);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      console.error(
+        `[EmailService] Failed to send ${payload.emailType} email via SMTP: ${message}`
+      );
+    }
+    return;
+  }
 
   if (!apiKey) {
     if (isProd) {
       // Never log email addresses, OTPs, or reset URLs/tokens in production logs
       console.warn(
-        `[EmailService] RESEND_API_KEY is not configured; skipped ${payload.emailType} email delivery.`
+        `[EmailService] Neither SMTP nor RESEND_API_KEY is configured; skipped ${payload.emailType} email delivery.`
       );
     } else if (process.env.NODE_ENV !== 'test') {
       console.info(
-        `[EmailService] Dev fallback (RESEND_API_KEY not set): type=${payload.emailType} to=${payload.to} subject="${payload.subject}"`
+        `[EmailService] Dev fallback (SMTP/RESEND_API_KEY not set): type=${payload.emailType} to=${payload.to} subject="${payload.subject}"`
       );
     }
     return;
