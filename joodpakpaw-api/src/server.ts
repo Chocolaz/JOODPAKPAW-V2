@@ -15,19 +15,6 @@ import { cacheService } from './services/cache.service';
 const app = createApp();
 const server = http.createServer(app);
 
-// Pre-rewrite listener for legacy socket path compatibility
-server.prependListener('request', (req: http.IncomingMessage) => {
-  if (req.url && req.url.startsWith('/capstone25/cp25nk2/api/socket.io')) {
-    req.url = req.url.replace('/capstone25/cp25nk2/api/socket.io', '/api/socket.io');
-  }
-});
-
-server.prependListener('upgrade', (req: http.IncomingMessage) => {
-  if (req.url && req.url.startsWith('/capstone25/cp25nk2/api/socket.io')) {
-    req.url = req.url.replace('/capstone25/cp25nk2/api/socket.io', '/api/socket.io');
-  }
-});
-
 // Initialize Socket.IO v4 server attached to the HTTP server
 initSocketServer(server);
 

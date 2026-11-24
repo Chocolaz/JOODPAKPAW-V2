@@ -3227,8 +3227,8 @@ async function main() {
       if (firstRes.statusCode !== 200) {
         throw new Error(`Expected 200, got ${firstRes.statusCode}: ${JSON.stringify(firstRes.body)}`)
       }
-      if (firstRes.body?.code !== 'SUCCESS') {
-        throw new Error(`Expected code SUCCESS, got ${firstRes.body?.code}`)
+      if (firstRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected code S-0000, got ${firstRes.body?.code}`)
       }
       if (firstRes.body?.message !== 'Featured sections retrieved successfully') {
         throw new Error(`Expected message 'Featured sections retrieved successfully', got ${firstRes.body?.message}`)
@@ -3269,7 +3269,7 @@ async function main() {
       const secondRes = await makeRequest(pipePath, '/api/v1/properties/featured-sections', 'GET')
       const secondDuration = Date.now() - t1
 
-      if (secondRes.statusCode !== 200 || secondRes.body?.code !== 'SUCCESS') {
+      if (secondRes.statusCode !== 200 || secondRes.body?.code !== 'S-0000') {
         throw new Error('Second request failed on cached response')
       }
 
@@ -3289,8 +3289,8 @@ async function main() {
         undefined,
         { Authorization: `Bearer ${userAAccessToken}` }
       )
-      if (authRes.statusCode !== 200 || authRes.body?.code !== 'SUCCESS') {
-        throw new Error(`Expected 200 SUCCESS on authenticated featured-sections, got ${authRes.statusCode}`)
+      if (authRes.statusCode !== 200 || authRes.body?.code !== 'S-0000') {
+        throw new Error(`Expected 200 S-0000 on authenticated featured-sections, got ${authRes.statusCode}`)
       }
       const authData = authRes.body?.data
       const authProp101 = authData?.allProperties?.find((p: any) => p.id === 101)
@@ -6348,9 +6348,13 @@ async function main() {
           stdio: 'pipe',
         }
       )
+      let mlSpawnStderr = ''
+      spawnedMlProc.stderr?.on('data', (chunk) => {
+        mlSpawnStderr += chunk.toString()
+      })
       config.mlServiceUrl = `http://127.0.0.1:${mlTestPort}`
 
-      const deadline = Date.now() + 15000
+      const deadline = Date.now() + 25000
       while (Date.now() < deadline) {
         try {
           const probe = await fetch(`${config.mlServiceUrl}/health`, {
@@ -6369,7 +6373,9 @@ async function main() {
         await new Promise((r) => setTimeout(r, 300))
       }
       if (!mlLiveReady) {
-        throw new Error('Timed out waiting for spawned joodpakpaw-ml test server on port 5055')
+        throw new Error(
+          `Timed out waiting for spawned joodpakpaw-ml test server on port 5055. stderr: ${mlSpawnStderr.slice(-800)}`
+        )
       }
     }
 
@@ -7480,6 +7486,32 @@ async function main() {
             `Expected 200 S-0000 for petProfileIds filter, got ${petFilterRes.statusCode} ${JSON.stringify(petFilterRes.body)}`
           )
         }
+      }
+
+      // 5. IDOR & auth enforcement on petProfileIds
+      const unauthPetRes = await makeRequest(pipePath, '/api/v1/properties?petProfileIds=1&limit=20')
+      if (unauthPetRes.statusCode !== 401 || unauthPetRes.body?.code !== 'A-3005') {
+        throw new Error(
+          `Expected 401 A-3005 for unauthenticated petProfileIds, got ${unauthPetRes.statusCode} ${unauthPetRes.body?.code}`
+        )
+      }
+
+      const foreignPet = await prisma.petProfile.findFirst({
+        where: { guestId: { not: user1Live.userId }, deletedAt: null },
+        select: { id: true },
+      })
+      const forbiddenPetId = foreignPet?.id ?? 999999
+      const foreignPetRes = await makeRequest(
+        pipePath,
+        `/api/v1/properties?petProfileIds=${forbiddenPetId}&limit=20`,
+        'GET',
+        undefined,
+        { Authorization: `Bearer ${user1Live.token}` }
+      )
+      if (foreignPetRes.statusCode !== 403 || foreignPetRes.body?.code !== 'A-3007') {
+        throw new Error(
+          `Expected 403 A-3007 for foreign/invalid petProfileIds, got ${foreignPetRes.statusCode} ${foreignPetRes.body?.code}`
+        )
       }
     })
 

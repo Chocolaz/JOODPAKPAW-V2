@@ -783,10 +783,19 @@ export async function getProperties(
       petSizeCategoryId: number | null;
       sizeCode: number | null;
     }> = [];
-    if (parsedPetProfileIds.length > 0 && req.user?.id) {
+    const uniquePetProfileIds = Array.from(new Set(parsedPetProfileIds));
+    if (uniquePetProfileIds.length > 0) {
+      if (!req.user?.id) {
+        res.status(401).json({
+          code: 'A-3005',
+          message: 'Authentication required to filter by pet profiles',
+        });
+        return;
+      }
+
       const dbPets = await prisma.petProfile.findMany({
         where: {
-          id: { in: parsedPetProfileIds },
+          id: { in: uniquePetProfileIds },
           guestId: req.user.id,
           deletedAt: null,
         },
@@ -794,6 +803,15 @@ export async function getProperties(
           petSizeCategory: true,
         },
       });
+
+      if (dbPets.length !== uniquePetProfileIds.length) {
+        res.status(403).json({
+          code: 'A-3007',
+          message: 'Forbidden: one or more pet profiles do not belong to your account',
+        });
+        return;
+      }
+
       userPets = dbPets.map((p) => ({
         id: p.id,
         petTypeId: p.petTypeId,
@@ -801,33 +819,6 @@ export async function getProperties(
         petSizeCategoryId: p.petSizeCategoryId ?? null,
         sizeCode: p.petSizeCategory?.code ?? null,
       }));
-
-      // None of the requested petProfileIds belong to this user -> return empty result safely
-      if (userPets.length === 0) {
-        res.status(200).json({
-          code: 'S-0000',
-          message: 'Success',
-          data: [],
-          pagination: {
-            page,
-            limit,
-            totalRows: 0,
-            totalPages: 0,
-          },
-          ...(isMlRecommendedSort
-            ? {
-                meta: {
-                  source: 'in_process_fallback',
-                  strategy: 'hybrid_filtered_cold_start',
-                  snapshotAgeSeconds: 0,
-                  latencyMs: 0,
-                  totalCandidates: 0,
-                },
-              }
-            : {}),
-        });
-        return;
-      }
     }
 
     // Resolve requested petSizeCategory code (if petSizeCategoryId passed)
@@ -1369,7 +1360,7 @@ export async function getProperties(
         candidatePropertyIds,
         filterContext: {
           petTypes: petTypeTokens,
-          petProfileIds: parsedPetProfileIds,
+          petProfileIds: userPets.map((p) => p.id),
           facilities: parsedFacilities,
           maxPrice: !isNaN(maxPrice) ? maxPrice : undefined,
           province: province || undefined,
@@ -1669,7 +1660,7 @@ export async function getFeaturedSections(
       };
 
       res.status(200).json({
-        code: 'SUCCESS',
+        code: 'S-0000',
         message: 'Featured sections retrieved successfully',
         data: personalizedData,
       });
@@ -1677,7 +1668,7 @@ export async function getFeaturedSections(
     }
 
     res.status(200).json({
-      code: 'SUCCESS',
+      code: 'S-0000',
       message: 'Featured sections retrieved successfully',
       data: baseData,
     });
@@ -2166,11 +2157,24 @@ export async function searchPropertyRoomCategories(
       nightDates.push(today);
     }
 
+    let reqSizeCode: number | null = null;
+    if (!isNaN(petSizeId)) {
+      const sizeCat = await prisma.petSizeCategory.findUnique({
+        where: { id: petSizeId },
+        select: { code: true },
+      });
+      reqSizeCode = sizeCat?.code ?? null;
+    }
+
     const roomCategories = await prisma.roomCategory.findMany({
       where: {
         propertyId,
         deletedAt: null,
-        ...(!isNaN(petSizeId) ? { petSizeCategoryId: petSizeId } : {}),
+        ...(!isNaN(petSizeId)
+          ? reqSizeCode !== null
+            ? { petSizeCategory: { code: { gte: reqSizeCode } } }
+            : { petSizeCategoryId: { gte: petSizeId } }
+          : {}),
       },
       include: {
         petSizeCategory: true,
