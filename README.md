@@ -3,7 +3,7 @@
 [![JoodPakPaw CI](https://github.com/Chocolaz/JOODPAKPAW-V2/actions/workflows/ci.yml/badge.svg)](https://github.com/Chocolaz/JOODPAKPAW-V2/actions/workflows/ci.yml)
 [![Production Smoke Check](https://github.com/Chocolaz/JOODPAKPAW-V2/actions/workflows/production-smoke.yml/badge.svg)](https://github.com/Chocolaz/JOODPAKPAW-V2/actions/workflows/production-smoke.yml)
 
-**JoodPakPaw V2** is a full-stack pet-friendly accommodation and boarding marketplace built for travelers with pets across **all 77 Thai provinces (EN / ไทย)**. It combines a Next.js 16 discovery frontend, an Express + Prisma PostgreSQL 16 core API with Socket.IO real-time messaging, and a Python FastAPI hybrid ML recommendation engine.
+**JoodPakPaw V2** is a full-stack pet-friendly accommodation and boarding marketplace built for travelers with pets across **all 77 Thai provinces (EN / ไทย)**. It brings together an Airbnb-grade **Next.js 16** discovery frontend, a concurrency-safe **Express + Prisma + Socket.IO** core backend API backed by **PostgreSQL 16 (42 tables)**, and a **Python FastAPI 3-stage hybrid ML recommendation engine** with automatic in-process fallback.
 
 ---
 
@@ -17,26 +17,117 @@
 
 ---
 
-## Architecture
+## System Architecture
 
 ```mermaid
 flowchart LR
     User["User Browser / Mobile"] -->|HTTPS| FE["joodpakpaw-frontend\n(Next.js 16 / Vercel)"]
-    FE -->|REST + Socket.IO| API["joodpakpaw-api\n(Node.js 22 + Express + Prisma)"]
+    FE -->|REST /api/v1 & Socket.IO| API["joodpakpaw-api\n(Node.js 22 + Express + Prisma)"]
     API -->|HTTPS /ml/v1/*| ML["joodpakpaw-ml\n(Python 3.12 + FastAPI)"]
-    API -->|SQL + S3 Media| DB["Supabase PostgreSQL 16 & Storage"]
+    API -->|SQL & S3 Media| DB["Supabase PostgreSQL 16\n& Object Storage"]
     ML -->|Catalog Snapshot| DB
-    API -->|HTTPS Port 443| Email["Brevo / Resend Email API"]
+    API -.->|Optional Cache| Redis["Redis / Upstash\n(In-Memory Fallback)"]
+    API -->|HTTPS Port 443| Email["Brevo / Resend\n(or SMTP Fallback)"]
 ```
 
-### Key Capabilities
-- **Airbnb-Grade Discovery & Pricing:** Filter across 77 Thai provinces (bilingual EN/TH), pet types, pet size categories, check-in/check-out room availability (`room_category_calendars`), price range, facilities, and distance (`lat`/`lng` Haversine) with interactive Google Maps view.
-- **3-Stage Pet-Aware Hybrid ML:** Personalized recommendations (`/ml/v1/recommend/user/{user_id}`), cold-start feed (`/ml/v1/recommend/cold-start`), similar stays (`/ml/v1/recommend/similar/{property_id}`), and context-aware search re-ranking (`POST /ml/v1/rank/candidates`) with automatic in-process fallback in `joodpakpaw-api`.
-- **Concurrency-Safe Booking Engine:** Row-level locking on room calendars prevents double-booking under concurrent requests.
-- **Real-Time Chat & Notifications:** Socket.IO v4 (`/api/socket.io`) paired with persistent in-app notifications.
-- **Image Pipeline:** Client/server WebP conversion (`sharp`) and S3-compatible object storage (MinIO locally, Supabase Storage / Cloudflare R2 in production).
-- **Transactional Email:** Supports **Brevo HTTP REST API** (`BREVO_API_KEY` over HTTPS 443 for Render Free Tier), **SMTP** (`nodemailer`), and **Resend** (`RESEND_API_KEY`).
-- **Host & Admin Portals:** Host room/calendar management, booking lifecycle management, verification review, and admin moderation/ban cascade.
+---
+
+## Tech Stack Summary
+
+| Layer | Technologies | Notes |
+| :--- | :--- | :--- |
+| **Frontend (`joodpakpaw-frontend`)** | Next.js 16, React 19, TypeScript, Tailwind CSS v4, `shadcn/ui`, Google Maps JS API, Socket.IO Client | 3D Pastel Clay category rail (`DESIGN.md`), split map view, client-side WebP compression |
+| **Backend (`joodpakpaw-api`)** | Node.js 22, Express, TypeScript, Prisma ORM, Socket.IO v4 (`/api/socket.io`), `sharp`, `@aws-sdk/client-s3`, `nodemailer` | Standard `{ code, message, data, pagination? }` envelope, `camelCase` DTOs, row-level booking locks |
+| **ML Service (`joodpakpaw-ml`)** | Python 3.12, FastAPI, Uvicorn, Pydantic v2, Scikit-Learn, NumPy, `psycopg` (pool), Pytest, HTTPX | 3-stage pet-aware hybrid filtering, context-aware search re-ranking, TTL snapshot cache |
+| **Database & Infra** | PostgreSQL 16 (42 tables / 9 domains), Redis (optional), MinIO / Supabase Storage / Cloudflare R2, Docker Compose, Render, GitHub Actions | Free-tier cloud compatible via `.env` switches + automatic in-process API fallbacks |
+
+---
+
+## Core System Modules & Features
+
+### 1. Discovery & Search (Airbnb-Grade)
+- **Bilingual 77-Province Search:** Search stays across all 77 Thai provinces in both **English and Thai** (`provinces` lookup table).
+- **Date-Range Availability & Dynamic Pricing:** Filters against `room_category_calendars` to check real room availability across selected `checkIn`/`checkOut` dates and calculates `stayNights` and `stayTotalPrice`.
+- **Pet-Aware Filters:** Filter by pet species (`dog`, `cat`, `exotic`), **up-to-max-size** pet size categories, saved user pet profiles (IDOR-protected), facilities, property types, and price range.
+- **Geospatial & Visual Discovery:** Haversine distance calculation (`lat`/`lng` → `distanceKm`), interactive Google Maps split view, multi-photo card carousels, and a 9-category **3D Pastel Clay** icon rail defined in [DESIGN.md](DESIGN.md).
+
+### 2. Booking Engine & Lifecycle
+- **Concurrency-Safe Row-Level Locking:** Booking transactions lock target `room_category_calendars` rows in PostgreSQL to eliminate double-bookings under concurrent requests.
+- **Full Booking Lifecycle:** Supports pending, confirmed, host rejection/reply (`host_reply`, `host_replied_at`), cancellation tracking (`cancelled_by`, `cancellation_reason`), and verified guest reviews.
+
+### 3. 3-Stage Pet-Aware Hybrid ML (`joodpakpaw-ml`)
+- **Personalized & Cold-Start Feeds:** Ranks properties for returning users (`/ml/v1/recommend/user/{user_id}`), new/anonymous visitors (`/ml/v1/recommend/cold-start`), and property detail carousels (`/ml/v1/recommend/similar/{property_id}`).
+- **Context-Aware Search Re-Ranking (`POST /ml/v1/rank/candidates`):** Re-ranks filtered search candidates using the traveler's pet profile, budget, distance, and amenities, returning explainable match reasons.
+- **Cold-Start Resilience:** When `joodpakpaw-ml` is sleeping on free-tier hosting or unreachable within `ML_TIMEOUT_MS`, `joodpakpaw-api` automatically executes an **in-process hybrid ranking fallback** with a single-flight catalog cache so search never stalls.
+
+### 4. Real-Time Chat & Persistent Notifications
+- **Socket.IO v4 (`/api/socket.io`):** Real-time guest-to-host messaging rooms paired with REST history endpoints (`/api/v1/chat-rooms`).
+- **Notification Center:** Real-time alerts and persistent notification logs (`/api/v1/notifications`).
+
+### 5. Host Portal
+- **Multi-Step Property Onboarding:** Guided listing creation with interactive location picker, room categories, pet policies, and image uploads.
+- **Room Calendar & Booking Management:** Manage daily room availability/pricing calendars and approve, decline, or reply to bookings.
+- **Host KYC Verification:** Identity and property verification submission with optional Gemini Vision pre-screening.
+
+### 6. Admin Portal
+- **Moderation & Governance:** Overview dashboard, host KYC verification review, user/property report handling, user ban/appeal state machine with cascade actions, ML recommendation inspector, and immutable admin action logs.
+
+### 7. Security, Media & Transactional Email
+- **Authentication & Protection:** JWT access/refresh tokens, OTP email verification, password reset flow, RBAC guards, IDOR ownership checks, and route rate limiting.
+- **Image Pipeline & S3 Garbage Collection:** Client-side and server-side (`sharp`) `.webp` optimization with automatic deletion of replaced/orphaned S3 objects.
+- **Free-Tier Email Reliability:** Priority dispatch via **Brevo HTTP REST API** (`BREVO_API_KEY` over HTTPS port `443`, bypassing Render Free Tier outbound SMTP port blocks), **SMTP** (`nodemailer`), and **Resend** (`RESEND_API_KEY`), with a safe non-crashing local fallback.
+
+---
+
+## Database Overview (42 Tables / 9 Domains)
+
+Managed with **PostgreSQL 16** and **Prisma ORM** in [`joodpakpaw-api/prisma/`](joodpakpaw-api/prisma):
+
+1. **Users & Auth:** Accounts, sessions/tokens, roles, OTP/password reset records.
+2. **Pet Profiles & Lookups:** User pet profiles, species, pet size categories, facility catalogs.
+3. **Properties & Rooms:** Listings (with denormalized `min_price`, `avg_rating`, `review_count`, `booking_count`), room categories, accepted pets/sizes, property photos.
+4. **Calendars & Bookings:** `room_category_calendars`, booking headers/items, lifecycle & cancellation metadata.
+5. **Reviews:** Guest ratings and comments linked to completed stays.
+6. **Favorites:** Named favorite folders and saved properties.
+7. **Chat & Notifications:** Chat rooms, messages, notification records.
+8. **Moderation, KYC & Analytics:** Verification submissions, reports, report categories, admin ban/appeal logs, user behavior events.
+9. **Master Locations:** `provinces` table containing **all 77 official Thai provinces** with bilingual EN/TH names.
+
+---
+
+## API & ML Endpoints Overview
+
+### Core Backend API (`/api/v1`)
+All API responses follow a unified JSON envelope (`{ code, message, data, pagination? }`) using `camelCase` DTOs. Importable Postman collections and environment files are located in [`postman/`](postman/).
+
+| Route Group | Base Path | Purpose |
+| :--- | :--- | :--- |
+| **Health** | `/health` | Service & dependency health probe |
+| **Auth** | `/api/v1/auth` | Register, login, refresh token, OTP verification, forgot/reset password |
+| **Users** | `/api/v1/users` | User profile & account settings |
+| **Pet Profiles** | `/api/v1/profiles/pet-profiles` | Traveler pet CRUD & attributes |
+| **Properties & Discovery** | `/api/v1/properties` | Filtered search, date-range pricing, details, recommendations (`/recommend`) |
+| **Master Lookups** | `/api/v1/pets/all`, `/api/v1/pet-size-categories/all`, `/api/v1/hosts/facilities/all`, `/api/v1/report-categories` | Reference data for search & onboarding |
+| **Bookings** | `/api/v1/bookings` | Concurrency-locked booking creation, status transitions, cancellation, reviews |
+| **Hosts** | `/api/v1/hosts` | Host listings, room categories, availability calendars, booking actions |
+| **Favorites** | `/api/v1/favorite-folders`, `/api/v1/favorite-properties` | Saved stay collections |
+| **Chat** | `/api/v1/chat-rooms` | Conversation threads & message history |
+| **Notifications** | `/api/v1/notifications` | Persistent notifications & read-state updates |
+| **Verifications** | `/api/v1/user-verifications` | Host KYC verification submission & status |
+| **Reports** | `/api/v1/reports` | User & property reporting |
+| **User Behaviors** | `/api/v1/user-behaviors` | Interaction telemetry for ML personalization |
+| **Admin** | `/api/v1/admin` | KYC review, report resolution, ban/appeal management, logs |
+
+### ML Recommendation Service (`/ml/v1`)
+
+| Method & Path | Description |
+| :--- | :--- |
+| `GET /health` | Returns service status, active `catalog_size`, `snapshot_age_seconds`, and `db_connected` |
+| `GET /ml/v1/recommend/user/{user_id}` | Personalized 3-stage hybrid recommendations (supports `limit`, `lat`, `lng`, `debug`) |
+| `GET /ml/v1/recommend/cold-start` | Popularity + proximity ranking for cold-start or anonymous users |
+| `GET /ml/v1/recommend/similar/{property_id}` | Item similarity recommendations for property detail pages |
+| `POST /ml/v1/rank/candidates` | Context-aware re-ranking of filtered search candidate IDs |
+| `POST /ml/v1/refresh` | Manually refreshes the in-memory catalog snapshot (protected by `X-ML-Secret`) |
 
 ---
 
@@ -46,17 +137,20 @@ flowchart LR
 joodpakpaw/
 ├── joodpakpaw-frontend/   # Next.js 16 (React 19, Tailwind CSS v4, shadcn/ui)
 ├── joodpakpaw-api/        # Express + TypeScript + Prisma + Socket.IO v4
-├── joodpakpaw-ml/         # FastAPI + Scikit-Learn + Pandas recommendation service
-├── postman/               # Postman v2 Collection & Local/Production environments
-├── .github/workflows/     # CI (ci.yml) & Production Smoke Check (production-smoke.yml)
-├── docker-compose.yml     # Local full-stack orchestration (Postgres, Redis, MinIO, Nginx)
+├── joodpakpaw-ml/         # FastAPI + Scikit-Learn + NumPy recommendation engine
+├── postman/               # Postman v2 collection & Local/Production environments
+├── docs/                  # Blueprint, backlog, and free-tier cloud deploy guide
+├── .github/workflows/     # CI (ci.yml) & 3-hour Production Smoke Check
+├── .agents/               # Multi-agent definitions & domain skills
+├── docker-compose.yml     # Local orchestration (Postgres, Redis, MinIO, Nginx, API, ML, FE)
 ├── render.yaml            # Render Blueprint for joodpakpaw-api & joodpakpaw-ml
-└── DESIGN.md              # UI/UX & 3D Pastel Clay design system specification
+├── DESIGN.md              # UI/UX & 3D Pastel Clay design system specification
+└── AGENTS.md              # Multi-agent governance & Git workflow rules
 ```
 
 ---
 
-## Local Development
+## Local Development & Environment Variables
 
 ### Option 1: Docker Compose (Recommended)
 ```bash
@@ -68,6 +162,7 @@ docker compose up -d --build
 #### 1. Backend API (`joodpakpaw-api`)
 ```bash
 cd joodpakpaw-api
+cp .env.example .env
 npm install
 npx prisma generate
 npm run dev
@@ -76,6 +171,7 @@ npm run dev
 #### 2. ML Service (`joodpakpaw-ml`)
 ```bash
 cd joodpakpaw-ml
+cp .env.example .env
 python -m venv .venv
 pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 5000 --reload
@@ -84,26 +180,40 @@ uvicorn app.main:app --host 0.0.0.0 --port 5000 --reload
 #### 3. Frontend (`joodpakpaw-frontend`)
 ```bash
 cd joodpakpaw-frontend
+cp .env.example .env.local
 npm install --legacy-peer-deps
 npm run dev
 ```
 
+### Key Environment Variables (See `.env.example` in Each Service)
+
+| Service | Variables |
+| :--- | :--- |
+| **`joodpakpaw-frontend`** | `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_BASE_PATH`, `NEXT_PUBLIC_SOCKET_URL`, `NEXT_PUBLIC_SOCKET_PATH`, `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` |
+| **`joodpakpaw-api`** | `PORT`, `NODE_ENV`, `DATABASE_URL`, `DIRECT_URL`, `REDIS_URL`, `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`, `S3_PUBLIC_URL`, `S3_FORCE_PATH_STYLE`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `FRONTEND_URL`, `CORS_ORIGINS`, `BREVO_API_KEY`, `RESEND_API_KEY`, `EMAIL_FROM`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `ML_SERVICE_URL`, `ML_TIMEOUT_MS`, `ML_INTERNAL_SECRET`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `GEMINI_API_KEY` |
+| **`joodpakpaw-ml`** | `PORT`, `DATABASE_URL`, `SNAPSHOT_TTL_SECONDS`, `TIME_DECAY_LAMBDA`, `ML_INTERNAL_SECRET` |
+
 ---
 
-## Testing & CI/CD
+## Testing, CI/CD & Cloud Deployment
 
-### Local Checks
+### Local Verification Commands
 ```bash
 # ML Service (pytest)
 cd joodpakpaw-ml && pytest -v
 
-# Backend API (TypeScript & Build)
-cd joodpakpaw-api && npm run typecheck && npm run build
+# Backend API (Prisma + TypeScript + Build)
+cd joodpakpaw-api && npx prisma generate && npm run typecheck && npm run build
 
-# Frontend (Next.js typegen, TypeScript, ESLint, Build)
+# Frontend (Next.js typegen + TypeScript + Production Build)
 cd joodpakpaw-frontend && npx next typegen && npm run typecheck && npm run build
 ```
 
 ### GitHub Actions Workflows
 - **[`.github/workflows/ci.yml`](.github/workflows/ci.yml):** Runs on pushes and pull requests to `develop` and `main` (`ml-tests`, `api-build`, `frontend-build`).
-- **[`.github/workflows/production-smoke.yml`](.github/workflows/production-smoke.yml):** Runs on pushes to `main`, manual dispatch, and every 3 hours (`0 */3 * * *`) to verify live endpoints (`/`, `/health` on API & ML, and `GET /api/v1/properties`).
+- **[`.github/workflows/production-smoke.yml`](.github/workflows/production-smoke.yml):** Runs on pushes to `main`, manual workflow dispatch, and every 3 hours (`0 */3 * * *`) to verify live endpoints (`/`, API `/health`, ML `/health`, and `GET /api/v1/properties`).
+
+### Additional Documentation
+- **Cloud Deployment Guide:** [`docs/FREE_CLOUD_DEPLOY_GUIDE.md`](docs/FREE_CLOUD_DEPLOY_GUIDE.md)
+- **Design System:** [`DESIGN.md`](DESIGN.md)
+- **Postman Collection Guide:** [`postman/README.md`](postman/README.md)
