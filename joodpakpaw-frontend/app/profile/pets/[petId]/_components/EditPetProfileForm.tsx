@@ -338,17 +338,28 @@ export default function EditPetProfileForm({
                   {isLoadingCategories ? (
                     <Spinner />
                   ) : (
-                    <div className="flex flex-row justify-center items-center gap-4 pb-4 overflow-x-auto whitespace-nowrap px-4">
+                    <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-row sm:justify-center sm:items-center sm:gap-4 pb-4 px-1 sm:px-4">
                   {petSizeCategories.map((size) => {
                     const isSelected = selectedPetSizeId === size.id.toString()
+                    const lower = size.name.trim().toLowerCase()
+                    const shortLabel =
+                      lower === 'small'
+                        ? 'S'
+                        : lower === 'medium'
+                          ? 'M'
+                          : lower === 'large'
+                            ? 'L'
+                            : lower === 'giant' || lower === 'extra large' || lower === 'xl'
+                              ? 'XL'
+                              : size.name
                     return (
                       <button
                         key={size.id}
                         type="button" // Important: set type="button" to prevent form submission
                         onClick={() => handlePetSizeChange(size.id.toString())}
                         className={cn(
-                          'flex flex-col items-center justify-center p-3 border rounded-[20px] cursor-pointer bg-white transition-transform duration-300 ease-in-out',
-                          'min-w-20 my-2',
+                          'flex flex-col items-center justify-center p-2 sm:p-3 border rounded-[20px] cursor-pointer bg-white transition-transform duration-300 ease-in-out',
+                          'min-w-0 sm:min-w-20 my-2',
                           isSelected
                             ? 'border-positive-green scale-110 shadow-lg'
                             : 'border-gray-200 hover:border-deep-teal/50 shadow-sm',
@@ -379,7 +390,8 @@ export default function EditPetProfileForm({
                               : 'text-neutral-dark'
                           )}
                         >
-                          {size.name}
+                          <span className="sm:hidden">{shortLabel}</span>
+                          <span className="hidden sm:inline">{size.name}</span>
                         </span>
                         <p
                           className={cn(
