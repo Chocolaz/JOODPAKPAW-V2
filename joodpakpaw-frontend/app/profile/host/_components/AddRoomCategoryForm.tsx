@@ -369,7 +369,7 @@ export function AddRoomCategoryForm({
                     ))}
                   </div>
                 ) : (
-                  <div className="flex flex-wrap gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                     {petSizeCategories.map((size) => {
                       const selected = roomData.petSizeCategoryId === size.id
                       const kgDescription =
@@ -392,7 +392,7 @@ export function AddRoomCategoryForm({
                             updateRoom('petSizeCategoryId', size.id)
                           }
                           className={cn(
-                            'flex flex-col items-center justify-center rounded-xl border shadow-sm transition gap-1 px-4 py-3 min-w-[100px]',
+                            'flex flex-col items-center justify-center rounded-xl border shadow-sm transition gap-1 px-2.5 py-3 w-full min-w-0',
                             selected
                               ? 'border-positive-green bg-teal-50/60'
                               : 'bg-white hover:border-deep-teal/40'
@@ -584,7 +584,7 @@ export function AddRoomCategoryForm({
         {loadingPetData ? (
           <SkeletonPetTypes />
         ) : (
-          <div className="flex justify-center items-center gap-6">
+          <div className="grid grid-cols-3 gap-2.5">
             {petTypes.map((pet) => {
               const selected = roomData.pets.includes(pet.id)
               return (
@@ -593,7 +593,7 @@ export function AddRoomCategoryForm({
                   type="button"
                   onClick={() => toggleMulti('pets', pet.id)}
                   className={cn(
-                    'flex flex-col items-center justify-center rounded-xl border shadow-sm transition aspect-square w-24 h-24 space-y-2',
+                    'flex flex-col items-center justify-center rounded-xl border shadow-sm transition py-3 px-2 w-full min-w-0 space-y-1.5',
                     selected
                       ? 'border-positive-green'
                       : 'bg-white hover:border-deep-teal/40'
@@ -614,9 +614,20 @@ export function AddRoomCategoryForm({
         {loadingPetData ? (
           <SkeletonPetSizes />
         ) : (
-          <div className="flex justify-center items-center gap-6">
+          <div className="grid grid-cols-4 gap-2">
             {petSizeCategories.map((size) => {
               const selected = roomData.petSizeCategoryId === size.id
+              const lower = size.name.trim().toLowerCase()
+              const shortLabel =
+                lower === 'small'
+                  ? 'S'
+                  : lower === 'medium'
+                    ? 'M'
+                    : lower === 'large'
+                      ? 'L'
+                      : lower === 'giant' || lower === 'extra large' || lower === 'xl'
+                        ? 'XL'
+                        : size.name
               const kgDescription =
                 size.max === 14
                   ? 'under 14kg'
@@ -635,7 +646,7 @@ export function AddRoomCategoryForm({
                   type="button"
                   onClick={() => updateRoom('petSizeCategoryId', size.id)}
                   className={cn(
-                    'flex flex-col items-center justify-center p-4 rounded-xl border shadow-sm transition w-[100px] h-[145px] space-y-0.5',
+                    'flex flex-col items-center justify-center px-1.5 py-3 rounded-xl border shadow-sm transition w-full min-w-0 min-h-[124px] space-y-0.5',
                     selected
                       ? 'border-positive-green'
                       : 'bg-white hover:border-deep-teal/40'
@@ -648,10 +659,11 @@ export function AddRoomCategoryForm({
                       selected && 'text-positive-green'
                     )}
                   >
-                    {size.name}
+                    <span className="sm:hidden">{shortLabel}</span>
+                    <span className="hidden sm:inline">{size.name}</span>
                   </span>
-                  <p className="text-xs text-gray-500">{kgDescription}</p>
-                  <p className="text-xs text-gray-500">{m2Description}</p>
+                  <p className="text-[11px] text-gray-500 text-center leading-tight">{kgDescription}</p>
+                  <p className="text-[11px] text-gray-500 text-center leading-tight">{m2Description}</p>
                 </button>
               )
             })}
