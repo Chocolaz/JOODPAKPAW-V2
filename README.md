@@ -81,17 +81,81 @@ flowchart LR
 
 ## Database Overview (42 Tables / 9 Domains)
 
-Managed with **PostgreSQL 16** and **Prisma ORM** in [`joodpakpaw-api/prisma/`](joodpakpaw-api/prisma):
+Managed with **PostgreSQL 16** and **Prisma ORM** in [`joodpakpaw-api/prisma/schema.prisma`](joodpakpaw-api/prisma/schema.prisma):
 
-1. **Users & Auth:** Accounts, sessions/tokens, roles, OTP/password reset records.
-2. **Pet Profiles & Lookups:** User pet profiles, species, pet size categories, facility catalogs.
-3. **Properties & Rooms:** Listings (with denormalized `min_price`, `avg_rating`, `review_count`, `booking_count`), room categories, accepted pets/sizes, property photos.
-4. **Calendars & Bookings:** `room_category_calendars`, booking headers/items, lifecycle & cancellation metadata.
-5. **Reviews:** Guest ratings and comments linked to completed stays.
-6. **Favorites:** Named favorite folders and saved properties.
-7. **Chat & Notifications:** Chat rooms, messages, notification records.
-8. **Moderation, KYC & Analytics:** Verification submissions, reports, report categories, admin ban/appeal logs, user behavior events.
-9. **Master Locations:** `provinces` table containing **all 77 official Thai provinces** with bilingual EN/TH names.
+```mermaid
+erDiagram
+    users ||--o{ user_roles : has
+    roles ||--o{ user_roles : assigned
+    roles ||--o{ roles_permissions : grants
+    permissions ||--o{ roles_permissions : mapped
+    group_permissions ||--o{ permissions : groups
+    users ||--o{ user_verifications : submits
+
+    users ||--o{ properties : hosts
+    property_types ||--o{ properties : categorizes
+    properties ||--o{ property_images : has
+    properties ||--o{ properties_has_facilities : offers
+    facilities ||--o{ properties_has_facilities : linked
+    facility_categories ||--o{ facilities : groups
+
+    properties ||--o{ room_categories : contains
+    pet_size_categories ||--o{ room_categories : max_size
+    room_categories ||--o{ room_category_images : has
+    room_categories ||--o{ room_category_calendars : availability
+    room_categories ||--o{ room_category_has_facilities : offers
+    facilities ||--o{ room_category_has_facilities : linked
+    room_categories ||--o{ room_has_pets : accepts
+    pets ||--o{ room_has_pets : allowed
+
+    users ||--o{ pet_profiles : owns
+    pets ||--o{ pet_profiles : species
+    pet_breeds ||--o{ pet_profiles : breed
+    pets ||--o{ pet_breeds : has
+    pet_size_categories ||--o{ pet_profiles : size
+    pet_profile_energies ||--o{ pet_profiles : energy
+
+    users ||--o{ bookings : books
+    properties ||--o{ bookings : receives
+    bookings ||--o{ booking_orders : reserves
+    room_categories ||--o{ booking_orders : room
+    room_category_calendars ||--o{ booking_orders : date_slot
+    bookings ||--o{ booking_pet_profiles : includes
+    pet_profiles ||--o{ booking_pet_profiles : staying
+    bookings ||--o{ booking_review_images : review_media
+
+    users ||--o{ favorite_folders : creates
+    favorite_folders ||--o{ favorite_properties : saves
+    properties ||--o{ favorite_properties : bookmarked
+
+    users ||--o{ chat_rooms : participates
+    chat_rooms ||--o{ chat_messages : contains
+    users ||--o{ chat_messages : sends
+    chat_messages ||--o{ chat_message_attachments : attaches
+
+    users ||--o{ notifications : receives
+    notification_actions ||--o{ notifications : triggers
+    users ||--o{ user_behaviors : logs
+    user_behavior_categories ||--o{ user_behaviors : classifies
+
+    users ||--o{ reports : files
+    report_categories ||--o{ reports : categorizes
+    properties ||--o{ reports : target_property
+    bookings ||--o{ reports : target_booking
+    reports ||--o{ report_images : evidence
+    users ||--o{ audit_logs : audited
+    users ||--o{ action_logs : moderated
+```
+
+1. **Users & Auth:** `users`, `roles`, `user_roles`, `permissions`, `group_permissions`, `roles_permissions`, `user_verifications`
+2. **Pet Profiles & Lookups:** `pet_profiles`, `pets`, `pet_breeds`, `pet_size_categories`, `pet_profile_energies`
+3. **Properties & Rooms:** `properties`, `property_types`, `property_images`, `facilities`, `facility_categories`, `properties_has_facilities`, `room_categories`, `room_category_images`, `room_category_has_facilities`, `room_has_pets`
+4. **Calendars & Bookings:** `room_category_calendars`, `bookings`, `booking_orders`, `booking_pet_profiles`
+5. **Reviews:** `booking_review_images` (plus rating/review fields on `bookings`)
+6. **Favorites:** `favorite_folders`, `favorite_properties`
+7. **Chat & Notifications:** `chat_rooms`, `chat_messages`, `chat_message_attachments`, `notifications`, `notification_actions`
+8. **Moderation, Reports & Analytics:** `reports`, `report_categories`, `report_images`, `audit_logs`, `action_logs`, `user_behaviors`, `user_behavior_categories`
+9. **Master Locations:** `provinces` (**77 official Thai provinces** with bilingual EN/TH names)
 
 ---
 
